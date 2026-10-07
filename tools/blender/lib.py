@@ -94,11 +94,19 @@ def euler(rot):
     return (Matrix.Rotation(rot[2], 4, 'Z') @ Matrix.Rotation(rot[1], 4, 'Y') @ Matrix.Rotation(rot[0], 4, 'X'))
 
 
-def export(filename):
+# Draco settings shared by every asset script. Position precision: 14 bits over the mesh bounds (~1 mm on the 20 m
+# castle); colors get 10 bits, plenty for block shades and the crowd meta channel (tint, swing, pivot).
+DRACO = dict(export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=7,
+             export_draco_position_quantization=14, export_draco_normal_quantization=10,
+             export_draco_texcoord_quantization=12, export_draco_color_quantization=10,
+             export_draco_generic_quantization=12)
+
+
+def export(filename, **extra):
     out = os.path.abspath(os.path.join(ASSETS, filename))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', use_selection=True, export_apply=True,
-                              export_normals=True, export_vertex_color='ACTIVE', export_yup=True)
+                              export_normals=True, export_vertex_color='ACTIVE', export_yup=True, **DRACO, **extra)
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == 'MESH')
     print('WROTE', out, sorted(o.name for o in bpy.data.objects), 'tris:', tris)

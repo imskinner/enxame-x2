@@ -2,8 +2,10 @@
 # Run headless:  blender --background --factory-startup --python tools/blender/flora.py
 # Every object has its origin at the ground (Y-up after export) and uses one of three
 # material names the game recognizes: "bark", "leaf", "rock". Colors are set in the game.
-import bpy, bmesh, math, os, random
+import bpy, bmesh, math, os, random, sys
 from mathutils import Vector, noise
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lib import export
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'assets', 'flora.glb')
 random.seed(11)
@@ -183,7 +185,4 @@ rock('rock3', 11, 0.7, 0.7, 0.9)
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)  # every origin back to the ground point
-bpy.ops.export_scene.gltf(filepath=os.path.abspath(OUT), export_format='GLB', use_selection=True,
-                          export_apply=True, export_normals=True, export_materials='EXPORT',
-                          export_yup=True)
-print('WROTE', os.path.abspath(OUT), 'objects:', sorted(o.name for o in bpy.data.objects))
+export('flora.glb')

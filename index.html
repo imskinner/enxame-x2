@@ -153,6 +153,49 @@ body {
 .stat .k { font-size: 11px; font-weight: 900; letter-spacing: .14em; color: var(--muted); }
 .stat .v { font-family: var(--font-display); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .newbest { color: var(--gate); }
+
+/* Home, ranking and account */
+.title.sub { font-size: clamp(36px, 10vw, 50px); }
+.title.sub + * { margin-top: 18px; }
+.row2 { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; margin-top: 12px; }
+.account { margin: 10px 0 0; display: flex; justify-content: center; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 800; font-size: 14px; color: var(--muted); text-align: center; }
+.link { border: 0; background: none; padding: 4px 2px; font: inherit; font-weight: 900; letter-spacing: .04em; color: var(--ally); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.link:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 12px; background: rgba(27, 22, 64, .08); border-radius: 14px; }
+.tabs button { border: 0; border-radius: 10px; padding: 9px; font: 900 14px var(--font-body); letter-spacing: .1em; color: var(--muted); background: none; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 2px 0 rgba(27, 22, 64, .15); }
+.tabs button:focus-visible { outline: 3px solid var(--gold); }
+.board { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 4px; }
+.board li { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(27, 22, 64, .05); font-weight: 800; }
+.board .pos { font-family: var(--font-display); font-size: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.board .top .pos { color: var(--gold-deep); }
+.board .nick { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board .nick small { display: block; font-size: 11px; font-weight: 900; letter-spacing: .1em; color: var(--muted); }
+.board .pts { font-family: var(--font-display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.board li.me { background: var(--gold); }
+.board li.me .pos, .board li.me small { color: var(--ink); }
+.board li.gap { display: block; padding: 0; background: none; text-align: center; color: var(--muted); }
+.note { margin: 0 0 14px; font-size: 15px; font-weight: 700; line-height: 1.45; color: var(--muted); }
+.note.center { text-align: center; padding: 18px 0; }
+.label { margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: .14em; color: var(--muted); }
+.section { margin-bottom: 18px; }
+.field { display: flex; gap: 8px; }
+.field input {
+  flex: 1; min-width: 0; border: 2px solid rgba(27, 22, 64, .15); border-radius: 12px; padding: 10px 12px;
+  font: 800 16px var(--font-body); color: var(--ink); background: #fff; user-select: text; -webkit-user-select: text;
+}
+.field input:focus { outline: none; border-color: var(--ally); }
+.btn.sm { width: auto; flex: none; font-size: 18px; padding: 10px 14px 8px; }
+.btn.light { background: #fff; box-shadow: 0 5px 0 #b9b1d6; font-size: 20px; margin-bottom: 10px; }
+.btn.light:active { box-shadow: 0 1px 0 #b9b1d6; }
+.btn:disabled { opacity: .6; cursor: default; }
+.msg { margin: 6px 0 0; min-height: 18px; font-size: 13px; font-weight: 800; line-height: 1.35; color: var(--muted); }
+.msg.err { color: #d62d4a; }
+.msg.ok { color: #1f8f5a; }
+.overOnline { margin: -4px 0 16px; }
+.rankline { margin: 0 0 8px; text-align: center; font-family: var(--font-display); font-size: 22px; line-height: 1.15; color: var(--ally); }
+.overOnline .msg { text-align: center; }
+#btnRankOver { margin-top: 10px; }
 @media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready { animation: none; } .btn { transition: none; } }
 </style>
 </head>
@@ -206,6 +249,19 @@ body {
   <div class="card">
     <h1 class="title">ENXAME <span class="badge">×2</span></h1>
     <p class="lead" id="menuLead">Seu canhão dispara uma tropa. Multiplique a tropa nos portões e segure a horda antes que ela chegue ao muro.</p>
+    <button class="btn" id="btnPlay" type="button">JOGAR</button>
+    <div class="row2">
+      <button class="btn alt" id="btnRank" type="button" data-online hidden>RANKING</button>
+      <button class="btn alt" id="btnHow" type="button">COMO JOGAR</button>
+    </div>
+    <p class="best" id="bestMenu">RECORDE 0</p>
+    <p class="account" id="accountLine" data-online hidden></p>
+  </div>
+</div>
+
+<div class="screen sub" id="howScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">COMO JOGAR</h2>
     <ul class="how">
       <li><span class="ico gate">×2</span><span>Mire nos portões: cada soldado que passa vira dois, três ou mais.</span></li>
       <li><span class="ico plus">+1</span><span>Pegue as caixas douradas com o canhão. Cada uma soma +1 tiro por disparo.</span></li>
@@ -214,8 +270,48 @@ body {
       <li><span class="ico horde"><b></b><b></b><b></b></span><span>A cada 5 ondas vem um chefão elemental: gelo, fogo, lava, tempestade, água, veneno, zumbi e o buraco negro. O mapa vai virando o mundo dele.</span></li>
     </ul>
     <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
-    <button class="btn" id="btnPlay" type="button">JOGAR</button>
-    <p class="best" id="bestMenu">RECORDE 0</p>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
+<div class="screen sub" id="rankScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">RANKING</h2>
+    <div class="tabs" role="tablist" aria-label="Período">
+      <button type="button" role="tab" data-period="week" aria-selected="true">SEMANA</button>
+      <button type="button" role="tab" data-period="all" aria-selected="false">GERAL</button>
+    </div>
+    <ol class="board" id="board"></ol>
+    <p class="note center" id="boardNote" hidden></p>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
+<div class="screen sub" id="accountScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">CONTA</h2>
+    <p class="note" id="acctStatus"></p>
+    <div class="section">
+      <p class="label">APELIDO NO RANKING</p>
+      <form class="field" id="nickForm">
+        <input id="nickInput" maxlength="16" autocomplete="nickname" placeholder="Seu apelido" aria-label="Apelido no ranking" required>
+        <button class="btn sm" type="submit">SALVAR</button>
+      </form>
+      <p class="msg" id="nickMsg"></p>
+    </div>
+    <div class="section" id="loginBox">
+      <p class="label" id="loginLabel">ENTRAR</p>
+      <button class="btn light" id="btnGoogle" type="button">ENTRAR COM GOOGLE</button>
+      <form class="field" id="emailForm">
+        <input id="emailInput" type="email" autocomplete="email" placeholder="seu@email.com" aria-label="E-mail" required>
+        <button class="btn sm" type="submit">ENVIAR LINK</button>
+      </form>
+      <p class="msg" id="loginMsg"></p>
+    </div>
+    <div class="stack">
+      <button class="btn alt" id="btnSignOut" type="button" hidden>SAIR DA CONTA</button>
+      <button class="btn alt" type="button" data-back>VOLTAR</button>
+    </div>
   </div>
 </div>
 
@@ -236,7 +332,16 @@ body {
       <div class="stat"><div class="k">ABATES</div><div class="v" id="stKills">0</div></div>
       <div class="stat"><div class="k">MAIOR TROPA</div><div class="v" id="stPeak">0</div></div>
     </div>
+    <div class="overOnline" id="overOnline" hidden>
+      <p class="rankline" id="overRank"></p>
+      <form class="field" id="overNickForm" hidden>
+        <input id="overNick" maxlength="16" autocomplete="nickname" placeholder="Apelido para o ranking" aria-label="Apelido no ranking" required>
+        <button class="btn sm" type="submit">SALVAR</button>
+      </form>
+      <p class="msg" id="overMsg"></p>
+    </div>
     <button class="btn" id="btnAgain" type="button">JOGAR DE NOVO</button>
+    <button class="btn alt" id="btnRankOver" type="button" data-online hidden>VER RANKING</button>
     <p class="best" id="bestOver">RECORDE 0</p>
   </div>
 </div>
@@ -1607,6 +1712,198 @@ function updateHud() {
   if (ui.ult.classList.contains('ready') !== ready) { ui.ult.classList.toggle('ready', ready); ui.ult.disabled = !ready; }
 }
 
+// ================= Online: login, partidas e ranking (Supabase) =================
+// Optional layer: with no key, or if the CDN/network fails, the game plays exactly as offline.
+// The browser never writes scores: it opens a run on the server at start and closes it at game over;
+// the server times the run and rejects impossible scores (supabase/schema.sql).
+const SUPABASE_URL = 'https://vnurhkrksmmogobtnvum.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_gI_qLahrIGuYGSVbNs2KWA_oN5TfQ1Y'; // public by design: RLS and the functions in supabase/schema.sql guard the data
+const NICK_RE = /^[A-Za-z0-9_ À-ÖØ-öø-ÿ]{3,16}$/;
+const online = { sb: null, user: null, nickname: null, run: null, period: 'week' };
+const isAnon = () => !!online.user?.is_anonymous;
+const authRedirect = () => location.origin + location.pathname;
+const fmt = (n) => n.toLocaleString('pt-BR');
+
+function setMsg(el, text, kind = '') { el.textContent = text; el.className = 'msg' + (kind ? ' ' + kind : ''); }
+async function setUser(user) {
+  const changed = user?.id !== online.user?.id;
+  online.user = user;
+  if (changed) {
+    online.nickname = null;
+    if (user) {
+      const { data } = await online.sb.from('profiles').select('nickname').eq('id', user.id).maybeSingle();
+      if (online.user?.id === user.id) online.nickname = data?.nickname ?? null;
+    }
+  }
+  renderAccount();
+}
+async function ensureSession() {
+  if (online.user) return online.user;
+  const { data, error } = await online.sb.auth.signInAnonymously();
+  if (error) throw error;
+  await setUser(data.user);
+  return data.user;
+}
+async function saveNickname(raw) {
+  const nick = raw.trim().replace(/\s+/g, ' ');
+  if (!NICK_RE.test(nick)) throw new Error('Use de 3 a 16 letras, números, espaços ou _.');
+  await ensureSession();
+  const { error } = await online.sb.from('profiles').upsert({ id: online.user.id, nickname: nick });
+  if (error) throw new Error(error.code === '23505' ? 'Esse apelido já está em uso.' : 'Não deu para salvar agora. Tente de novo.');
+  online.nickname = nick;
+  renderAccount();
+  return nick;
+}
+
+function renderAccount() {
+  const line = $('accountLine'), u = online.user;
+  const who = !u ? 'Você ainda não está no ranking' : isAnon() ? (online.nickname || 'Sem apelido') + ' · convidado' : online.nickname || u.email;
+  const act = document.createElement('button');
+  act.className = 'link'; act.type = 'button';
+  act.textContent = !u ? 'ENTRAR' : isAnon() ? 'SALVAR CONTA' : 'CONTA';
+  act.addEventListener('click', () => openScreen('accountScreen'));
+  line.replaceChildren(document.createTextNode(who + ' ·'), act);
+
+  $('acctStatus').textContent = !u
+    ? 'Jogue e escolha um apelido para aparecer no ranking. Entre com Google ou e-mail para manter seus pontos em qualquer aparelho.'
+    : isAnon()
+      ? 'Você está jogando como convidado: seus pontos ficam só neste navegador. Vincule Google ou e-mail para não perdê-los.'
+      : 'Conectado como ' + (u.email || 'jogador') + '.';
+  $('loginLabel').textContent = isAnon() ? 'SALVAR CONTA' : 'ENTRAR';
+  $('loginBox').hidden = !!u && !isAnon();
+  $('btnSignOut').hidden = !u || isAnon();
+  if (document.activeElement !== $('nickInput')) $('nickInput').value = online.nickname || '';
+}
+
+async function loginGoogle() {
+  const options = { redirectTo: authRedirect() };
+  const { error } = isAnon()
+    ? await online.sb.auth.linkIdentity({ provider: 'google', options })
+    : await online.sb.auth.signInWithOAuth({ provider: 'google', options });
+  if (error) setMsg($('loginMsg'), 'Não deu para abrir o login do Google.', 'err');
+}
+async function loginEmail(email) {
+  const msg = $('loginMsg');
+  setMsg(msg, 'Enviando…');
+  if (isAnon()) {
+    // Turns the guest into a permanent account, keeping its scores.
+    const { error } = await online.sb.auth.updateUser({ email }, { emailRedirectTo: authRedirect() });
+    if (!error) return setMsg(msg, 'Enviamos um link para ' + email + '. Abra neste navegador para confirmar.', 'ok');
+    if (error.code !== 'email_exists') return setMsg(msg, 'Não deu para enviar o link. Tente de novo.', 'err');
+  }
+  const { error } = await online.sb.auth.signInWithOtp({ email, options: { emailRedirectTo: authRedirect() } });
+  if (error) setMsg(msg, error.status === 429 ? 'Muitas tentativas. Espere um pouco.' : 'Não deu para enviar o link. Tente de novo.', 'err');
+  else setMsg(msg, 'Enviamos um link para ' + email + '. Abra neste navegador para entrar.', 'ok');
+}
+
+// ---- Runs ----
+function onlineRunStart() {
+  online.run = null;
+  if (!online.sb || location.hash) return; // test shortcuts (#w13t20, #autoplay) never rank
+  online.run = ensureSession()
+    .then(() => online.sb.rpc('start_run'))
+    .then(({ data, error }) => (error ? null : data))
+    .catch(() => null);
+}
+async function onlineRunFinish() {
+  const pending = online.run; online.run = null;
+  const box = $('overOnline'), line = $('overRank'), msg = $('overMsg'), form = $('overNickForm');
+  box.hidden = !pending; form.hidden = true; setMsg(msg, '');
+  if (!pending) return;
+  line.textContent = 'Enviando pontuação…';
+  const stats = { p_score: state.score, p_wave: state.wave, p_kills: state.kills, p_peak: state.peak };
+  const runId = await pending;
+  const { data, error } = runId ? await online.sb.rpc('finish_run', { p_run: runId, ...stats }) : { error: true };
+  const r = data?.[0];
+  if (error || !r) { line.textContent = 'Ranking indisponível agora'; return; }
+  if (!r.accepted) { line.textContent = 'Partida fora do ranking'; return; }
+  line.textContent = r.week_rank != null ? `#${fmt(r.week_rank)} na semana · #${fmt(r.all_rank)} geral` : `#${fmt(r.all_rank)} no ranking geral`;
+  if (!online.nickname) {
+    form.hidden = false;
+    setMsg(msg, 'Escolha um apelido para aparecer no ranking.');
+  }
+}
+
+// ---- Leaderboard ----
+async function loadBoard(period) {
+  online.period = period;
+  for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.setAttribute('aria-selected', String(t.dataset.period === period));
+  const board = $('board'), note = $('boardNote');
+  board.replaceChildren(); note.hidden = false; note.textContent = 'Carregando…';
+  const { data, error } = await online.sb.rpc('get_leaderboard', { p_period: period, p_limit: 50 });
+  if (period !== online.period) return;
+  if (error) { note.textContent = 'Não deu para carregar o ranking.'; return; }
+  if (!data.length) { note.textContent = period === 'week' ? 'Ninguém pontuou nesta semana ainda. Seja o primeiro!' : 'Ninguém no ranking ainda. Seja o primeiro!'; return; }
+  note.hidden = true;
+  let prev = 0;
+  for (const row of data) {
+    if (row.pos > prev + 1 && row.is_me) {
+      const gap = document.createElement('li'); gap.className = 'gap'; gap.textContent = '…'; board.append(gap);
+    }
+    prev = row.pos;
+    const li = document.createElement('li');
+    li.className = (row.is_me ? 'me' : '') + (row.pos <= 3 ? ' top' : '');
+    const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = row.pos;
+    const nick = document.createElement('span'); nick.className = 'nick'; nick.textContent = row.nickname;
+    const small = document.createElement('small'); small.textContent = 'ONDA ' + row.wave; nick.append(small);
+    const pts = document.createElement('span'); pts.className = 'pts'; pts.textContent = fmt(row.score);
+    li.append(pos, nick, pts); board.append(li);
+  }
+}
+
+// ---- Screens ----
+let screenBack = null;
+const openSub = () => document.querySelector('.screen.sub:not([hidden])');
+function openScreen(id) {
+  const from = [ui.menu, ui.over].find((s) => !s.hidden);
+  if (from) { screenBack = from; from.hidden = true; }
+  const el = $(id); el.hidden = false;
+  if (id === 'rankScreen') loadBoard(online.period);
+  if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
+  el.querySelector('[data-back]').focus();
+}
+function closeScreen(el) {
+  el.hidden = true;
+  (screenBack || ui.menu).hidden = false; screenBack = null;
+}
+for (const b of document.querySelectorAll('[data-back]')) b.addEventListener('click', () => closeScreen(b.closest('.screen')));
+$('btnHow').addEventListener('click', () => openScreen('howScreen'));
+$('btnRank').addEventListener('click', () => openScreen('rankScreen'));
+$('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
+for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
+$('btnGoogle').addEventListener('click', loginGoogle);
+$('emailForm').addEventListener('submit', (e) => { e.preventDefault(); loginEmail($('emailInput').value.trim()); });
+$('btnSignOut').addEventListener('click', async () => { await online.sb.auth.signOut(); closeScreen($('accountScreen')); });
+async function submitNick(e, input, msg, after) {
+  e.preventDefault();
+  const btn = e.currentTarget.querySelector('button'); btn.disabled = true;
+  try { const n = await saveNickname(input.value); setMsg(msg, 'Pronto! Você aparece no ranking como ' + n + '.', 'ok'); after?.(); }
+  catch (err) { setMsg(msg, err.message || 'Não deu para salvar agora.', 'err'); }
+  btn.disabled = false;
+}
+$('nickForm').addEventListener('submit', (e) => submitNick(e, $('nickInput'), $('nickMsg')));
+$('overNickForm').addEventListener('submit', (e) => submitNick(e, $('overNick'), $('overMsg'), () => { $('overNickForm').hidden = true; }));
+
+async function initOnline() {
+  if (!SUPABASE_KEY) return;
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    online.sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { flowType: 'pkce' } });
+  } catch { return; }
+  const params = new URLSearchParams(location.search);
+  online.sb.auth.onAuthStateChange((event, session) => {
+    // Supabase calls inside this callback can deadlock the auth lock; defer them.
+    setTimeout(() => {
+      setUser(session?.user ?? null);
+      if (event !== 'INITIAL_SESSION') return;
+      // The guest tried to link a Google account that already exists: sign into that account instead.
+      if (params.get('error_code') === 'identity_already_exists') online.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: authRedirect() } });
+      if (params.has('code') || params.has('error')) history.replaceState(null, '', location.pathname + location.hash);
+    });
+  });
+  for (const el of document.querySelectorAll('[data-online]')) el.hidden = false;
+}
+
 // ================= Game flow =================
 function clearWorld() {
   clearHazards(); state.bossDown = false;
@@ -1626,6 +1923,7 @@ function startGame() {
   player.position.x = 0;
   ui.menu.hidden = true; ui.over.hidden = true; ui.pause.hidden = true; ui.hud.hidden = false;
   startWave(1);
+  onlineRunStart();
   canvas.focus();
 }
 function gameOver() {
@@ -1644,6 +1942,7 @@ function showGameOver() {
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
   bo.classList.toggle('newbest', isBest);
   ui.over.hidden = false; ui.bossBar.hidden = true; $('btnAgain').focus();
+  onlineRunFinish();
 }
 function setPaused(p) {
   if (state.phase !== 'playing' && state.phase !== 'break') return;
@@ -1666,12 +1965,14 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) setPa
 // ================= Input =================
 const keys = new Set();
 addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement) return; // typing a nickname or e-mail
   const k = e.key.toLowerCase();
+  if (k === 'escape' && openSub()) { closeScreen(openSub()); return; }
   if (['arrowleft', 'arrowright', 'a', 'd'].includes(k)) { keys.add(k); e.preventDefault(); }
   if (k === 'p' || k === 'escape') setPaused(!state.paused);
   if (k === 'm') { Sfx.init(); toggleMute(); }
   if ((k === ' ' || k === 'q' || k === 'e') && (state.phase === 'playing' || state.phase === 'break')) { e.preventDefault(); useUltimate(); }
-  if ((k === 'enter' || k === ' ') && (state.phase === 'menu' || state.phase === 'over') && document.activeElement?.tagName !== 'BUTTON') { e.preventDefault(); startGame(); }
+  if ((k === 'enter' || k === ' ') && (state.phase === 'menu' || state.phase === 'over') && document.activeElement?.tagName !== 'BUTTON' && !openSub()) { e.preventDefault(); startGame(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
@@ -2400,6 +2701,7 @@ function frame(now) {
 // ================= Boot =================
 try { await Promise.race([document.fonts.load(`64px ${DISPLAY_FONT}`), new Promise((r) => setTimeout(r, 1500))]); } catch { /* fallback font */ }
 $('bestMenu').textContent = 'RECORDE ' + state.best.toLocaleString('pt-BR');
+initOnline();
 fitCamera();
 setLayout(makeLayout(1));
 requestAnimationFrame(loop);

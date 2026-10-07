@@ -771,6 +771,7 @@ async function loadModels() {
     const m = meshesOf(g);
     for (const [mesh, src] of [[allyMesh, m.soldier], [enemyMesh, m.imp]]) { mesh.geometry.dispose(); mesh.geometry = crowdGeometry(src); }
   }).catch((err) => console.warn('characters.glb indisponível', err));
+  loader.loadAsync('assets/ogre.glb').then((g) => { OGRE = meshesOf(g); }).catch((err) => console.warn('ogre.glb indisponível', err));
 }
 // Unpacks a Blender character (tools/blender/characters.py) into the attributes the crowd shader reads:
 // COLOR_0 is the part color, COLOR_1 packs team tint, walk swing (-1/0/1) and swing pivot height.
@@ -986,6 +987,7 @@ const OG = {
   clubHead: ball(0.2, 12, 10), crown: new THREE.CylinderGeometry(0.2, 0.18, 0.14, 16), crownSpike: new THREE.ConeGeometry(0.045, 0.14, 5),
   gem: ball(0.04, 6, 5), cape: new THREE.PlaneGeometry(0.9, 1.05),
 };
+let OGRE = null; // Blender parts (tools/blender/ogre.py), set once assets/ogre.glb loads; until then the primitives below
 function buildOgre(boss, theme = null) {
   const skin = new THREE.MeshLambertMaterial({ color: theme ? theme.skin : boss ? 0x6a2c91 : 0xa3326b, emissive: 0xffffff, emissiveIntensity: 0, flatShading: theme?.id === 'lava' });
   const root = new THREE.Group();
@@ -993,6 +995,32 @@ function buildOgre(boss, theme = null) {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; parent.add(m); return m;
   };
   const legs = [], arms = [];
+  if (OGRE) {
+    // Same groups and pivots as the primitive ogre, so the walk, club swing and boss decorations line up.
+    const trim = boss ? OM.gold : OM.metal, crowned = boss && theme?.id !== 'ice';
+    const mats = {
+      leg_skin: skin, leg_dark: OM.dark, body_skin: skin, body_belly: theme ? themeMat(theme).belly : OM.belly, body_cloth: OM.cloth,
+      body_trim: trim, body_bone: OM.bone, head_skin: skin, head_white: OM.white, head_dark: OM.dark, head_bone: OM.bone,
+      horns_bone: boss ? null : OM.bone, crown_gold: crowned ? (theme?.id === 'void' ? themeMat(theme).glow : OM.gold) : null,
+      crown_gem: crowned ? OM.gem : null, cape_cloth: crowned ? OM.cape : null, arm_skin: skin, arm_trim: trim,
+      club_wood: OM.wood, club_head: boss ? OM.gold : OM.wood, club_bone: OM.bone,
+    };
+    const group = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+    const parts = (parent, prefixes) => {
+      for (const [name, geo] of Object.entries(OGRE)) if (mats[name] && prefixes.some((p) => name.startsWith(p + '_'))) add(parent, geo, mats[name], 0, 0, 0);
+    };
+    for (const s of [-1, 1]) legs.push(group(root, s * 0.2, 0.46, 0));
+    for (const hip of legs) parts(hip, ['leg']);
+    parts(root, ['body', 'cape']);
+    const head = group(root, 0, 1.36, 0.02); parts(head, ['head', 'horns', 'crown']);
+    for (const s of [-1, 1]) {
+      const sh = group(root, s * 0.52, 1.06, 0); arms.push(sh); parts(sh, ['arm']);
+      if (s === 1) { const club = group(sh, 0, -0.56, 0.05); club.rotation.x = -0.35; parts(club, ['club']); }
+    }
+    root.userData = { legs, arms, head, skin, glow: theme ? theme.glow : 0, glowI: theme ? theme.glowI : 0, spin: [] };
+    if (theme) decorateBoss(root, head, theme);
+    return root;
+  }
   for (const s of [-1, 1]) {
     const hip = new THREE.Group(); hip.position.set(s * 0.2, 0.46, 0); root.add(hip); legs.push(hip);
     add(hip, OG.leg, skin, 0, -0.2, 0); add(hip, OG.foot, OM.dark, 0, -0.4, 0.06, 1.1, 0.6, 1.4);

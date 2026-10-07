@@ -672,7 +672,7 @@ const portalMat = new THREE.ShaderMaterial({
 void main() {
   vec2 p = vUv - 0.5; float r = length(p) * 2.0; float a = atan(p.y, p.x);
   float sw = sin(a * 5.0 + r * 11.0 - uTime * (4.0 + uBoost * 6.0)) * 0.5 + 0.5;
-  float core = smoothstep(1.0, 0.0, r);
+  float core = (1.0 - smoothstep(0.0, 1.0, r));
   vec3 col = mix(vec3(0.3, 0.02, 0.18), vec3(1.0, 0.16, 0.42), sw * core);
   col = mix(col, vec3(1.0, 0.78, 0.92), pow(core, 4.0) * (0.7 + uBoost * 0.3));
   gl_FragColor = vec4(col, 1.0);
@@ -1291,7 +1291,7 @@ void main() {
 const POINT_FS = `uniform float uSoft; varying vec3 vColor; varying float vAlpha;
 void main() {
   float d = length(gl_PointCoord - 0.5);
-  float a = pow(smoothstep(0.5, 0.0, d), uSoft);
+  float a = pow((1.0 - smoothstep(0.0, 0.5, d)), uSoft);
   if (a < 0.01) discard;
   gl_FragColor = vec4(vColor, a * vAlpha);
 }`;
@@ -1501,9 +1501,9 @@ const GATE_PANEL_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = p
 const GATE_PANEL_FS = `uniform vec3 uColor; uniform float uTime; uniform float uPulse; uniform float uSign; varying vec2 vUv;
 void main() {
   float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
-  float rim = smoothstep(0.06, 0.0, edge);
+  float rim = (1.0 - smoothstep(0.0, 0.06, edge));
   float chev = fract(vUv.y * 3.0 - abs(vUv.x - 0.5) * 1.6 * uSign - uTime * 0.9 * uSign);
-  float stripe = smoothstep(0.0, 0.1, chev) * smoothstep(0.42, 0.22, chev);
+  float stripe = smoothstep(0.0, 0.1, chev) * (1.0 - smoothstep(0.22, 0.42, chev));
   float glow = mix(0.6, 1.2, vUv.y);
   float a = 0.14 + stripe * 0.18 + rim * 0.55 + uPulse * 0.3;
   gl_FragColor = vec4(uColor * glow + (rim + uPulse) * 0.3, a);
@@ -1946,10 +1946,12 @@ const ultWallMat = new THREE.ShaderMaterial({
   vertexShader: GATE_PANEL_VS,
   fragmentShader: `uniform float uTime; uniform float uFade; varying vec2 vUv;
 void main() {
-  float streak = 0.5 + 0.5 * sin(vUv.x * 60.0 + uTime * 20.0) * sin(vUv.x * 23.0 - uTime * 13.0);
-  float h = 1.0 - vUv.y;
+  // pow() of a negative base is NaN on the GPU, and the bloom smears a single NaN pixel over the whole frame
+  // (the screen flashed black during the ultimate). vUv can overshoot 1.0 by a hair, so clamp every base.
+  float streak = clamp(0.5 + 0.5 * sin(vUv.x * 60.0 + uTime * 20.0) * sin(vUv.x * 23.0 - uTime * 13.0), 0.0, 1.0);
+  float h = clamp(1.0 - vUv.y, 0.0, 1.0);
   float a = pow(h, 1.3) * (0.5 + 0.5 * streak);
-  a *= smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x);
+  a *= smoothstep(0.0, 0.05, vUv.x) * (1.0 - smoothstep(0.95, 1.0, vUv.x));
   vec3 col = mix(vec3(0.15, 0.55, 1.0), vec3(0.9, 1.0, 1.0), pow(h, 3.0) + streak * 0.25);
   gl_FragColor = vec4(col, a * uFade);
 }`,
@@ -2503,14 +2505,14 @@ void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
 const LIQ_FS = `uniform float uT; uniform float uIce; uniform float uRound; uniform float uLen; uniform vec3 uA; uniform vec3 uB; varying vec2 vUv;
 #include <fog_pars_fragment>
 void main() {
-  float edge = uRound > 0.5 ? smoothstep(0.5, 0.28, length(vUv - 0.5)) : smoothstep(0.0, 0.3, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
+  float edge = uRound > 0.5 ? (1.0 - smoothstep(0.28, 0.5, length(vUv - 0.5))) : smoothstep(0.0, 0.3, vUv.x) * (1.0 - smoothstep(0.7, 1.0, vUv.x));
   vec2 uv = vUv * vec2(1.0, uLen);
   float f = sin(uv.y * 1.7 - uT * 1.3 + sin(uv.x * 6.0 + uT) * 1.5) * 0.5 + 0.5;
   float g = sin(uv.y * 3.1 + uT * 0.7 + uv.x * 9.0) * 0.5 + 0.5;
   float n = f * 0.6 + g * 0.4;
-  vec3 flowCol = mix(uA, uB, clamp(pow(n, 2.2) * (0.4 + 0.8 * edge) + 0.08, 0.0, 1.0));
+  vec3 flowCol = mix(uA, uB, clamp(pow(max(n, 0.0), 2.2) * (0.4 + 0.8 * edge) + 0.08, 0.0, 1.0));
   float cr = abs(sin(uv.y * 3.3 + sin(uv.x * 11.0 + uv.y) * 2.0));
-  float crack = smoothstep(0.06, 0.0, cr);
+  float crack = (1.0 - smoothstep(0.0, 0.06, cr));
   vec3 iceCol = mix(uB, uA, 0.25 + vUv.x * 0.25 + crack * 0.5);
   gl_FragColor = vec4(mix(flowCol, iceCol, uIce), 1.0);
   #include <colorspace_fragment>
@@ -2612,8 +2614,8 @@ const holeDiskMat = new THREE.ShaderMaterial({
 void main() {
   vec2 p = vUv - 0.5; float r = length(p) * 2.0; float a = atan(p.y, p.x);
   float streak = 0.5 + 0.5 * sin(a * 7.0 - r * 18.0 + uTime * 3.0);
-  float inner = smoothstep(0.24, 0.3, r) * smoothstep(1.0, 0.45, r);
-  vec3 col = mix(vec3(0.55, 0.2, 1.0), vec3(1.0, 0.6, 0.25), smoothstep(0.55, 0.28, r));
+  float inner = smoothstep(0.24, 0.3, r) * (1.0 - smoothstep(0.45, 1.0, r));
+  vec3 col = mix(vec3(0.55, 0.2, 1.0), vec3(1.0, 0.6, 0.25), (1.0 - smoothstep(0.28, 0.55, r)));
   gl_FragColor = vec4(col * (0.6 + 0.8 * streak), inner * (0.35 + 0.65 * streak));
 }`,
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,

@@ -19,6 +19,18 @@ python3 -m http.server 8000
 # abra http://localhost:8000
 ```
 
+## Modelos 3D (Blender)
+
+Árvores, pedras, castelos, objetos da pista (lanternas, cercas, barris, estandartes, colunas dos portões), o canhão e os personagens são gerados por script em `tools/blender/` e exportados para `assets/*.glb`. Sem esses arquivos o jogo usa as formas simples feitas em código. Para regenerar:
+
+```sh
+blender --background --factory-startup --python tools/blender/flora.py
+blender --background --factory-startup --python tools/blender/castle.py
+blender --background --factory-startup --python tools/blender/props.py
+blender --background --factory-startup --python tools/blender/characters.py
+# prévia em PNG: blender --background --factory-startup --python tools/blender/preview.py -- assets/flora.glb previa.png
+```
+
 ## Ranking e login (Supabase)
 
 Opcional: sem chave configurada o jogo roda 100% offline. Para ligar:

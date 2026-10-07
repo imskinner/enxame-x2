@@ -488,14 +488,47 @@ function vnoise(x, z) {
 }
 const fbm = (x, z) => vnoise(x, z) * 0.55 + vnoise(x * 2.1, z * 2.1) * 0.3 + vnoise(x * 4.3, z * 4.3) * 0.15;
 const sstep = THREE.MathUtils.smoothstep;
+// Water courses: a meandering river on each side, outside the trackside props, plus a few ponds farther out.
+// They are carved into the terrain; when a world floods them, the shoreline is wherever the flat liquid surface
+// meets the uneven bank, so it never looks like a pasted-on shape. Dry worlds show a grassy creek bed.
+const RIVER_Z0 = -160, RIVER_Z1 = 80;
+const riverX = (side, z) => side * (LANE_HALF + 11.5 + 1.6 * Math.sin(z * 0.055 + side * 1.3) + 0.6 * Math.sin(z * 0.16 + side));
+const riverHalf = (side, z) => 1.6 + 0.6 * vnoise(z * 0.07, side * 5 + 11);
+const PONDS = Array.from({ length: 6 }, (_, i) => ({ x: (i % 2 ? 1 : -1) * (31 + srand() * 10), z: -108 + i * 23 + srand() * 8, r: 2.6 + srand() * 1.8 }));
 // Flat where the game happens; rolling hills off to the sides and a ridge line behind the enemy fort.
-function heightAt(x, z) {
+function baseHeight(x, z) {
   const ax = Math.abs(x);
   const side = sstep(ax, 40, 75) * (3 + 9 * fbm(x * 0.03, z * 0.03));
   const back = sstep(-z, 78, 130) * (8 + 26 * fbm(x * 0.02 + 5, z * 0.02));
-  const roll = sstep(ax, LANE_HALF + 6, 30) * (fbm(x * 0.08, z * 0.08) - 0.45) * 1.2;
+  const nearRiver = Math.exp(-(((ax - Math.abs(riverX(Math.sign(x) || 1, z))) / 5) ** 2)); // calm ground by the river
+  const roll = sstep(ax, LANE_HALF + 6, 30) * (fbm(x * 0.08, z * 0.08) - 0.45) * 1.2 * (1 - 0.85 * nearRiver);
   return side + back + roll;
 }
+// How deep the river/pond bed is cut at (x, z): 0 on dry land, ~1 at the middle of a channel. Negative = raised bank lip.
+function carveAt(x, z) {
+  let c = 0;
+  if (Math.abs(x) > LANE_HALF + 5) {
+    const side = Math.sign(x), d = Math.abs(x - riverX(side, z)) / riverHalf(side, z);
+    c = 1.0 * (1 - sstep(d, 0.45, 1.2)) - 0.14 * Math.exp(-(((d - 1.4) / 0.25) ** 2));
+  }
+  for (const p of PONDS) {
+    const dx = x - p.x, dz = z - p.z, a = Math.atan2(dz, dx);
+    const r = p.r * (1 + 0.36 * (vnoise(Math.cos(a) * 1.7 + p.x, Math.sin(a) * 1.7 + p.z) - 0.5));
+    c = Math.max(c, 0.95 * (1 - sstep(Math.hypot(dx, dz) / r, 0.4, 1.15)));
+  }
+  return c;
+}
+const heightAt = (x, z) => baseHeight(x, z) - carveAt(x, z);
+// True when (x, z) is within `pad` of a river or pond, so nothing gets planted in (or hanging over) the water.
+function nearWater(x, z, pad = 0) {
+  if (Math.abs(x) > LANE_HALF + 4) {
+    const side = Math.sign(x);
+    if (Math.abs(x - riverX(side, z)) < riverHalf(side, z) * 1.25 + pad) return true;
+  }
+  return PONDS.some((p) => Math.hypot(x - p.x, z - p.z) < p.r * 1.35 + pad);
+}
+// Picks a random spot (from the two generators) that is clear of water.
+const dry = (fx, fz, pad) => { for (let t = 0; t < 30; t++) { const x = fx(), z = fz(); if (!nearWater(x, z, pad)) return [x, z]; } return [fx(), fz()]; };
 
 // Grass: fine blades in a tileable detail map, big light/dark patches in vertex colors, all tinted by the biome color.
 const grassDetail = (() => {
@@ -517,17 +550,33 @@ const grassDetail = (() => {
 })();
 const groundMat = new THREE.MeshLambertMaterial({ color: 0x96dc7e, map: grassDetail, vertexColors: true });
 {
-  const geo = new THREE.PlaneGeometry(700, 700, 175, 175); geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i), h = heightAt(x, z);
-    pos.setY(i, h);
+  // Uneven grid: fine where the river banks and ponds are carved, coarse far away.
+  const axis = (spans) => {
+    const out = [];
+    for (const [a, b, step] of spans) for (let v = a; v < b - 1e-6; v += (b - a) / Math.round((b - a) / step)) out.push(v);
+    out.push(spans[spans.length - 1][1]); return out;
+  };
+  const xs = axis([[-350, -48, 6], [-48, -28, 1], [-28, -14, 0.4], [-14, 14, 1.4], [14, 28, 0.4], [28, 48, 1], [48, 350, 6]]);
+  const zs = axis([[-350, RIVER_Z0 - 5, 6], [RIVER_Z0 - 5, RIVER_Z1 + 5, 0.8], [RIVER_Z1 + 5, 350, 6]]);
+  const W = xs.length, H = zs.length, pos = new Float32Array(W * H * 3), uv = new Float32Array(W * H * 2), col = new Float32Array(W * H * 3);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const k = j * W + i, x = xs[i], z = zs[j], carve = carveAt(x, z), h = baseHeight(x, z) - carve;
+    pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
+    uv[k * 2] = (x + 350) / 700; uv[k * 2 + 1] = 1 - (z + 350) / 700;
     const patch = 0.88 + fbm(x * 0.045 + 3, z * 0.045) * 0.24;
     const edge = 1 - 0.22 * sstep(LANE_HALF + 2.4 - Math.abs(x), 0, 1.4); // darker grass hugging the curbs
     const high = 1 + Math.min(h, 20) * 0.006; // sunlit hilltops
-    const c = patch * edge * high; col[i * 3] = c; col[i * 3 + 1] = c; col[i * 3 + 2] = c;
+    const bed = 1 - 0.32 * clamp(carve, 0, 1); // damp, shaded creek bed
+    const c = patch * edge * high * bed; col[k * 3] = c; col[k * 3 + 1] = c; col[k * 3 + 2] = c;
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const idx = [];
+  for (let j = 0; j < H - 1; j++) for (let i = 0; i < W - 1; i++) {
+    const a = j * W + i, b = a + 1, c = a + W, d = c + 1;
+    idx.push(a, c, b, b, c, d);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
   const ground = new THREE.Mesh(geo, groundMat); ground.receiveShadow = true; scene.add(ground);
 }
 
@@ -722,6 +771,7 @@ const flora = { meshes: {}, mats: {} };
     const back = tries % 4 === 0;
     const x = back ? rand(-70, 70) : (Math.random() < 0.5 ? -1 : 1) * rand(LANE_HALF + 6, 62);
     const z = back ? rand(-135, -72) : rand(-120, 45);
+    if (nearWater(x, z, 1.8)) continue;
     if (!back && fbm(x * 0.05 + 9, z * 0.05) < 0.4 && Math.random() > 0.35) continue;
     if (back && Math.abs(x) < 16 && z > -80) continue; // keep the fort clear
     const h = heightAt(x, z), far = Math.abs(x) > 34 || back;
@@ -734,7 +784,7 @@ const flora = { meshes: {}, mats: {} };
     planted++;
   }
   for (let i = 0; i < 40; i++) {
-    const x = (i % 2 ? 1 : -1) * rand(LANE_HALF + 2.5, 42), z = rand(-120, 40), k = rand(0.5, 1.5);
+    const [x, z] = dry(() => (i % 2 ? 1 : -1) * rand(LANE_HALF + 2.5, 42), () => rand(-120, 40), 0.6), k = rand(0.5, 1.5);
     put('rock' + (1 + (i % 3)), x, heightAt(x, z), z, k, rand(0, 6.28), null, k * rand(0.7, 1.1));
   }
   const bushGreens = [0x57c46b, 0x45b35d, 0x7ad685].map((c) => new THREE.Color(c));
@@ -811,7 +861,7 @@ loadModels();
   const petals = [0xff8fb8, 0xfff27a, 0xffffff, 0xb79cff, 0xff9f5a].map((c) => new THREE.Color(c));
   for (let i = 0; i < F; i++) {
     const side = i % 2 ? 1 : -1;
-    const x = side * rand(LANE_HALF + 1.4, 34), z = rand(-120, 45);
+    const [x, z] = dry(() => side * rand(LANE_HALF + 1.4, 34), () => rand(-120, 45), 0.2);
     m.compose(p.set(x, heightAt(x, z) + 0.12, z), q.identity(), s.set(1, 0.6, 1)); flowers.setMatrixAt(i, m);
     flowers.setColorAt(i, petals[i % petals.length]);
   }
@@ -822,7 +872,7 @@ loadModels();
   for (let i = 0; i < T; i++) {
     const side = i % 2 ? 1 : -1;
     q.setFromEuler(e.set(rand(-0.3, 0.3), rand(0, 3), rand(-0.3, 0.3)));
-    const x = side * rand(LANE_HALF + 1.1, 40), z = rand(-120, 45);
+    const [x, z] = dry(() => side * rand(LANE_HALF + 1.1, 40), () => rand(-120, 45), 0.2);
     m.compose(p.set(x, heightAt(x, z) + 0.2, z), q, s.set(1, rand(0.6, 1.4), 1)); grass.setMatrixAt(i, m);
   }
   scene.add(grass); decor.grass = grass;
@@ -1158,7 +1208,8 @@ function dressProps(m) {
   const cloth = windy(new THREE.MeshLambertMaterial({ flatShading: true, vertexColors: true, side: THREE.DoubleSide }), 0.06, 3.9, true);
   const fences = [], kegs = [], crates = [], banners = [];
   for (const side of [-1, 1]) for (let z = LANE_BACK + 8; z < LANE_FRONT - 6; z += 3) {
-    if (fbm(z * 0.07 + side * 7, 3) > 0.4) fences.push({ x: side * (LANE_HALF + 7.4), z, yaw: rand(-0.03, 0.03) });
+    const x = side * (LANE_HALF + 6);
+    if (fbm(z * 0.07 + side * 7, 3) > 0.4 && !nearWater(x, z, 0.5)) fences.push({ x, z, yaw: rand(-0.03, 0.03) });
   }
   decor.lamps.forEach((p, i) => {
     if (i % 3) return;
@@ -2444,7 +2495,13 @@ const amb = { strikeIn: 2, bolt: 0, confetti: 0, flow: 0, testStrikes: false };
 scene.background = lookNow.bg;
 
 // ---- liquid channels and pools: lava, water, poison, ice, swamp or void depending on the look ----
+const LIQ_VS = `#include <fog_pars_vertex>
+varying vec2 vUv;
+void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
+#include <fog_vertex>
+}`;
 const LIQ_FS = `uniform float uT; uniform float uIce; uniform float uRound; uniform float uLen; uniform vec3 uA; uniform vec3 uB; varying vec2 vUv;
+#include <fog_pars_fragment>
 void main() {
   float edge = uRound > 0.5 ? smoothstep(0.5, 0.28, length(vUv - 0.5)) : smoothstep(0.0, 0.3, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
   vec2 uv = vUv * vec2(1.0, uLen);
@@ -2457,20 +2514,34 @@ void main() {
   vec3 iceCol = mix(uB, uA, 0.25 + vUv.x * 0.25 + crack * 0.5);
   gl_FragColor = vec4(mix(flowCol, iceCol, uIce), 1.0);
   #include <colorspace_fragment>
+  #include <fog_fragment>
 }`;
 const liqUniforms = { uT: { value: 0 }, uIce: { value: 0 }, uA: { value: new THREE.Color() }, uB: { value: new THREE.Color() } };
-const liqMat = (round, len) => new THREE.ShaderMaterial({ uniforms: { ...liqUniforms, uRound: { value: round }, uLen: { value: len } }, vertexShader: GATE_PANEL_VS, fragmentShader: LIQ_FS });
+const liqMat = (round, len) => new THREE.ShaderMaterial({
+  uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...liqUniforms, uRound: { value: round }, uLen: { value: len } },
+  vertexShader: LIQ_VS, fragmentShader: LIQ_FS, fog: true,
+});
+// The liquid sits a little below the banks and is wider than the channel: the terrain hides its edges and draws the shore.
+// When a world drains it, it sinks under the creek bed (see updateAmbience).
+const LIQ_LEVEL = -0.32;
 const liquidPieces = [];
 {
-  const len = LANE_LEN - 6;
-  for (const s of [-1, 1]) {
-    const river = new THREE.Mesh(new THREE.PlaneGeometry(3.4, len), liqMat(0, len / 3));
-    river.rotation.x = -Math.PI / 2; river.position.set(s * (LANE_HALF + 3.2), -1, LANE_MID); scene.add(river); liquidPieces.push(river);
+  for (const side of [-1, 1]) {
+    const pts = [], uvs = [], idx = [], n = Math.round(RIVER_Z1 - RIVER_Z0);
+    for (let j = 0; j <= n; j++) {
+      const z = RIVER_Z0 + j, cx = riverX(side, z), hw = riverHalf(side, z) * 1.25 + 0.4, y = baseHeight(cx, z) + LIQ_LEVEL;
+      pts.push(cx - hw, y, z, cx + hw, y, z); uvs.push(0, j / n, 1, j / n);
+      if (j < n) { const a = j * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    const river = new THREE.Mesh(geo, liqMat(0, n / 3)); river.userData.base = 0; scene.add(river); liquidPieces.push(river);
   }
-  for (let i = 0; i < 8; i++) {
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(rand(2, 4.5), 28), liqMat(1, 4));
-    pool.rotation.x = -Math.PI / 2; pool.position.set((i % 2 ? 1 : -1) * rand(17, 30), -1, rand(-100, 30));
-    pool.userData.base = heightAt(pool.position.x, pool.position.z) + 0.05; scene.add(pool); liquidPieces.push(pool);
+  for (const p of PONDS) {
+    const pond = new THREE.Mesh(new THREE.CircleGeometry(p.r * 1.45, 32), liqMat(1, 4));
+    pond.rotation.x = -Math.PI / 2; pond.position.set(p.x, 0, p.z);
+    pond.userData.base = baseHeight(p.x, p.z) + LIQ_LEVEL; scene.add(pond); liquidPieces.push(pond);
   }
 }
 // glowing veins across the lane (lava cracks, frost, toxic veins, void rifts)
@@ -2509,7 +2580,7 @@ const spikes = new THREE.InstancedMesh(new THREE.ConeGeometry(0.45, 2.6, 5), new
   for (let i = 0; i < 80; i++) {
     const side = i % 2 ? 1 : -1, k = rand(0.6, 1.8);
     q.setFromEuler(e.set(rand(-0.35, 0.35), rand(0, 6), rand(-0.35, 0.35)));
-    const x = side * rand(LANE_HALF + 1.3, LANE_HALF + 22), z = rand(LANE_BACK, LANE_FRONT + 6);
+    const [x, z] = dry(() => side * rand(LANE_HALF + 1.3, LANE_HALF + 22), () => rand(LANE_BACK, LANE_FRONT + 6), 0.8);
     m.compose(p.set(x, heightAt(x, z) + 1.1 * k, z), q, s.set(k, k, k)); spikes.setMatrixAt(i, m);
   }
   spikes.castShadow = true; spikes.visible = false; scene.add(spikes);
@@ -2526,7 +2597,7 @@ const graves = new THREE.InstancedMesh(
   for (let i = 0; i < 50; i++) {
     const side = i % 2 ? 1 : -1, k = rand(0.8, 1.3);
     q.setFromEuler(e.set(rand(-0.15, 0.15), rand(-0.4, 0.4), rand(-0.2, 0.2)));
-    const x = side * rand(LANE_HALF + 1.6, LANE_HALF + 18), z = rand(LANE_BACK, LANE_FRONT + 4);
+    const [x, z] = dry(() => side * rand(LANE_HALF + 1.6, LANE_HALF + 18), () => rand(LANE_BACK, LANE_FRONT + 4), 0.6);
     m.compose(p.set(x, heightAt(x, z), z), q, s.set(k, k, k)); graves.setMatrixAt(i, m);
   }
   graves.castShadow = true; graves.visible = false; scene.add(graves);
@@ -2554,7 +2625,7 @@ void main() {
   holeGroup.position.copy(HOLE_POS); holeGroup.rotation.x = -0.25; holeGroup.visible = false; scene.add(holeGroup);
 }
 // warm lights from the liquid and the portal (always present so shaders never recompile)
-const liqLights = [-1, 1].map((s) => { const l = new THREE.PointLight(0xff5a1f, 0, 70, 2); l.position.set(s * (LANE_HALF + 3.2), 2.5, -12); scene.add(l); return l; });
+const liqLights = [-1, 1].map((s) => { const l = new THREE.PointLight(0xff5a1f, 0, 70, 2); l.position.set(riverX(s, -12), 2.5, -12); scene.add(l); return l; });
 const portalLight = new THREE.PointLight(0xff2e63, 0, 60, 2); portalLight.position.set(0, 4, SPAWN_Z - 2); scene.add(portalLight);
 const haloMat = new THREE.SpriteMaterial({
   map: canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,220,140,1)'); r.addColorStop(1, 'rgba(255,160,60,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); }),
@@ -2862,7 +2933,7 @@ function updateAmbience(realDt, dt) {
   decor.grass.visible = decor.flowers.visible = L.grass > 0.06;
 
   const rise = clamp(L.liquid / 0.6, 0, 1);
-  for (const p of liquidPieces) p.position.y = (p.userData.base ?? 0.05) - 1.05 * (1 - rise);
+  for (const p of liquidPieces) p.position.y = p.userData.base - 1.2 * (1 - rise);
   liqUniforms.uA.value.copy(L.liqA); liqUniforms.uB.value.copy(L.liqB); liqUniforms.uIce.value = L.liqIce;
   amb.flow += dt * L.liqFlow; liqUniforms.uT.value = amb.flow;
   for (const l of liqLights) { l.color.copy(L.liqLight); l.intensity = L.liqLightI * 50; }
@@ -2887,7 +2958,8 @@ function updateAmbience(realDt, dt) {
       const bc = toColor(L.liqB, 0.3).clone();
       for (let k = count(L.bubbles * 3 + L.liqLightI * 1.5); k > 0; k--) {
         const s = Math.random() < 0.5 ? -1 : 1;
-        emit(sparkSys, s * (LANE_HALF + 3.2 + rand(-1.4, 1.4)), 0.2, rand(LANE_BACK + 4, PLAYER_Z), rand(-0.5, 0.5), rand(1.5, 3.5), rand(-0.5, 0.5), bc, rand(0.3, 0.55), rand(0.6, 1.2), -0.3, -1, 1);
+        const z = rand(LANE_BACK + 4, PLAYER_Z), x = riverX(s, z) + rand(-0.8, 0.8) * riverHalf(s, z);
+        emit(sparkSys, x, baseHeight(x, z) + LIQ_LEVEL + 0.15, z, rand(-0.5, 0.5), rand(1.5, 3.5), rand(-0.5, 0.5), bc, rand(0.3, 0.55), rand(0.6, 1.2), -0.3, -1, 1);
       }
     }
     for (let k = count(L.wisps * 0.5); k > 0; k--) emit(sparkSys, (Math.random() < 0.5 ? -1 : 1) * rand(LANE_HALF + 1.5, 18), rand(0.5, 2.2), rand(LANE_BACK, PLAYER_Z), rand(-0.6, 0.6), rand(0.1, 0.5), rand(-0.6, 0.6), WISP, rand(0.7, 1.1), rand(2.5, 3.5), -0.2, 0, 0);

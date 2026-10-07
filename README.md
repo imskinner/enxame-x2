@@ -19,6 +19,16 @@ python3 -m http.server 8000
 # abra http://localhost:8000
 ```
 
+## Modelos 3D (Blender)
+
+Árvores, pedras, arbustos e castelos são gerados por script em `tools/blender/` e exportados para `assets/*.glb`. Sem esses arquivos o jogo usa formas simples no lugar. Para regenerar:
+
+```sh
+blender --background --factory-startup --python tools/blender/flora.py
+blender --background --factory-startup --python tools/blender/castle.py
+# prévia em PNG: blender --background --factory-startup --python tools/blender/preview.py -- assets/flora.glb previa.png
+```
+
 ## Ranking e login (Supabase)
 
 Opcional: sem chave configurada o jogo roda 100% offline. Para ligar:

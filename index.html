@@ -349,6 +349,10 @@ body {
 <script type="module">
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ================= Config =================
 const LANE_HALF = 9;
@@ -409,6 +413,8 @@ try {
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 scene.background = canvasTex(4, 256, (g, w, h) => {
@@ -418,6 +424,25 @@ scene.background = canvasTex(4, 256, (g, w, h) => {
 });
 scene.fog = new THREE.Fog(0xdff4ff, 90, 220);
 const camera = new THREE.PerspectiveCamera(46, 1, 0.5, 500);
+
+// Post: HDR render -> bloom on the brightest pixels (lamps, portal, lava, sparks) -> tone mapping.
+// Falls back to a direct render if the device can't hold the frame rate.
+const post = { on: true, slow: 0 };
+{
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  post.composer = new EffectComposer(renderer, rt);
+  post.composer.addPass(new RenderPass(scene, camera));
+  post.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 1.6);
+  post.composer.addPass(post.bloom);
+  post.composer.addPass(new OutputPass());
+}
+function render(realDt) {
+  if (post.on) {
+    post.slow = realDt > 0.026 ? post.slow + realDt : Math.max(0, post.slow - realDt * 0.5);
+    if (post.slow > 4) post.on = false; // ~4 s of sub-38 fps: drop the bloom for good
+  }
+  if (post.on) post.composer.render(realDt); else renderer.render(scene, camera);
+}
 
 const hemi = new THREE.HemisphereLight(0xeaf6ff, 0x8a7aa0, 1.25);
 scene.add(hemi);
@@ -442,17 +467,106 @@ const LANE_LEN = LANE_FRONT - LANE_BACK;
 const LANE_MID = (LANE_FRONT + LANE_BACK) / 2;
 const decor = { lamps: [], treeSpots: [] }; // scenery the day/night cycle restyles
 
-const groundMat = new THREE.MeshLambertMaterial({ color: 0x96dc7e });
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), groundMat);
-ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// Seeded, tileable value noise: the scenery is generated, and the same on every visit.
+let seed = 7;
+const srand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+function tileNoise(size, cells) {
+  const lat = Array.from({ length: cells * cells }, srand), out = new Float32Array(size * size);
+  const at = (i, j) => lat[((j + cells) % cells) * cells + ((i + cells) % cells)];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const fx = (x / size) * cells, fy = (y / size) * cells, i = Math.floor(fx), j = Math.floor(fy);
+    const u = (fx - i) * (fx - i) * (3 - 2 * (fx - i)), v = (fy - j) * (fy - j) * (3 - 2 * (fy - j));
+    out[y * size + x] = (at(i, j) * (1 - u) + at(i + 1, j) * u) * (1 - v) + (at(i, j + 1) * (1 - u) + at(i + 1, j + 1) * u) * v;
+  }
+  return out;
+}
+// Smooth 2D noise for terrain heights and color patches.
+const hash2 = (x, z) => { const h = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return h - Math.floor(h); };
+function vnoise(x, z) {
+  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+  return (hash2(i, j) * (1 - su) + hash2(i + 1, j) * su) * (1 - sv) + (hash2(i, j + 1) * (1 - su) + hash2(i + 1, j + 1) * su) * sv;
+}
+const fbm = (x, z) => vnoise(x, z) * 0.55 + vnoise(x * 2.1, z * 2.1) * 0.3 + vnoise(x * 4.3, z * 4.3) * 0.15;
+const sstep = THREE.MathUtils.smoothstep;
+// Flat where the game happens; rolling hills off to the sides and a ridge line behind the enemy fort.
+function heightAt(x, z) {
+  const ax = Math.abs(x);
+  const side = sstep(ax, 40, 75) * (3 + 9 * fbm(x * 0.03, z * 0.03));
+  const back = sstep(-z, 78, 130) * (8 + 26 * fbm(x * 0.02 + 5, z * 0.02));
+  const roll = sstep(ax, LANE_HALF + 6, 30) * (fbm(x * 0.08, z * 0.08) - 0.45) * 1.2;
+  return side + back + roll;
+}
 
-const laneTex = canvasTex(128, 128, (g) => {
-  g.fillStyle = '#f3ebff'; g.fillRect(0, 0, 128, 128);
-  g.fillStyle = '#e4d8fb'; g.fillRect(0, 0, 64, 64); g.fillRect(64, 64, 64, 64);
-});
-laneTex.wrapS = laneTex.wrapT = THREE.RepeatWrapping;
-laneTex.repeat.set((LANE_HALF * 2) / 4, LANE_LEN / 4);
-const lane = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, LANE_LEN), new THREE.MeshLambertMaterial({ map: laneTex }));
+// Grass: fine blades in a tileable detail map, big light/dark patches in vertex colors, all tinted by the biome color.
+const grassDetail = (() => {
+  const S = 256, n1 = tileNoise(S, 8), n2 = tileNoise(S, 32), n3 = tileNoise(S, 64);
+  const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  const img = g.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) {
+    const v = 205 + (n1[i] - 0.5) * 50 + (n2[i] - 0.5) * 40 + (n3[i] - 0.5) * 34;
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  for (let k = 0; k < 2600; k++) { // short blade strokes, wrapped so the tile stays seamless
+    const x = srand() * S, y = srand() * S, l = 2 + srand() * 4, a = -1.57 + (srand() - 0.5) * 0.9, v = srand() < 0.5 ? 150 : 255;
+    g.strokeStyle = `rgba(${v},${v},${v},0.5)`; g.lineWidth = 1;
+    for (const [ox, oy] of [[0, 0], [-S, 0], [0, -S], [-S, -S]]) { g.beginPath(); g.moveTo(x + ox, y + oy); g.lineTo(x + ox + Math.cos(a) * l, y + oy + Math.sin(a) * l); g.stroke(); }
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.repeat.set(90, 90);
+  return t;
+})();
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x96dc7e, map: grassDetail, vertexColors: true });
+{
+  const geo = new THREE.PlaneGeometry(700, 700, 175, 175); geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), h = heightAt(x, z);
+    pos.setY(i, h);
+    const patch = 0.88 + fbm(x * 0.045 + 3, z * 0.045) * 0.24;
+    const edge = 1 - 0.22 * sstep(LANE_HALF + 2.4 - Math.abs(x), 0, 1.4); // darker grass hugging the curbs
+    const high = 1 + Math.min(h, 20) * 0.006; // sunlit hilltops
+    const c = patch * edge * high; col[i * 3] = c; col[i * 3 + 1] = c; col[i * 3 + 2] = c;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const ground = new THREE.Mesh(geo, groundMat); ground.receiveShadow = true; scene.add(ground);
+}
+
+// Lane: paving slabs in the old two-tone checker, with grout, bevels, wear and the odd crack.
+const laneTex = (() => {
+  const S = 512, half = S / 2, noise = tileNoise(S, 48), fine = tileNoise(S, 128);
+  const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  const bump = document.createElement('canvas'); bump.width = bump.height = S; const b = bump.getContext('2d');
+  g.fillStyle = '#b9add6'; g.fillRect(0, 0, S, S); // grout
+  b.fillStyle = '#000'; b.fillRect(0, 0, S, S);
+  for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+    const x = i * half + 5, y = j * half + 5, w = half - 10, light = (i + j) % 2 === 0;
+    const base = light ? [243, 235, 255] : [226, 214, 250], jit = (srand() - 0.5) * 8;
+    g.fillStyle = `rgb(${base[0] + jit},${base[1] + jit},${base[2] + jit})`; g.beginPath(); roundRect(g, x, y, w, w, 14); g.fill();
+    g.lineWidth = 6; g.lineCap = 'round';
+    g.strokeStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.moveTo(x + 4, y + w - 14); g.lineTo(x + 4, y + 4); g.lineTo(x + w - 14, y + 4); g.stroke();
+    g.strokeStyle = 'rgba(90,70,140,0.22)'; g.beginPath(); g.moveTo(x + w - 3, y + 14); g.lineTo(x + w - 3, y + w - 3); g.lineTo(x + 14, y + w - 3); g.stroke();
+    b.fillStyle = '#fff'; b.beginPath(); roundRect(b, x + 3, y + 3, w - 6, w - 6, 14); b.fill();
+    if (srand() < 0.6) { // a hairline crack
+      let cx = x + 20 + srand() * (w - 40), cy = y + 20 + srand() * (w - 40);
+      g.strokeStyle = 'rgba(120,100,170,0.45)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx, cy);
+      for (let k = 0; k < 5; k++) { cx = clamp(cx + (srand() - 0.5) * 60, x + 10, x + w - 10); cy = clamp(cy + (srand() - 0.5) * 60, y + 10, y + w - 10); g.lineTo(cx, cy); }
+      g.stroke();
+    }
+  }
+  const soft = document.createElement('canvas'); soft.width = soft.height = S; const sg = soft.getContext('2d');
+  sg.filter = 'blur(3px)'; sg.drawImage(bump, 0, 0);
+  const img = g.getImageData(0, 0, S, S);
+  for (let i = 0; i < S * S; i++) {
+    const k = 1 + (noise[i] - 0.5) * 0.1 + (fine[i] - 0.5) * 0.07;
+    for (let ch = 0; ch < 3; ch++) img.data[i * 4 + ch] = Math.min(255, img.data[i * 4 + ch] * k);
+  }
+  g.putImageData(img, 0, 0);
+  const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace;
+  const bumpMap = new THREE.CanvasTexture(soft);
+  for (const t of [map, bumpMap]) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set((LANE_HALF * 2) / 4, LANE_LEN / 4); }
+  return { map, bumpMap };
+})();
+const lane = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, LANE_LEN), new THREE.MeshLambertMaterial({ map: laneTex.map, bumpMap: laneTex.bumpMap, bumpScale: 1.5 }));
 lane.rotation.x = -Math.PI / 2; lane.position.set(0, 0.02, LANE_MID); lane.receiveShadow = true; scene.add(lane);
 
 // striped curbs
@@ -488,7 +602,17 @@ function castle(color, roofColor, z, w, h) {
   }
   grp.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   grp.position.z = z; scene.add(grp);
-  return { grp, mat };
+  return { grp, mat, roof };
+}
+// Swaps a castle's primitive stand-in for the Blender model; materials (and their biome/damage colors) stay the same.
+function dressCastle(c, stone, roofGeo) {
+  for (const ch of [...c.grp.children]) { c.grp.remove(ch); ch.geometry.dispose(); }
+  c.mat.vertexColors = c.roof.vertexColors = true; c.mat.needsUpdate = c.roof.needsUpdate = true;
+  for (const [geo, mat] of [[stone, c.mat], [roofGeo, c.roof]]) {
+    const col = geo.attributes.color; // Blender stores block shades as sRGB bytes; undo the linearization so they read as authored
+    for (let i = 0; i < col.count; i++) for (let k = 0; k < 3; k++) col.setComponent(i, k, Math.pow(col.getComponent(i, k), 1 / 2.2));
+    const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; c.grp.add(m);
+  }
 }
 const homeWall = castle(0xdfe8ff, 0x2f7bff, PLAYER_Z + 4.6, LANE_HALF * 2 + 2, 1.8);
 const WALL_OK = new THREE.Color(0xdfe8ff), WALL_BAD = new THREE.Color(0xff8a8a);
@@ -541,61 +665,143 @@ const torchPoints = [];
   }
 }
 
-// trees, rocks, bushes, flowers, grass
+// Wind: canopies, bushes and grass sway above `base` (model space height), phase-shifted per instance.
+function windy(mat, amp, base) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = worldTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace('#include <begin_vertex>', `#include <begin_vertex>
+#ifdef USE_INSTANCING
+float wph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.21;
+float ww = max(position.y - ${base.toFixed(2)}, 0.0) * ${amp.toFixed(3)};
+transformed.x += (sin(uTime * 1.3 + wph) + 0.4 * sin(uTime * 3.1 + wph * 2.0)) * ww;
+transformed.z += cos(uTime * 1.1 + wph * 1.3) * ww * 0.6;
+#endif`);
+  };
+  mat.customProgramCacheKey = () => `wind-${amp}-${base}`;
+  return mat;
+}
+// Canopy and rock shading baked into vertex colors: darker underneath, brighter on top (cheap ambient occlusion).
+function shadeByHeight(geo, lo, hi) {
+  geo.computeBoundingBox();
+  const { min, max } = geo.boundingBox, pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) { const c = lo + (hi - lo) * ((pos.getY(i) - min.y) / (max.y - min.y || 1)); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = c; }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+// Flora is modeled in Blender (tools/blender/flora.py -> assets/flora.glb). Until that file arrives, or if it
+// never does, every model has a primitive stand-in with its origin on the ground, so placements never change.
+const TREE_KINDS = ['oak1', 'oak2', 'oak3', 'poplar1', 'pine1', 'pine2'];
+const flora = { meshes: {}, mats: {} };
+{
+  const stand = {};
+  const crown = (r, y) => mergeGeometries([new THREE.IcosahedronGeometry(r, 0).translate(0, y, 0), new THREE.IcosahedronGeometry(r * 0.66, 0).translate(0, y + r * 0.8, 0)]);
+  for (const k of TREE_KINDS) {
+    const pine = k.startsWith('pine');
+    stand[k + '_bark'] = new THREE.CylinderGeometry(0.18, 0.28, 2.2, 6).translate(0, 1.1, 0);
+    stand[k + '_leaf'] = pine ? new THREE.ConeGeometry(1.4, 4, 7).translate(0, 3.2, 0) : crown(1.5, 3);
+  }
+  for (const k of ['bush1', 'bush2']) stand[k + '_leaf'] = new THREE.IcosahedronGeometry(0.75, 0).scale(1.2, 0.75, 1).translate(0, 0.4, 0);
+  for (const k of ['rock1', 'rock2', 'rock3']) stand[k] = new THREE.DodecahedronGeometry(0.8, 0).scale(1, 0.7, 1);
+  for (const [k, g] of Object.entries(stand)) shadeByHeight(g, k.endsWith('_bark') ? 1 : 0.62, k.endsWith('_bark') ? 1 : 1.08);
+  flora.stand = stand;
+
+  flora.mats.bark = new THREE.MeshLambertMaterial({ color: 0x8a5d40, flatShading: true, vertexColors: true });
+  flora.mats.leaf = windy(new THREE.MeshLambertMaterial({ flatShading: true, vertexColors: true }), 0.035, 1.2);
+  flora.mats.bush = windy(new THREE.MeshLambertMaterial({ flatShading: true, vertexColors: true }), 0.06, 0.2);
+  flora.mats.rock = new THREE.MeshLambertMaterial({ color: 0xb9b0d0, flatShading: true, vertexColors: true });
+
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
+  const greens = [0x4fbf6a, 0x3aa65a, 0x6fd07a, 0x2e9a5b, 0x5cc276].map((c) => new THREE.Color(c));
+  const pineGreens = [0x2f8a5a, 0x2a7d55, 0x3d9a62].map((c) => new THREE.Color(c));
+  const place = {}; // model -> [{matrix, color}]
+  const put = (model, x, y, z, k, yaw, color, sy = k) => {
+    m.compose(p.set(x, y, z), q.setFromEuler(e.set(0, yaw, 0)), s.set(k, sy, k));
+    (place[model] ??= []).push({ matrix: m.clone(), color });
+  };
+  // Trees grow in groves (noise-driven), pines on the far hills and behind the fort.
+  let planted = 0;
+  for (let tries = 0; planted < 175 && tries < 6000; tries++) {
+    const back = tries % 4 === 0;
+    const x = back ? rand(-70, 70) : (Math.random() < 0.5 ? -1 : 1) * rand(LANE_HALF + 6, 62);
+    const z = back ? rand(-135, -72) : rand(-120, 45);
+    if (!back && fbm(x * 0.05 + 9, z * 0.05) < 0.4 && Math.random() > 0.35) continue;
+    if (back && Math.abs(x) < 16 && z > -80) continue; // keep the fort clear
+    const h = heightAt(x, z), far = Math.abs(x) > 34 || back;
+    const kind = far && Math.random() < 0.65 ? (Math.random() < 0.6 ? 'pine1' : 'pine2') : TREE_KINDS[Math.floor(Math.random() * 4)];
+    const k = rand(0.8, 1.35), yaw = rand(0, 6.28);
+    const tint = kind.startsWith('pine') ? pineGreens[planted % 3] : greens[planted % greens.length];
+    put(kind + '_bark', x, h - 0.15, z, k, yaw, null);
+    put(kind + '_leaf', x, h - 0.15, z, k, yaw, tint);
+    if (Math.abs(x) < 26 && !back) decor.treeSpots.push(new THREE.Vector3(x, h + 3.2 * k, z));
+    planted++;
+  }
+  for (let i = 0; i < 40; i++) {
+    const x = (i % 2 ? 1 : -1) * rand(LANE_HALF + 2.5, 42), z = rand(-120, 40), k = rand(0.5, 1.5);
+    put('rock' + (1 + (i % 3)), x, heightAt(x, z), z, k, rand(0, 6.28), null, k * rand(0.7, 1.1));
+  }
+  const bushGreens = [0x57c46b, 0x45b35d, 0x7ad685].map((c) => new THREE.Color(c));
+  for (let i = 0; i < 80; i++) {
+    const x = (i % 2 ? 1 : -1) * rand(LANE_HALF + 1.6, LANE_HALF + 6), z = rand(LANE_BACK, LANE_FRONT + 4), k = rand(0.7, 1.25);
+    put('bush' + (1 + (i % 2)) + '_leaf', x, heightAt(x, z), z, k, rand(0, 6.28), bushGreens[i % 3]);
+  }
+  flora.bushGroup = new THREE.Group(); scene.add(flora.bushGroup);
+  for (const [model, list] of Object.entries(place)) {
+    const matName = model.startsWith('rock') ? 'rock' : model.startsWith('bush') ? 'bush' : model.endsWith('_bark') ? 'bark' : 'leaf';
+    const mesh = new THREE.InstancedMesh(stand[model], flora.mats[matName], list.length);
+    list.forEach((it, i) => { mesh.setMatrixAt(i, it.matrix); if (it.color) mesh.setColorAt(i, it.color); });
+    mesh.castShadow = true; mesh.receiveShadow = matName !== 'leaf';
+    (matName === 'bush' ? flora.bushGroup : scene).add(mesh); flora.meshes[model] = mesh;
+  }
+  decor.leaves = [flora.mats.leaf]; decor.rocks = flora.mats.rock; decor.bushes = flora.bushGroup;
+}
+// Blender models (tools/blender/*.py). Each loads on its own; a missing file just keeps the stand-ins.
+async function loadModels() {
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const loader = new GLTFLoader();
+  const meshesOf = (gltf) => {
+    const out = {}; gltf.scene.updateMatrixWorld(true);
+    gltf.scene.traverse((o) => { if (o.isMesh) out[o.name] = o.geometry.clone().applyMatrix4(o.matrixWorld); });
+    return out;
+  };
+  loader.loadAsync('assets/castle.glb').then((g) => {
+    const m = meshesOf(g);
+    dressCastle(homeWall, m.home_stone, m.home_roof); dressCastle(fort, m.fort_stone, m.fort_roof);
+  }).catch((err) => console.warn('castle.glb indisponível', err));
+  loader.loadAsync('assets/flora.glb').then((g) => dressFlora(meshesOf(g))).catch((err) => console.warn('flora.glb indisponível', err));
+}
+function dressFlora(models) {
+  for (const [name, geo] of Object.entries(models)) {
+    const mesh = flora.meshes[name];
+    if (!mesh) continue;
+    for (const a of Object.keys(geo.attributes)) if (a !== 'position' && a !== 'normal') geo.deleteAttribute(a);
+    const bark = name.endsWith('_bark'), rock = name.startsWith('rock');
+    shadeByHeight(geo, bark ? 0.85 : rock ? 0.75 : 0.58, bark ? 1.05 : rock ? 1.08 : 1.12);
+    mesh.geometry.dispose(); mesh.geometry = geo;
+  }
+}
+loadModels();
+
+// flowers, grass tufts and lamp posts
 {
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
-  const N = 90;
-  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1.4, 6), new THREE.MeshLambertMaterial({ color: 0x9b6b4a }), N);
-  const leaves = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.5, 0), new THREE.MeshLambertMaterial({ flatShading: true }), N);
-  const leaves2 = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.0, 0), new THREE.MeshLambertMaterial({ flatShading: true }), N);
-  const greens = [0x4fbf6a, 0x3aa65a, 0x6fd07a, 0x2e9a5b].map((c) => new THREE.Color(c));
-  for (let i = 0; i < N; i++) {
-    const side = i % 2 ? 1 : -1, x = side * rand(LANE_HALF + 6, 55), z = rand(-130, 45), k = rand(0.8, 1.6);
-    m.compose(p.set(x, 0.7 * k, z), q.identity(), s.set(k, k, k)); trunk.setMatrixAt(i, m);
-    q.setFromEuler(e.set(rand(0, 1), rand(0, 6), 0));
-    m.compose(p.set(x, 2.2 * k, z), q, s.set(k, k * 1.2, k)); leaves.setMatrixAt(i, m);
-    m.compose(p.set(x + rand(-0.4, 0.4) * k, 3.4 * k, z + rand(-0.4, 0.4) * k), q, s.set(k, k * 1.1, k)); leaves2.setMatrixAt(i, m);
-    leaves.setColorAt(i, greens[i % greens.length]); leaves2.setColorAt(i, greens[(i + 1) % greens.length]);
-    if (Math.abs(x) < 26) decor.treeSpots.push(new THREE.Vector3(x, 3 * k, z));
-  }
-  trunk.castShadow = leaves.castShadow = leaves2.castShadow = true; scene.add(trunk, leaves, leaves2);
-  decor.leaves = [leaves, leaves2];
-
-  const R = 34;
-  const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.8, 0), new THREE.MeshLambertMaterial({ color: 0xb9b0d0, flatShading: true }), R);
-  for (let i = 0; i < R; i++) {
-    const side = i % 2 ? 1 : -1, k = rand(0.5, 1.4);
-    q.setFromEuler(e.set(rand(0, 3), rand(0, 3), 0));
-    m.compose(p.set(side * rand(LANE_HALF + 2.5, 40), 0.3 * k, rand(-120, 40)), q, s.set(k, k * 0.7, k)); rocks.setMatrixAt(i, m);
-  }
-  rocks.castShadow = true; scene.add(rocks); decor.rocks = rocks;
-
-  const B = 70;
-  const bushes = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 5), new THREE.MeshLambertMaterial({ flatShading: true }), B);
-  const bushGreens = [0x57c46b, 0x45b35d, 0x7ad685].map((c) => new THREE.Color(c));
-  for (let i = 0; i < B; i++) {
-    const side = i % 2 ? 1 : -1, k = rand(0.5, 1.0);
-    m.compose(p.set(side * rand(LANE_HALF + 1.6, LANE_HALF + 5), 0.35 * k, rand(LANE_BACK, LANE_FRONT + 4)), q.identity(), s.set(k * 1.2, k * 0.8, k)); bushes.setMatrixAt(i, m);
-    bushes.setColorAt(i, bushGreens[i % 3]);
-  }
-  bushes.castShadow = true; scene.add(bushes); decor.bushes = bushes;
-
   const F = 420;
   const flowers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.14, 5, 4), new THREE.MeshLambertMaterial(), F);
   const petals = [0xff8fb8, 0xfff27a, 0xffffff, 0xb79cff, 0xff9f5a].map((c) => new THREE.Color(c));
   for (let i = 0; i < F; i++) {
     const side = i % 2 ? 1 : -1;
-    m.compose(p.set(side * rand(LANE_HALF + 1.4, 34), 0.12, rand(-120, 45)), q.identity(), s.set(1, 0.6, 1)); flowers.setMatrixAt(i, m);
+    const x = side * rand(LANE_HALF + 1.4, 34), z = rand(-120, 45);
+    m.compose(p.set(x, heightAt(x, z) + 0.12, z), q.identity(), s.set(1, 0.6, 1)); flowers.setMatrixAt(i, m);
     flowers.setColorAt(i, petals[i % petals.length]);
   }
   scene.add(flowers); decor.flowers = flowers;
 
   const T = 900;
-  const grass = new THREE.InstancedMesh(new THREE.ConeGeometry(0.07, 0.45, 3), new THREE.MeshLambertMaterial({ color: 0x5fbf5c }), T);
+  const grass = new THREE.InstancedMesh(new THREE.ConeGeometry(0.07, 0.45, 3), windy(new THREE.MeshLambertMaterial({ color: 0x5fbf5c }), 0.25, -0.2), T);
   for (let i = 0; i < T; i++) {
     const side = i % 2 ? 1 : -1;
     q.setFromEuler(e.set(rand(-0.3, 0.3), rand(0, 3), rand(-0.3, 0.3)));
-    m.compose(p.set(side * rand(LANE_HALF + 1.1, 40), 0.2, rand(-120, 45)), q, s.set(1, rand(0.6, 1.4), 1)); grass.setMatrixAt(i, m);
+    const x = side * rand(LANE_HALF + 1.1, 40), z = rand(-120, 45);
+    m.compose(p.set(x, heightAt(x, z) + 0.2, z), q, s.set(1, rand(0.6, 1.4), 1)); grass.setMatrixAt(i, m);
   }
   scene.add(grass); decor.grass = grass;
 
@@ -2007,6 +2213,7 @@ function fitCamera() {
   if (!w || !h) return;
   fitW = w; fitH = h;
   renderer.setSize(w, h, false);
+  post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(w, h);
   camera.aspect = w / h; camera.fov = camera.aspect < 0.75 ? 54 : 44; camera.updateProjectionMatrix();
   const bottom = -1 + (125 / h) * 2, top = 1 - (70 / h) * 2, side = 1 - (12 / w) * 2;
   const near = new THREE.Vector3(0, 0, PLAYER_Z + 1.8), edge = new THREE.Vector3(LANE_HALF + 0.9, 0, PLAYER_Z), far = new THREE.Vector3(0, 3, SPAWN_Z - 5);
@@ -2041,7 +2248,7 @@ const LOOK_COLORS = ['bg', 'fog', 'ground', 'lane', 'hemiSky', 'hemiGround', 'su
 const LOOK_NUMS = ['sunI', 'hemiI', 'fogNear', 'fogFar', 'liquid', 'liqFlow', 'liqIce', 'crackO', 'grass', 'storm', 'spikes', 'graves', 'hole',
   'snow', 'rain', 'embers', 'fireTrees', 'bubbles', 'wisps', 'voidStream', 'lightning', 'vignette', 'liqLightI'];
 const DAY_DEF = {
-  bg: 0x9fdcff, fog: 0xdff4ff, ground: 0x96dc7e, lane: 0xffffff, hemiSky: 0xeaf6ff, hemiGround: 0x8a7aa0, sun: 0xffffff,
+  bg: 0x9fdcff, fog: 0xdff4ff, ground: 0x96dc7e, lane: 0xffffff, hemiSky: 0xe4f1ff, hemiGround: 0x8a7aa0, sun: 0xfff2dc,
   leaves: 0xffffff, bush: 0xffffff, rock: 0xb9b0d0, liqA: 0x1a5fa0, liqB: 0x7ff0ff, crack: 0xffffff, fort: 0x6b3358, fortGlow: 0x000000, liqLight: 0xff7a2a,
   sunI: 2.0, hemiI: 1.25, fogNear: 1, fogFar: 1, liquid: 0, liqFlow: 1, liqIce: 0, crackO: 0, grass: 1, storm: 0, spikes: 0, graves: 0, hole: 0,
   snow: 0, rain: 0, embers: 0, fireTrees: 0, bubbles: 0, wisps: 0, voidStream: 0, lightning: 0, vignette: 0, liqLightI: 0,
@@ -2140,7 +2347,8 @@ const liquidPieces = [];
   }
   for (let i = 0; i < 8; i++) {
     const pool = new THREE.Mesh(new THREE.CircleGeometry(rand(2, 4.5), 28), liqMat(1, 4));
-    pool.rotation.x = -Math.PI / 2; pool.position.set((i % 2 ? 1 : -1) * rand(17, 38), -1, rand(-100, 30)); scene.add(pool); liquidPieces.push(pool);
+    pool.rotation.x = -Math.PI / 2; pool.position.set((i % 2 ? 1 : -1) * rand(17, 30), -1, rand(-100, 30));
+    pool.userData.base = heightAt(pool.position.x, pool.position.z) + 0.05; scene.add(pool); liquidPieces.push(pool);
   }
 }
 // glowing veins across the lane (lava cracks, frost, toxic veins, void rifts)
@@ -2179,7 +2387,8 @@ const spikes = new THREE.InstancedMesh(new THREE.ConeGeometry(0.45, 2.6, 5), new
   for (let i = 0; i < 80; i++) {
     const side = i % 2 ? 1 : -1, k = rand(0.6, 1.8);
     q.setFromEuler(e.set(rand(-0.35, 0.35), rand(0, 6), rand(-0.35, 0.35)));
-    m.compose(p.set(side * rand(LANE_HALF + 1.3, LANE_HALF + 22), 1.1 * k, rand(LANE_BACK, LANE_FRONT + 6)), q, s.set(k, k, k)); spikes.setMatrixAt(i, m);
+    const x = side * rand(LANE_HALF + 1.3, LANE_HALF + 22), z = rand(LANE_BACK, LANE_FRONT + 6);
+    m.compose(p.set(x, heightAt(x, z) + 1.1 * k, z), q, s.set(k, k, k)); spikes.setMatrixAt(i, m);
   }
   spikes.castShadow = true; spikes.visible = false; scene.add(spikes);
 }
@@ -2195,7 +2404,8 @@ const graves = new THREE.InstancedMesh(
   for (let i = 0; i < 50; i++) {
     const side = i % 2 ? 1 : -1, k = rand(0.8, 1.3);
     q.setFromEuler(e.set(rand(-0.15, 0.15), rand(-0.4, 0.4), rand(-0.2, 0.2)));
-    m.compose(p.set(side * rand(LANE_HALF + 1.6, LANE_HALF + 18), 0, rand(LANE_BACK, LANE_FRONT + 4)), q, s.set(k, k, k)); graves.setMatrixAt(i, m);
+    const x = side * rand(LANE_HALF + 1.6, LANE_HALF + 18), z = rand(LANE_BACK, LANE_FRONT + 4);
+    m.compose(p.set(x, heightAt(x, z), z), q, s.set(k, k, k)); graves.setMatrixAt(i, m);
   }
   graves.castShadow = true; graves.visible = false; scene.add(graves);
 }
@@ -2523,17 +2733,17 @@ function updateAmbience(realDt, dt) {
   stormMat.emissiveIntensity = amb.bolt * 1.4;
   groundMat.color.copy(L.ground); lane.material.color.copy(L.lane);
   fort.mat.color.copy(L.fort); fort.mat.emissive.copy(L.fortGlow).multiplyScalar(0.8 + 0.2 * Math.sin(gt * 7));
-  for (const l of decor.leaves) l.material.color.copy(L.leaves);
-  decor.rocks.material.color.copy(L.rock); decor.bushes.material.color.copy(L.bush);
+  for (const l of decor.leaves) l.color.copy(L.leaves);
+  decor.rocks.color.copy(L.rock); flora.mats.bush.color.copy(L.bush);
   decor.bushes.scale.y = 0.45 + 0.55 * L.grass;
   decor.grass.scale.y = decor.flowers.scale.y = Math.max(0.05, L.grass);
   decor.grass.visible = decor.flowers.visible = L.grass > 0.06;
 
   const rise = clamp(L.liquid / 0.6, 0, 1);
-  for (const p of liquidPieces) p.position.y = -1 + 1.05 * rise;
+  for (const p of liquidPieces) p.position.y = (p.userData.base ?? 0.05) - 1.05 * (1 - rise);
   liqUniforms.uA.value.copy(L.liqA); liqUniforms.uB.value.copy(L.liqB); liqUniforms.uIce.value = L.liqIce;
   amb.flow += dt * L.liqFlow; liqUniforms.uT.value = amb.flow;
-  for (const l of liqLights) { l.color.copy(L.liqLight); l.intensity = L.liqLightI * 90; }
+  for (const l of liqLights) { l.color.copy(L.liqLight); l.intensity = L.liqLightI * 50; }
   crackMat.color.copy(L.crack); crackMat.opacity = L.crackO * (0.8 + 0.2 * Math.sin(gt * 3)); cracks.visible = L.crackO > 0.01;
   storm.visible = L.storm > 0.01; storm.position.y = -40 * (1 - L.storm);
   spikes.visible = L.spikes > 0.01; spikes.position.y = -3.2 * (1 - L.spikes);
@@ -2684,7 +2894,7 @@ function loop(now) { requestAnimationFrame(loop); frame(now); }
 function frame(now) {
   if (innerWidth !== fitW || innerHeight !== fitH) fitCamera();
   const realDt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now);
-  if (state.paused) { renderer.render(scene, camera); return; }
+  if (state.paused) { render(realDt); return; }
   let dt = realDt;
   if (state.slowmo > 0) { state.slowmo -= realDt; dt *= 0.3; }
   if (state.phase === 'dying') {
@@ -2695,7 +2905,7 @@ function frame(now) {
   else simulate(dt, realDt);
   drawCrowds(); drawAmbient(realDt, dt);
   if (state.phase !== 'menu') updateHud();
-  renderer.render(scene, camera);
+  render(realDt);
 }
 
 // ================= Boot =================

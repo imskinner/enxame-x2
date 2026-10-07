@@ -767,6 +767,26 @@ async function loadModels() {
   }).catch((err) => console.warn('castle.glb indisponível', err));
   loader.loadAsync('assets/flora.glb').then((g) => dressFlora(meshesOf(g))).catch((err) => console.warn('flora.glb indisponível', err));
   loader.loadAsync('assets/props.glb').then((g) => dressProps(meshesOf(g))).catch((err) => console.warn('props.glb indisponível', err));
+  loader.loadAsync('assets/characters.glb').then((g) => {
+    const m = meshesOf(g);
+    for (const [mesh, src] of [[allyMesh, m.soldier], [enemyMesh, m.imp]]) { mesh.geometry.dispose(); mesh.geometry = crowdGeometry(src); }
+  }).catch((err) => console.warn('characters.glb indisponível', err));
+}
+// Unpacks a Blender character (tools/blender/characters.py) into the attributes the crowd shader reads:
+// COLOR_0 is the part color, COLOR_1 packs team tint, walk swing (-1/0/1) and swing pivot height.
+function crowdGeometry(src) {
+  const n = src.attributes.position.count, c = src.attributes.color, meta = src.attributes.color_1;
+  const col = new Float32Array(n * 3), tint = new Float32Array(n), swing = new Float32Array(n), pivot = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    col[i * 3] = c.getX(i); col[i * 3 + 1] = c.getY(i); col[i * 3 + 2] = c.getZ(i);
+    tint[i] = meta.getX(i) > 0.5 ? 1 : 0; swing[i] = Math.round(meta.getY(i) * 2 - 1); pivot[i] = meta.getZ(i) * 2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', src.attributes.position); geo.setAttribute('normal', src.attributes.normal);
+  if (src.index) geo.setIndex(src.index);
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('tint', new THREE.BufferAttribute(tint, 1));
+  geo.setAttribute('swing', new THREE.BufferAttribute(swing, 1)); geo.setAttribute('pivotY', new THREE.BufferAttribute(pivot, 1));
+  return geo;
 }
 function dressFlora(models) {
   for (const [name, geo] of Object.entries(models)) {

@@ -754,8 +754,10 @@ const flora = { meshes: {}, mats: {} };
 }
 // Blender models (tools/blender/*.py). Each loads on its own; a missing file just keeps the stand-ins.
 async function loadModels() {
-  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
+  const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([import('three/addons/loaders/GLTFLoader.js'), import('three/addons/loaders/DRACOLoader.js')]);
+  // The GLBs are Draco-compressed; the decoder comes from the same three.js release the import map points at.
+  const dracoPath = import.meta.resolve?.('three/addons/libs/draco/gltf/') ?? 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/';
+  const loader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath(dracoPath));
   const meshesOf = (gltf) => {
     const out = {}; gltf.scene.updateMatrixWorld(true);
     gltf.scene.traverse((o) => { if (o.isMesh) out[o.name] = o.geometry.clone().applyMatrix4(o.matrixWorld); });

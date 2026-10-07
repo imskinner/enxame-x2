@@ -3,8 +3,10 @@
 # Each castle has two meshes, <name>_stone and <name>_roof. Per-block brightness lives in vertex colors
 # (COLOR_0); the game multiplies it by its own material color, which it changes per biome and on damage.
 # Blender -Y is the front (it becomes glTF +Z, toward the game camera). Origins sit at the ground.
-import bpy, bmesh, math, os, random
+import bpy, bmesh, math, os, random, sys
 from mathutils import Matrix, Vector
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lib import export
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'assets', 'castle.glb')
 random.seed(5)
@@ -142,8 +144,4 @@ castle('fort', w=20.0, h=6.0, depth=1.6, tower_r=1.6, tower_h=8.6, roof_r=2.1, r
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 bpy.ops.object.select_all(action='SELECT')
-bpy.ops.export_scene.gltf(filepath=os.path.abspath(OUT), export_format='GLB', use_selection=True,
-                          export_apply=True, export_normals=True, export_vertex_color='ACTIVE',
-                          export_all_vertex_colors=False, export_yup=True)
-print('WROTE', os.path.abspath(OUT), sorted(o.name for o in bpy.data.objects),
-      'tris:', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects))
+export('castle.glb')

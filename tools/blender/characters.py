@@ -7,7 +7,7 @@
 import bpy, bmesh, math, os, sys
 from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import reset, euler, ASSETS
+from lib import reset, euler, ASSETS, export
 
 reset(2)
 
@@ -156,8 +156,4 @@ for (dx, dy, dz) in ((0.1, 0, 0), (-0.1, 0, 0), (0, 0.1, 0), (0, 0, 0.1), (0, -0
     i.cone((0.45 + dx, 0.83 + dy, 0.28 + dz), 0.025, 0.0, 0.08, 0xd8d0c0, rot=(math.atan2(dz, dy) if dy or dz else 0, 0, -math.atan2(dx, dy) if dx else 0), segs=4, **club)
 i.build()
 
-out = os.path.abspath(os.path.join(ASSETS, 'characters.glb'))
-bpy.ops.object.select_all(action='SELECT')
-bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', use_selection=True, export_apply=True, export_normals=True,
-                          export_vertex_color='ACTIVE', export_all_vertex_colors=True, export_yup=True)
-print('WROTE', out, {o.name: sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects})
+export('characters.glb', export_all_vertex_colors=True)

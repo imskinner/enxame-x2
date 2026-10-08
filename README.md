@@ -7,7 +7,7 @@ Jogo de navegador em 3D (Three.js): seu canhão dispara uma tropa, os portões m
 ## Modos
 
 - **Defesa:** o canhão dispara a tropa, os portões a multiplicam e você segura a horda antes do muro.
-- **Marcha:** a tropa corre por uma estrada sem fim atirando para a frente. Portões dão soldados, multiplicam ou cortam a tropa, ou avançam o calendário. Os anos mudam a era (da Pedra à Cósmica) e com ela as armas. Atirar num portão de número aumenta o valor: um -8 pode virar +2. Há muros de caixotes, jaulas com reféns, brutamontes e um chefão a cada 1000 m. Ranking separado.
+- **Marcha:** a tropa corre por uma estrada sem fim atirando para a frente. Portões dourados melhoram a arma (cadência, dano, alcance) e atirar neles aumenta o número: um -8% pode virar +4%. Portões verdes-água multiplicam a tropa e as jaulas guardam reféns (os únicos soldados novos); matar a horda carrega o ultimate, e relíquias acorrentadas dão um bônus (rajada, tiro triplo, dano, ultimate) quando você as liberta à bala. A cada 1000 m um chefão para a estrada ao longe e vem andando; só ataca quando entra no alcance da tropa. Ao vencê-lo, um portal se abre e atravessá-lo dá à tropa o elemento dele (gelo congela, fogo queima, lava explode, raio salta, água atravessa, veneno deixa poças, zumbi ergue os mortos contra a horda, buraco negro persegue) e leva ao mundo do próximo chefão. A tropa guarda dois elementos; no terceiro, dois portais aparecem, o escolhido acende e a tropa entra em fila nele. Ranking separado.
 
 ## Controles
 
@@ -48,6 +48,6 @@ Opcional: sem chave configurada o jogo roda 100% offline. Para ligar:
 
 Quem joga entra automaticamente como convidado; ao fim da partida escolhe um apelido. Vincular Google ou e-mail transforma o convidado em conta permanente sem perder os pontos. A pontuação só é gravada pelas funções `start_run`/`finish_run`, que medem o tempo no servidor e recusam valores impossíveis para a onda. Partidas com atalhos de teste na URL não contam.
 
-Atalhos de teste pela URL: `#march` inicia a marcha; `#march850` começa aos 850 m com uma tropa já crescida.
+Atalhos de teste pela URL: `#march` inicia a marcha; `#march850` começa aos 850 m com uma tropa já crescida (`#march2850` também traz os elementos dos chefões anteriores); acrescente `t60` (`#march0t60`) para jogar 60 s instantâneos com um robô que escolhe portões, e veja o resumo no console.
 
 Na defesa: `#w13t20` pula para a onda 13 e simula 20 s; flags `u` (ultimate), `c` (câmera próxima), `b` (invoca chefão), `k` (mata o chefão).

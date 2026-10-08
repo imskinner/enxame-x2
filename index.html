@@ -1809,7 +1809,7 @@ function killEnemy(e, fromUlt = false) {
   sparks(e.x, 0.8, e.z, e.color, fromUlt ? 3 : 6, 5, 0.5, 0.4, 2);
   Sfx.play('pop');
   if (!fromUlt) addUlt(e.ult * ultGainScale());
-  if (state.mode === 'march') marchKill(e, 1);
+  if (state.mode === 'march') marchKill(e);
   else if (Math.random() < (e.kind === 'runner' ? 0.02 : 0.012)) spawnPickup(randomPickupType(), e.x, e.z);
 }
 function killBig(b, fromUlt = false) {
@@ -1824,7 +1824,7 @@ function killBig(b, fromUlt = false) {
   state.shake = Math.max(state.shake, isBoss ? 1 : 0.35); Sfx.play('bigdie');
   floatText('+' + b.score, b.x, b.scale * 1.5, b.z, 'gold');
   if (!fromUlt) addUlt(b.ult * ultGainScale());
-  if (state.mode === 'march') { if (isBoss) bossBeaten(b); else marchKill(b, 4); }
+  if (state.mode === 'march') { if (isBoss) bossBeaten(b); else marchKill(b); }
   else if (isBoss) { celebrate(b.x, b.z); spawnPickup('plus', b.x - 1.6, b.z); spawnPickup('plus', b.x + 1.6, b.z); spawnPickup('heal', b.x, b.z - 1.5); }
   else if (Math.random() < 0.4) spawnPickup(randomPickupType(), b.x, b.z);
   removeBig(b);
@@ -2351,9 +2351,10 @@ async function initOnline() {
 // troop's shots and leads into the next boss's world. The world is a treadmill: the troop stays at SQUAD_Z and
 // everything slides toward it.
 const SQUAD_Z = 15, MAX_SQUAD = 150, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
-const BOSS_Z = SQUAD_Z - 26; // where the boss plants itself: inside the troop's shortest range, so both sides can hit
-const MARCH_BOSS_HP = 7; // the march troop fires as one: its bosses need far more health than the defense ones
-const RECRUIT_COST = 2; // kill points per new soldier (an imp is worth 1, a brute 4)
+// The boss halts the road far ahead and walks in. It only uses its powers once inside the troop's base range, so a
+// longer range buys free hits; then it keeps closing in slowly until it stomps the troop.
+const BOSS_HALT_Z = SQUAD_Z - 75, BOSS_REACH = 40, PORTAL_Z = SQUAD_Z - 50;
+const MARCH_BOSS_HP = 5; // the march troop fires as one: its bosses need far more health than the defense ones
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 const STATS = {
   rate: { name: 'CADÊNCIA', unit: '%', cap: 30 },
@@ -2368,20 +2369,20 @@ const ELEMENTS = {
   storm: { name: 'TEMPESTADE', hint: 'Cada acerto solta raios em mais dois inimigos', tint: 0xe8d84a, shot: 0xfff07a },
   water: { name: 'ÁGUA', hint: 'Tiros atravessam o primeiro alvo', tint: 0x3aa8ff, shot: 0x8ff4ff },
   poison: { name: 'VENENO', hint: 'Quem morre deixa uma poça tóxica para a horda', tint: 0x7ad83a, shot: 0x9cff4a },
-  zombie: { name: 'ZUMBI', hint: 'Os mortos se erguem: recrutas pela metade do preço', tint: 0x8ab89a, shot: 0xc8ffd8 },
+  zombie: { name: 'ZUMBI', hint: 'Inimigos abatidos se erguem e atacam a horda', tint: 0x8ab89a, shot: 0xc8ffd8 },
   void: { name: 'BURACO NEGRO', hint: 'Tiros perseguem os inimigos', tint: 0x9a5ae8, shot: 0xc86bff },
 };
 for (const e of Object.values(ELEMENTS)) { e.tintC = new THREE.Color(e.tint); e.shotC = new THREE.Color(e.shot); }
 const M = {
   speed: 0, dist: 0, scroll: 0, nextSeg: 0, bossAt: BOSS_EVERY, volley: 0, walls: [], bolts: [], portals: [], pools: [],
-  elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, recruit: 0, triple: 0, bossT: 0, built: false, best: 0,
+  elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
 };
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
 const shotRange = () => clamp(WEAPON.range + M.stat.range, 32, 70);
 const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
-const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged') n++; return n; };
+const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul') n++; return n; };
 
 // ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
 const marchWorld = new THREE.Group(); marchWorld.visible = false; scene.add(marchWorld);
@@ -2701,23 +2702,21 @@ function addSoldiers(k, x = null) {
   if (k > 0) floatText('+' + k, M.cx, 3, SQUAD_Z, 'cyan');
 }
 function loseSoldiers(k) {
-  const troop = allies.filter((a) => a.alive && a.role !== 'caged');
+  const troop = allies.filter((a) => a.alive && a.role !== 'caged' && a.role !== 'ghoul');
   for (let i = 0; i < k && troop.length; i++) {
     const a = troop.splice(Math.floor(Math.random() * troop.length), 1)[0];
     a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16);
   }
   if (k > 0) { floatText('-' + k, M.cx, 3, SQUAD_Z, 'red'); Sfx.play('cut'); }
 }
-// Killing the horde recruits: every few kill points a new soldier rises where the enemy fell and runs to the troop.
-function marchKill(e, pts) {
+// Kills on the march only charge the ultimate (in killEnemy); soldiers come from cages and multiplier gates. The poison
+// and zombie elements add their own aftermath.
+function marchKill(e) {
   if (hasEl('poison') && M.pools.length < 14) M.pools.push({ x: e.x, z: e.z, r: 1.6, life: 2.6 });
-  M.recruit += pts * (hasEl('zombie') ? 2 : 1);
-  while (M.recruit >= RECRUIT_COST) {
-    M.recruit -= RECRUIT_COST;
-    if (squadCount() >= MAX_SQUAD) continue;
-    const a = spawnAlly(e.x, e.z, 0, 0, 0, 1); if (!a) break;
-    a.role = 'joining'; floatText('+1', e.x, 1.8, e.z, 'cyan');
-    emit(sparkSys, e.x, 0.6, e.z, 0, 2.5, 0, hasEl('zombie') ? WISP : toColor(0x5ff3ff, 0.2), 0.8, 0.8, -0.3, -0.5, 0);
+  if (hasEl('zombie') && Math.random() < 0.3 && allies.filter((a) => a.alive && a.role === 'ghoul').length < 12) {
+    const a = spawnAlly(e.x, e.z, 0, 0, 0, 0); if (!a) return;
+    a.role = 'ghoul'; a.life = 5;
+    emit(sparkSys, e.x, 0.6, e.z, 0, 2.5, 0, WISP, 0.8, 0.8, -0.3, -0.5, 0); debris(e.x, 0.3, e.z, new THREE.Color(0x6a5040), 3, 4, 0.2);
   }
 }
 
@@ -2754,8 +2753,8 @@ function spawnPortal(x, rx, element, slot, text) {
   const rim = new THREE.Mesh(portalRimGeo, rimMat); rim.scale.set(rx, ry, 1); rim.position.y = ry + 0.2; grp.add(rim);
   const labelMat = new THREE.MeshBasicMaterial({ map: portalLabelTex(text, slot == null ? 'ATRAVESSE PARA ABSORVER' : 'ENTRA ' + ELEMENTS[element].name), transparent: true, depthWrite: false });
   const label = new THREE.Mesh(new THREE.PlaneGeometry(rx > 4 ? 10 : 8, rx > 4 ? 2.5 : 2), labelMat); label.position.set(0, ry * 2 + 1.6, 0.1); label.rotation.x = -0.7; label.renderOrder = 2; grp.add(label);
-  const z = BOSS_Z - 22; grp.position.set(x, 0, z); grp.scale.setScalar(0.001); scene.add(grp);
-  M.portals.push({ x, z, half: rx, element, slot, grp, mat, rimMat, labelMat, disc, open: 0 });
+  const z = PORTAL_Z; grp.position.set(x, 0, z); grp.scale.setScalar(0.001); scene.add(grp);
+  M.portals.push({ x, z, half: rx, element, slot, grp, mat, rimMat, labelMat, disc, open: 0, hl: 1, rimC: rimMat.color.clone() });
 }
 function removePortal(p) {
   scene.remove(p.grp); p.disc.geometry.dispose(); p.mat.dispose(); p.rimMat.dispose(); p.labelMat.map.dispose(); p.labelMat.dispose();
@@ -2777,7 +2776,7 @@ function enterPortal(p) {
   else if (p.slot == null) M.elements.push(id);
   else M.elements[p.slot] = id;
   for (const q of M.portals) removePortal(q);
-  M.portals.length = 0;
+  M.portals.length = 0; M.portalSel = null;
   M.stage++; M.stageStart = M.dist; M.bossAt = M.dist + BOSS_EVERY; M.nextSeg = M.dist + 14;
   state.bossDown = false; state.wave = M.stage * 5 + 1; snapLook();
   state.flash = 1; state.shake = Math.max(state.shake, 0.4); Sfx.play('warp');
@@ -2793,7 +2792,7 @@ function marchSegment() {
   const rush = M.dist > M.bossAt - BOSS_LEAD - (MARCH_BEHIND - MARCH_FAR);
   const kind = rush ? 'enemies' : M.segs <= 3 ? 'gates2' : weighted([ // the first stretch only offers gates
     { w: 28, k: 'gates2' }, { w: 10, k: 'gate1' }, { w: 24 + Math.min(20, lvl * 3), k: 'enemies' },
-    { w: lvl > 0.6 ? 12 : 0, k: 'wall' }, { w: lvl > 0.3 ? 9 : 0, k: 'cage' }, { w: 10, k: 'relic' },
+    { w: lvl > 0.6 ? 12 : 0, k: 'wall' }, { w: lvl > 0.15 ? 16 : 0, k: 'cage' }, { w: 10, k: 'relic' },
   ]).k;
   const scale = 1 + lvl * 0.35;
   const stat = () => weighted([{ w: 40, k: 'rate' }, { w: 40, k: 'dmg' }, { w: 20, k: 'range' }]).k;
@@ -2820,7 +2819,7 @@ function marchSegment() {
     const side = Math.random() < 0.5 ? -1 : 1; // off-center, so even the widest troop can go around it
     make(Math.random() < 0.6 ? badGate() : goodGate(), side * rand(3.5, 5), rand(5, 6.5));
   } else if (kind === 'enemies') {
-    const n = Math.round(rand(4, 7) * scale * (rush ? 1.5 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
+    const n = Math.round(rand(4, 7) * scale * (rush ? 1.2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
     for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
     if (lvl > 1.2 && Math.random() < 0.3 + lvl * 0.05) { spawnBig('brute'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR + rand(-2, 2); b.mesh.position.z = b.z; }
   } else if (kind === 'wall') {
@@ -2829,7 +2828,7 @@ function marchSegment() {
     if (lw > 1) spawnWall(-LANE_HALF + lw / 2, lw, hp);
     if (rw > 1) spawnWall(LANE_HALF - rw / 2, rw, hp);
   } else if (kind === 'cage') {
-    spawnCage(rand(-LANE_HALF + 2, LANE_HALF - 2), Math.round(rand(10, 16) * scale), randInt(3, 6 + Math.floor(lvl)));
+    spawnCage(rand(-LANE_HALF + 2, LANE_HALF - 2), Math.round(rand(10, 16) * scale), randInt(4, 8 + Math.floor(lvl * 1.5)));
   } else {
     const type = weighted([{ w: 30, k: 'rapid' }, { w: 25, k: 'triple' }, { w: 25, k: 'power' }, { w: 20, k: 'charge' }]).k;
     spawnRelic(rand(-LANE_HALF + 2, LANE_HALF - 2), type, Math.round(rand(14, 20) * scale));
@@ -2840,7 +2839,7 @@ function marchSegment() {
 function startMarch() {
   Object.assign(M, {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
-    elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, recruit: 0, triple: 0, bossT: 0,
+    elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null,
   });
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
   for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0;
@@ -2874,7 +2873,7 @@ function simulateMarch(dt, realDt = dt) {
 
   // the road halts while a boss is standing in it
   const boss = bigs.find((b) => b.alive && b.kind === 'boss');
-  const arena = boss && boss.z > BOSS_Z - 30;
+  const arena = boss && boss.z > BOSS_HALT_Z;
   const target = active ? (arena ? 0 : Math.min(15, 8 + M.dist / 350)) : 0;
   M.speed += (target - M.speed) * Math.min(1, dt * (arena ? 3 : 1.2));
   const dz = M.speed * dt;
@@ -2886,17 +2885,24 @@ function simulateMarch(dt, realDt = dt) {
   // spawn the road ahead; the boss comes just before each 1000 m mark
   if (active && !M.portals.length) {
     if (!boss && !state.bossDown && M.dist >= M.bossAt - BOSS_LEAD) {
-      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR; b.mesh.position.z = b.z; M.bossLive = true; M.bossT = 0;
+      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR; b.mesh.position.z = b.z; M.bossLive = true;
     } else if (!boss && M.dist >= M.nextSeg) { marchSegment(); M.nextSeg = M.dist + rand(22, 30) * (M.speed / 10); }
   }
 
-  // troop formation (sunflower) and the stragglers running to join it
+  // troop formation (sunflower) and the stragglers running to join it; near a pair of vortices it files into the chosen one
+  const fun = portalFunnel(R), fx = fun ? fun.x : M.cx, fk = fun ? fun.k : 1;
   let slot = 0;
   for (const a of allies) {
     if (!a.alive) continue;
     if (a.role === 'caged') { a.x = a.cage.x + a.ox; a.z = a.cage.z + a.oz; continue; }
+    if (a.role === 'ghoul') { // zombie element: the risen dead charge the horde and burst on the first one they reach
+      a.z -= 7 * dt; a.life -= dt;
+      for (const e of enemies) if (e.alive && (a.x - e.x) ** 2 + (a.z - e.z) ** 2 < (e.r + 0.4) ** 2) { hurt(e, WEAPON.dmg * statMul('dmg') * 6); a.life = 0; break; }
+      if (a.life <= 0 || a.z < MARCH_FAR) { a.alive = false; debris(a.x, 0.6, a.z, ELEMENTS.zombie.tintC, 4, 4, 0.2); }
+      continue;
+    }
     const r = 0.55 * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
-    const tx = M.cx + Math.cos(ang) * r, tz = SQUAD_Z + Math.sin(ang) * r * 0.8;
+    const tx = fx + Math.cos(ang) * r * fk, tz = SQUAD_Z + Math.sin(ang) * r * 0.8;
     const k = a.role === 'joining' ? dt * 3.5 : dt * 9;
     a.x += (tx - a.x) * Math.min(1, k); a.z += (tz - a.z) * Math.min(1, k);
     if (a.role === 'joining' && Math.abs(tx - a.x) + Math.abs(tz - a.z) < 0.6) a.role = 'squad';
@@ -2945,19 +2951,31 @@ function simulateMarch(dt, realDt = dt) {
   state.kills = state.kills || 0;
   if (active && squadCount() === 0) gameOver();
 }
+// With two vortices the one under the troop's center lights up and the other dims; the pick locks 8 m out, and from
+// 22 m out the troop narrows and files toward the chosen one so it's plain which it goes through.
+function portalFunnel(R) {
+  if (M.portals.length < 2) return null;
+  const z = M.portals[0].z;
+  if (z < SQUAD_Z - 8 || !M.portalSel) M.portalSel = M.portals.reduce((a, b) => (Math.abs(b.x - M.cx) < Math.abs(a.x - M.cx) ? b : a));
+  if (z < SQUAD_Z - 22) return null;
+  const p = M.portalSel, t = clamp((z - (SQUAD_Z - 22)) / 10, 0, 1);
+  return { x: M.cx + (p.x - M.cx) * t, k: 1 + (Math.min(1, (p.half * 0.75) / Math.max(R, 0.1)) - 1) * t };
+}
 function updatePortals(dt, dz, active) {
   let entered = null;
+  const pair = M.portals.length > 1;
   for (const p of M.portals) {
     const z0 = p.z; p.z += dz; p.grp.position.z = p.z;
-    p.open = Math.min(1, p.open + dt * 1.2); p.mat.uniforms.uOpen.value = p.open;
-    p.grp.scale.setScalar(Math.max(0.001, easeOutBack(Math.min(1, p.open * 1.4))));
+    p.hl += ((!pair || p === M.portalSel ? 1 : 0) - p.hl) * Math.min(1, dt * 8);
+    p.open = Math.min(1, p.open + dt * 1.2); p.mat.uniforms.uOpen.value = p.open * (0.3 + 0.7 * p.hl);
+    p.rimMat.color.copy(p.rimC).multiplyScalar(0.25 + 0.75 * p.hl); p.labelMat.opacity = 0.35 + 0.65 * p.hl;
+    p.grp.scale.setScalar(Math.max(0.001, easeOutBack(Math.min(1, p.open * 1.4)) * (pair ? 0.88 + 0.2 * p.hl : 1)));
     p.disc.rotation.z += dt * 0.5;
     if (Math.random() < 0.5) emit(sparkSys, p.x + rand(-p.half, p.half), rand(0.5, 7), p.z, 0, rand(0.5, 2), rand(0.5, 2), toColor(p.mat.uniforms.uColor.value.getHex(), 0.2), 0.5, 0.8, -0.3, 0, 0);
     if (active && !entered && z0 < SQUAD_Z && p.z >= SQUAD_Z) entered = p;
   }
   if (!entered) return;
-  // with two vortices, the troop goes through whichever is under its center
-  if (M.portals.length > 1) entered = M.portals.reduce((a, b) => (Math.abs(b.x - M.cx) < Math.abs(a.x - M.cx) ? b : a));
+  if (pair) entered = M.portalSel || entered; // the highlighted one, whatever the edges of the troop touch
   enterPortal(entered);
 }
 // poison element: pools left by the dead hurt the horde walking through them
@@ -3052,14 +3070,11 @@ function updateMarchEnemies(dt, dz) {
     if (!b.alive) continue;
     const isBoss = b.kind === 'boss';
     if (isBoss) {
-      // The boss strides in, plants itself within range and only starts its powers once there. After 20 s it
-      // starts creeping toward the troop so a fight can't stall forever.
-      const arrived = b.z >= BOSS_Z - 0.5;
-      if (arrived) M.bossT += dt;
-      const hold = Math.min(SQUAD_Z - 4, BOSS_Z + Math.max(0, M.bossT - 20) * 0.5);
-      if (b.z < hold) b.z = Math.min(hold, b.z + dz + 7 * dt);
+      // strides in fast while out of reach, then closes in slowly with its powers on (see BOSS_REACH)
+      const far = SQUAD_Z - b.z > BOSS_REACH;
+      b.z = Math.min(SQUAD_Z - 4, b.z + dz + (far ? 4.5 : 0.6) * dt);
       b.x += clamp(M.cx - b.x, -1, 1) * 1.6 * dt;
-      b.arrived = arrived;
+      b.arrived = !far;
     } else b.z += dz + b.speed * 0.3 * dt;
     b.x = clamp(b.x + Math.sin(gt * 0.9 + b.phase) * 0.4 * dt, -LANE_HALF + b.r, LANE_HALF - b.r);
     if (b.flash > 0) b.flash -= dt * 7;
@@ -3074,7 +3089,7 @@ function updateMarchEnemies(dt, dz) {
     else if (b.chill > 0) { u.skin.emissive.setHex(0x6ac8ff); u.skin.emissiveIntensity = 0.45; }
     else { u.skin.emissive.setHex(u.glow); u.skin.emissiveIntensity = u.glowI * (0.85 + 0.15 * Math.sin(gt * 6)); }
     for (const r of u.spin) r.rotation.z += dt * 2.5;
-    if (isBoss && active && b.arrived) bossPower(b, b.chill > 0 ? dt * 0.6 : dt); // ice slows its powers
+    if (isBoss && active && b.arrived) bossPower(b, dt * (b.chill > 0 ? 0.5 : 0.8)); // a bit slower than in defense; ice slows it more
     if (b.label) { drawLabel(b.label, Math.max(0, Math.ceil(b.hp))); b.label.sprite.position.set(b.x, b.scale * 1.8 + 0.6, b.z); }
     if (active && b.z > SQUAD_Z - b.r - 2) { // stomping into the troop
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < (b.r + 0.5) ** 2) {
@@ -3621,10 +3636,10 @@ function decorateBoss(root, head, t) {
 // ---- boss powers ----
 const fireballs = [], toxic = [];
 const fireballGeo = new THREE.SphereGeometry(0.6, 14, 10), fireballMat = new THREE.MeshBasicMaterial({ color: 0xffb03a });
-// On the march the troop is a dense blob, so one blast could wipe dozens: there it takes at most a few plus 6% of the troop.
+// On the march the troop is a dense blob, so one blast could wipe dozens: there it takes at most a couple plus 4% of the troop.
 function killAlliesNear(x, z, r, color) {
   let n = 0;
-  const cap = state.mode === 'march' ? Math.ceil(3 + squadCount() * 0.06) : Infinity;
+  const cap = state.mode === 'march' ? Math.ceil(2 + squadCount() * 0.04) : Infinity;
   for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - x) ** 2 + (a.z - z) ** 2 < r * r) {
     a.alive = false; if (++n % 3 === 0) debris(a.x, 0.6, a.z, color, 1, 4, 0.18);
     if (n >= cap) break;
@@ -3871,7 +3886,7 @@ function drawCrowds() {
   for (let i = 0; i < allies.length; i++) {
     const a = allies[i], k = march && a.role === 'joining' ? 1 : amp, w = Math.sin(gt * 15 + a.phase) * k, bob = a.y > 0 ? a.y : Math.abs(w) * 0.1;
     writeMatrix(ma, i, a.x, bob, a.z, Math.PI, w * 0.06, 1, a.y > 0 ? 1.08 : 1 - Math.abs(w) * 0.04);
-    writeColor(ca, i, march ? (a.role === 'caged' ? COL.caged : troopColor(a.phase > Math.PI ? 1 : 0)) : a.tint ? COL.allyClone : COL.ally, a.role === 'joining' ? 0.35 : 0);
+    writeColor(ca, i, march ? (a.role === 'caged' ? COL.caged : a.role === 'ghoul' ? ELEMENTS.zombie.tintC : troopColor(a.phase > Math.PI ? 1 : 0)) : a.tint ? COL.allyClone : COL.ally, a.role === 'joining' ? 0.35 : 0);
   }
   allyMesh.count = allies.length; allyMesh.instanceMatrix.needsUpdate = true; allyMesh.instanceColor.needsUpdate = true;
   ma = enemyMesh.instanceMatrix.array; ca = enemyMesh.instanceColor.array;
@@ -3968,6 +3983,8 @@ const marchBot = () => {
   let best = null;
   for (const g of gates) if (!g.used && !g.dying && ahead(g) && (!best || g.z > best.z + 3 || (Math.abs(g.z - best.z) <= 3 && worth(g) > worth(best)))) best = g;
   let x = best && worth(best) > 0 ? best.x : best ? -Math.sign(best.x || 1) * 5 : Math.sin(gt * 0.5) * 4;
+  const prize = M.walls.find((o) => o.type !== 'wall' && !o.dead && ahead(o)); // line up with a cage or relic to shoot it open
+  if (prize && (!best || best.z < SQUAD_Z - 28)) x = prize.x;
   for (const o of M.walls) if (o.type === 'wall' && ahead(o) && Math.abs(x - o.x) < o.half + M.R) x = o.x + Math.sign(-o.x || 1) * (o.half + M.R + 0.5);
   for (const p of M.portals) if (ahead(p) && M.portals.length > 1) x = M.portals[1].x; // always gives up the second element
   state.targetX = laneClamp(x);
@@ -3978,7 +3995,7 @@ if (mh) {
     const d = +mh[1]; M.dist = d; M.nextSeg = d + 10; M.segs = 9;
     M.stage = Math.floor(d / BOSS_EVERY); M.stageStart = M.stage * BOSS_EVERY; M.bossAt = M.stageStart + BOSS_EVERY;
     for (let i = Math.max(0, M.stage - 2); i < M.stage; i++) M.elements.push(BIOMES[i % BIOMES.length].id); // the last two bosses' elements
-    M.stat.dmg = M.stat.rate = Math.round(d / 50); addSoldiers(45);
+    M.stat.dmg = M.stat.rate = Math.round(d / 50); addSoldiers(45 + M.stage * 30);
   }
   // plays `seconds` of march at once with the bot; also reachable from the console as marchTest(seconds)
   const run = (seconds) => {
@@ -3996,7 +4013,7 @@ if (mh) {
     console.log('MARCH', JSON.stringify(log), JSON.stringify(end));
     return end;
   };
-  window.marchTest = run; window.marchDbg = { M, state, spawnRelic, spawnCage, frame };
+  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, frame };
   if (mh[2]) run(+mh[2]);
 }
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.

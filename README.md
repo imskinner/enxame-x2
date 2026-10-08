@@ -13,7 +13,7 @@ Jogo de navegador em 3D (Three.js): seu canhão dispara uma tropa, os portões m
 
 - Mover: mouse, arrastar o dedo, `A`/`D` ou `←`/`→`
 - Ultimate: `Espaço` ou `Q`
-- FILA (Marcha): `Shift`, `W`/`↑` ou o botão
+- FILA (Marcha): `S`, `↑`, clique do mouse ou o botão (também `W` e `Shift`)
 - Pausa: `P` · Som: `M`
 
 ## Rodar localmente

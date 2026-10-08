@@ -241,7 +241,7 @@ body {
     </div>
     <div class="group">
       <div class="ab">
-      <button class="ult fila" id="btnFila" type="button" aria-label="Afunilar a tropa (Shift)" hidden>
+      <button class="ult fila" id="btnFila" type="button" aria-label="Afunilar a tropa (S, seta para cima ou clique)" hidden>
         <svg viewBox="0 0 72 72" aria-hidden="true"><circle class="track" cx="36" cy="36" r="32"/><circle class="fill" id="filaRing" cx="36" cy="36" r="32"/></svg>
         <span class="lbl">FILA</span>
       </button>
@@ -296,7 +296,7 @@ body {
       <li><span class="ico plus">ANO</span><span>Portões de anos levam a tropa a novas eras, da pedra ao laser: tiros mais fortes e rápidos.</span></li>
       <li><span class="ico horde"><b></b><b></b><b></b></span><span>Quebre muros de caixotes, liberte reféns das jaulas e derrube o chefão a cada 1000 m.</span></li>
     </ul>
-    <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
+    <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Fila (Marcha): <kbd>S</kbd>, <kbd>↑</kbd> ou clique. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
@@ -2853,7 +2853,7 @@ function marchSegment() {
     // the gap narrows with distance: later on, FILA is the clean way through
     const gap = Math.max(2.2, rand(3, 5) - lvl * 0.12), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
     const lw = gx - gap / 2 + LANE_HALF, rw = LANE_HALF - (gx + gap / 2);
-    if (!M.filaHint) { M.filaHint = true; showBanner('FILA', 'Toque em FILA (ou Shift) para afunilar e passar pela brecha', 2.8); }
+    if (!M.filaHint) { M.filaHint = true; showBanner('FILA', matchMedia('(pointer: fine)').matches ? 'Clique, S ou ↑ para afunilar e passar pela brecha' : 'Toque em FILA para afunilar e passar pela brecha', 2.8); }
     if (lw > 1) spawnWall(-LANE_HALF + lw / 2, lw, hp);
     if (rw > 1) spawnWall(LANE_HALF - rw / 2, rw, hp);
   } else if (kind === 'cage') {
@@ -3404,7 +3404,7 @@ addEventListener('keydown', (e) => {
   if (k === 'p' || k === 'escape') setPaused(!state.paused);
   if (k === 'm') { Sfx.init(); toggleMute(); }
   if ((k === ' ' || k === 'q' || k === 'e') && (state.phase === 'playing' || state.phase === 'break')) { e.preventDefault(); useUltimate(); }
-  if ((k === 'shift' || k === 'w' || k === 'arrowup') && state.phase === 'playing') { e.preventDefault(); squeeze(); }
+  if (['shift', 'w', 's', 'arrowup'].includes(k) && state.phase === 'playing') { e.preventDefault(); squeeze(); }
   if ((k === 'enter' || k === ' ') && (state.phase === 'menu' || state.phase === 'over') && document.activeElement?.tagName !== 'BUTTON' && !openSub()) { e.preventDefault(); startGame(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
@@ -3419,7 +3419,11 @@ function groundX(cx, cy) {
 let pxPerUnit = 30, drag = null;
 canvas.addEventListener('pointerdown', (e) => {
   Sfx.init();
-  if (e.pointerType === 'mouse') { const x = groundX(e.clientX, e.clientY); if (x !== null) state.targetX = laneClamp(x); return; }
+  if (e.pointerType === 'mouse') { // the mouse steers by hovering, so a left click is free for FILA on the march
+    const x = groundX(e.clientX, e.clientY); if (x !== null) state.targetX = laneClamp(x);
+    if (e.button === 0) squeeze();
+    return;
+  }
   drag = { id: e.pointerId, sx: e.clientX, base: state.targetX }; canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {

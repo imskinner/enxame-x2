@@ -155,6 +155,12 @@ body {
 .newbest { color: var(--gate); }
 
 /* Home, ranking and account */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn.mode { padding: 12px 10px 10px; font-size: 24px; line-height: 1.05; }
+.btn.mode small { display: block; margin-top: 4px; font: 800 12px var(--font-body); letter-spacing: 0; opacity: .78; }
+.btn.mode.march { background: var(--gate); color: var(--on-dark); box-shadow: 0 5px 0 #0c8a7f; text-shadow: 0 2px 0 rgba(27, 22, 64, .35); }
+.btn.mode.march:active { box-shadow: 0 1px 0 #0c8a7f; }
+.how h3 { margin: 4px 0 0; font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--ally); grid-column: 1 / -1; }
 .title.sub { font-size: clamp(36px, 10vw, 50px); }
 .title.sub + * { margin-top: 18px; }
 .row2 { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; margin-top: 12px; }
@@ -195,7 +201,7 @@ body {
 .overOnline { margin: -4px 0 16px; }
 .rankline { margin: 0 0 8px; text-align: center; font-family: var(--font-display); font-size: 22px; line-height: 1.15; color: var(--ally); }
 .overOnline .msg { text-align: center; }
-#btnRankOver { margin-top: 10px; }
+
 @media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready { animation: none; } .btn { transition: none; } }
 </style>
 </head>
@@ -215,16 +221,16 @@ body {
 <div id="hud" hidden>
   <div class="hud-top">
     <div class="stack-left">
-      <div class="chip"><span class="k">ONDA</span><span class="v" id="waveNum">1</span></div>
+      <div class="chip"><span class="k" id="waveK">ONDA</span><span class="v" id="waveNum">1</span></div>
       <div class="chip next" id="nextBoss"><i id="nextDot"></i><span id="nextText">Gelo · onda 5</span></div>
     </div>
     <div class="score" id="score">0</div>
-    <div class="chip hp"><span class="k">MURO</span><div class="bar"><i id="hpFill"></i></div><span class="v" id="hpText">30</span></div>
+    <div class="chip hp" id="hpChip"><span class="k">MURO</span><div class="bar"><i id="hpFill"></i></div><span class="v" id="hpText">30</span></div>
   </div>
   <div id="bossBar" hidden><span class="k" id="bossName">CHEFÃO</span><div class="bar"><i id="bossFill"></i></div></div>
   <div class="hud-bottom">
     <div class="group">
-      <div class="chip"><span class="k">TIROS</span><span class="v" id="shots">1</span></div>
+      <div class="chip"><span class="k" id="shotsK">TIROS</span><span class="v" id="shots">1</span></div>
       <div class="chip"><span class="k">TROPA</span><span class="v" id="troops">0</span></div>
       <div class="chip rapid" id="rapidChip" hidden><span class="k">RAJADA</span><span class="v" id="rapidT">0</span></div>
     </div>
@@ -249,7 +255,10 @@ body {
   <div class="card">
     <h1 class="title">ENXAME <span class="badge">×2</span></h1>
     <p class="lead" id="menuLead">Seu canhão dispara uma tropa. Multiplique a tropa nos portões e segure a horda antes que ela chegue ao muro.</p>
-    <button class="btn" id="btnPlay" type="button">JOGAR</button>
+    <div class="modes">
+      <button class="btn mode" id="btnPlay" type="button">DEFESA<small>Segure a horda no muro</small></button>
+      <button class="btn mode march" id="btnMarch" type="button">MARCHA<small>Avance pela estrada sem fim</small></button>
+    </div>
     <div class="row2">
       <button class="btn alt" id="btnRank" type="button" data-online hidden>RANKING</button>
       <button class="btn alt" id="btnHow" type="button">COMO JOGAR</button>
@@ -269,6 +278,13 @@ body {
       <li><span class="ico power"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M13.5 2 5 13.5h6L9.5 22 19 9.5h-6.2z"/></svg></span><span>Abates carregam o ULTIMATE. Guarde para a horda gigante e solte com Espaço ou o botão.</span></li>
       <li><span class="ico horde"><b></b><b></b><b></b></span><span>A cada 5 ondas vem um chefão elemental: gelo, fogo, lava, tempestade, água, veneno, zumbi e o buraco negro. O mapa vai virando o mundo dele.</span></li>
     </ul>
+    <ul class="how">
+      <li><h3>Marcha</h3></li>
+      <li><span class="ico gate">+5</span><span>Sua tropa corre pela estrada atirando. Arraste para escolher o portão: mais soldados, ×2 ou anos.</span></li>
+      <li><span class="ico div">-8</span><span>Atire nos portões de número: cada acerto soma 1. Um -8 pode virar +2.</span></li>
+      <li><span class="ico plus">ANO</span><span>Portões de anos levam a tropa a novas eras, da pedra ao laser: tiros mais fortes e rápidos.</span></li>
+      <li><span class="ico horde"><b></b><b></b><b></b></span><span>Quebre muros de caixotes, liberte reféns das jaulas e derrube o chefão a cada 1000 m.</span></li>
+    </ul>
     <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
@@ -277,6 +293,10 @@ body {
 <div class="screen sub" id="rankScreen" hidden>
   <div class="card">
     <h2 class="title sub">RANKING</h2>
+    <div class="tabs" role="tablist" aria-label="Modo">
+      <button type="button" role="tab" data-mode="defense" aria-selected="true">DEFESA</button>
+      <button type="button" role="tab" data-mode="march" aria-selected="false">MARCHA</button>
+    </div>
     <div class="tabs" role="tablist" aria-label="Período">
       <button type="button" role="tab" data-period="week" aria-selected="true">SEMANA</button>
       <button type="button" role="tab" data-period="all" aria-selected="false">GERAL</button>
@@ -320,15 +340,16 @@ body {
     <h2 class="title">PAUSA</h2>
     <button class="btn" id="btnResume" type="button">CONTINUAR</button>
     <button class="btn alt" id="btnRestart" type="button">RECOMEÇAR</button>
+    <button class="btn alt" id="btnMenuPause" type="button">MENU</button>
   </div>
 </div>
 
 <div class="screen" id="overScreen" hidden>
   <div class="card">
-    <h2 class="title over">O MURO CAIU</h2>
+    <h2 class="title over" id="overTitle">O MURO CAIU</h2>
     <div class="stats">
       <div class="stat"><div class="k">PONTOS</div><div class="v" id="stScore">0</div></div>
-      <div class="stat"><div class="k">ONDA</div><div class="v" id="stWave">1</div></div>
+      <div class="stat"><div class="k" id="stWaveK">ONDA</div><div class="v" id="stWave">1</div></div>
       <div class="stat"><div class="k">ABATES</div><div class="v" id="stKills">0</div></div>
       <div class="stat"><div class="k">MAIOR TROPA</div><div class="v" id="stPeak">0</div></div>
     </div>
@@ -341,7 +362,10 @@ body {
       <p class="msg" id="overMsg"></p>
     </div>
     <button class="btn" id="btnAgain" type="button">JOGAR DE NOVO</button>
-    <button class="btn alt" id="btnRankOver" type="button" data-online hidden>VER RANKING</button>
+    <div class="row2">
+      <button class="btn alt" id="btnRankOver" type="button" data-online hidden>RANKING</button>
+      <button class="btn alt" id="btnMenuOver" type="button">MENU</button>
+    </div>
     <p class="best" id="bestOver">RECORDE 0</p>
   </div>
 </div>
@@ -386,8 +410,9 @@ function weighted(list) {
   for (const it of list) { r -= it.w; if (r <= 0) return it; }
   return list[list.length - 1];
 }
-function loadBest() { try { return parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0; } catch { return 0; } }
-function saveBest(v) { try { localStorage.setItem(BEST_KEY, String(v)); } catch { /* storage blocked */ } }
+const bestKey = (mode = 'defense') => (mode === 'march' ? BEST_KEY + '-march' : BEST_KEY);
+function loadBest(mode) { try { return parseInt(localStorage.getItem(bestKey(mode)) || '0', 10) || 0; } catch { return 0; } }
+function saveBest(v, mode) { try { localStorage.setItem(bestKey(mode), String(v)); } catch { /* storage blocked */ } }
 function roundRect(g, x, y, w, h, r) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
@@ -407,7 +432,7 @@ try {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 } catch (err) {
   $('menuLead').textContent = 'Este navegador não conseguiu iniciar o WebGL. Tente abrir no Chrome, Edge ou Firefox atualizado.';
-  $('btnPlay').hidden = true;
+  $('btnPlay').hidden = true; $('btnMarch').hidden = true;
   throw err;
 }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
@@ -417,6 +442,8 @@ renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
+// Mode-specific scenery: the defense arena lives here, the march road in marchWorld; everything else is shared.
+const defenseWorld = new THREE.Group(); scene.add(defenseWorld);
 scene.background = canvasTex(4, 256, (g, w, h) => {
   const gr = g.createLinearGradient(0, 0, 0, h);
   gr.addColorStop(0, '#4fb2ee'); gr.addColorStop(0.6, '#a6e0ff'); gr.addColorStop(1, '#dff4ff');
@@ -456,7 +483,7 @@ sun.shadow.bias = -0.0006;
 scene.add(sun, sun.target);
 
 const COL = {
-  ally: new THREE.Color(0x2f7bff), allyClone: new THREE.Color(0x3fc4ff),
+  ally: new THREE.Color(0x2f7bff), allyClone: new THREE.Color(0x3fc4ff), caged: new THREE.Color(0x8a8aa0),
   grunt: new THREE.Color(0xff4a3d), runner: new THREE.Color(0xff9a1f), armored: new THREE.Color(0x9e1030),
   brute: 0xb0306a, boss: 0x6a1b9a, white: new THREE.Color(0xffffff), gold: new THREE.Color(0xffc629),
 };
@@ -577,7 +604,7 @@ const groundMat = new THREE.MeshLambertMaterial({ color: 0x96dc7e, map: grassDet
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
-  const ground = new THREE.Mesh(geo, groundMat); ground.receiveShadow = true; scene.add(ground);
+  const ground = new THREE.Mesh(geo, groundMat); ground.receiveShadow = true; defenseWorld.add(ground);
 }
 
 // Lane: paving slabs in the old two-tone checker, with grout, bevels, wear and the odd crack.
@@ -616,7 +643,7 @@ const laneTex = (() => {
   return { map, bumpMap };
 })();
 const lane = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, LANE_LEN), new THREE.MeshLambertMaterial({ map: laneTex.map, bumpMap: laneTex.bumpMap, bumpScale: 1.5 }));
-lane.rotation.x = -Math.PI / 2; lane.position.set(0, 0.02, LANE_MID); lane.receiveShadow = true; scene.add(lane);
+lane.rotation.x = -Math.PI / 2; lane.position.set(0, 0.02, LANE_MID); lane.receiveShadow = true; defenseWorld.add(lane);
 
 // striped curbs
 {
@@ -628,13 +655,13 @@ lane.rotation.x = -Math.PI / 2; lane.position.set(0, 0.02, LANE_MID); lane.recei
     m.makeTranslation(side * (LANE_HALF + 0.4), 0.25, LANE_BACK + 1 + i * 2);
     curb.setMatrixAt(k, m); curb.setColorAt(k, i % 2 ? cA : cB); k++;
   }
-  curb.receiveShadow = true; curb.castShadow = true; scene.add(curb); decor.curb = curb;
+  curb.receiveShadow = true; curb.castShadow = true; defenseWorld.add(curb); decor.curb = curb;
 }
 
 // defense line
 const defenseMat = new THREE.MeshBasicMaterial({ color: 0x57b8ff, transparent: true, opacity: 0.85 });
 const defense = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, 0.45), defenseMat);
-defense.rotation.x = -Math.PI / 2; defense.position.set(0, 0.04, DEFENSE_Z); scene.add(defense);
+defense.rotation.x = -Math.PI / 2; defense.position.set(0, 0.04, DEFENSE_Z); defenseWorld.add(defense);
 const DEF_BLUE = new THREE.Color(0x57b8ff), DEF_RED = new THREE.Color(0xff3b5c);
 
 function castle(color, roofColor, z, w, h) {
@@ -650,7 +677,7 @@ function castle(color, roofColor, z, w, h) {
     grp.add(tw, cone);
   }
   grp.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  grp.position.z = z; scene.add(grp);
+  grp.position.z = z; defenseWorld.add(grp);
   return { grp, mat, roof };
 }
 // Swaps a castle's primitive stand-in for the Blender model; materials (and their biome/damage colors) stay the same.
@@ -679,15 +706,15 @@ void main() {
 }`,
 });
 const portal = new THREE.Mesh(new THREE.CircleGeometry(3.2, 48), portalMat);
-portal.position.set(0, 3.4, SPAWN_Z - 6.1); scene.add(portal);
+portal.position.set(0, 3.4, SPAWN_Z - 6.1); defenseWorld.add(portal);
 const portalRing = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.38, 10, 48), new THREE.MeshLambertMaterial({ color: 0x3a1330 }));
-portalRing.position.copy(portal.position); portalRing.position.z += 0.05; scene.add(portalRing);
+portalRing.position.copy(portal.position); portalRing.position.z += 0.05; defenseWorld.add(portalRing);
 {
   const stud = new THREE.ConeGeometry(0.22, 0.6, 6), studMat = new THREE.MeshLambertMaterial({ color: 0xfff1d6 });
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2, m = new THREE.Mesh(stud, studMat);
     m.position.set(Math.cos(a) * 3.85, 3.4 + Math.sin(a) * 3.85, SPAWN_Z - 5.9);
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(a), Math.sin(a), 0)); scene.add(m);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(a), Math.sin(a), 0)); defenseWorld.add(m);
   }
 }
 // Torches and banners on the enemy fort. Flames are emitted as particles every frame.
@@ -704,11 +731,11 @@ const torchPoints = [];
   const bannerMat = new THREE.MeshLambertMaterial({ map: bannerTex, side: THREE.DoubleSide });
   for (const s of [-1, 1]) {
     const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.22, 0.4, 10), bracket);
-    bowl.position.set(s * 5.2, 5.4, SPAWN_Z - 5.9); scene.add(bowl);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.7), bracket); arm.position.set(s * 5.2, 5.2, SPAWN_Z - 6.2); scene.add(arm);
+    bowl.position.set(s * 5.2, 5.4, SPAWN_Z - 5.9); defenseWorld.add(bowl);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.7), bracket); arm.position.set(s * 5.2, 5.2, SPAWN_Z - 6.2); defenseWorld.add(arm);
     torchPoints.push(new THREE.Vector3(s * 5.2, 5.65, SPAWN_Z - 5.9));
     const banner = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 3.5), bannerMat);
-    banner.position.set(s * 7.6, 3.6, SPAWN_Z - 6.15); scene.add(banner);
+    banner.position.set(s * 7.6, 3.6, SPAWN_Z - 6.15); defenseWorld.add(banner);
   }
 }
 
@@ -792,13 +819,13 @@ const flora = { meshes: {}, mats: {} };
     const x = (i % 2 ? 1 : -1) * rand(LANE_HALF + 1.6, LANE_HALF + 6), z = rand(LANE_BACK, LANE_FRONT + 4), k = rand(0.7, 1.25);
     put('bush' + (1 + (i % 2)) + '_leaf', x, heightAt(x, z), z, k, rand(0, 6.28), bushGreens[i % 3]);
   }
-  flora.bushGroup = new THREE.Group(); scene.add(flora.bushGroup);
+  flora.bushGroup = new THREE.Group(); defenseWorld.add(flora.bushGroup);
   for (const [model, list] of Object.entries(place)) {
     const matName = model.startsWith('rock') ? 'rock' : model.startsWith('bush') ? 'bush' : model.endsWith('_bark') ? 'bark' : 'leaf';
     const mesh = new THREE.InstancedMesh(stand[model], flora.mats[matName], list.length);
     list.forEach((it, i) => { mesh.setMatrixAt(i, it.matrix); if (it.color) mesh.setColorAt(i, it.color); });
     mesh.castShadow = true; mesh.receiveShadow = matName !== 'leaf';
-    (matName === 'bush' ? flora.bushGroup : scene).add(mesh); flora.meshes[model] = mesh;
+    (matName === 'bush' ? flora.bushGroup : defenseWorld).add(mesh); flora.meshes[model] = mesh;
   }
   decor.leaves = [flora.mats.leaf]; decor.rocks = flora.mats.rock; decor.bushes = flora.bushGroup;
 }
@@ -817,8 +844,9 @@ async function loadModels() {
     const m = meshesOf(g);
     dressCastle(homeWall, m.home_stone, m.home_roof); dressCastle(fort, m.fort_stone, m.fort_roof);
   }).catch((err) => console.warn('castle.glb indisponível', err));
-  loader.loadAsync('assets/flora.glb').then((g) => dressFlora(meshesOf(g))).catch((err) => console.warn('flora.glb indisponível', err));
-  loader.loadAsync('assets/props.glb').then((g) => dressProps(meshesOf(g))).catch((err) => console.warn('props.glb indisponível', err));
+  // A march that started before the models arrived gets its roadside rebuilt with them.
+  loader.loadAsync('assets/flora.glb').then((g) => { dressFlora(meshesOf(g)); if (M.built) buildMarchDecor(); }).catch((err) => console.warn('flora.glb indisponível', err));
+  loader.loadAsync('assets/props.glb').then((g) => { dressProps(meshesOf(g)); if (M.built) buildMarchDecor(); }).catch((err) => console.warn('props.glb indisponível', err));
   loader.loadAsync('assets/characters.glb').then((g) => {
     const m = meshesOf(g);
     for (const [mesh, src] of [[allyMesh, m.soldier], [enemyMesh, m.imp]]) { mesh.geometry.dispose(); mesh.geometry = crowdGeometry(src); }
@@ -865,7 +893,7 @@ loadModels();
     m.compose(p.set(x, heightAt(x, z) + 0.12, z), q.identity(), s.set(1, 0.6, 1)); flowers.setMatrixAt(i, m);
     flowers.setColorAt(i, petals[i % petals.length]);
   }
-  scene.add(flowers); decor.flowers = flowers;
+  defenseWorld.add(flowers); decor.flowers = flowers;
 
   const T = 900;
   const grass = new THREE.InstancedMesh(new THREE.ConeGeometry(0.07, 0.45, 3), windy(new THREE.MeshLambertMaterial({ color: 0x5fbf5c }), 0.25, -0.2), T);
@@ -875,7 +903,7 @@ loadModels();
     const [x, z] = dry(() => side * rand(LANE_HALF + 1.1, 40), () => rand(-120, 45), 0.2);
     m.compose(p.set(x, heightAt(x, z) + 0.2, z), q, s.set(1, rand(0.6, 1.4), 1)); grass.setMatrixAt(i, m);
   }
-  scene.add(grass); decor.grass = grass;
+  defenseWorld.add(grass); decor.grass = grass;
 
   // lamp posts along the lane with warm glowing lanterns
   const postGeo = new THREE.CylinderGeometry(0.08, 0.1, 2.6, 6), lampGeo = new THREE.BoxGeometry(0.34, 0.42, 0.34), capGeo = new THREE.ConeGeometry(0.3, 0.25, 4);
@@ -887,7 +915,7 @@ loadModels();
     const post = new THREE.Mesh(postGeo, postMat); post.position.set(x, 1.3, z); post.castShadow = true;
     const lamp = new THREE.Mesh(lampGeo, lampMat); lamp.position.set(x, 2.75, z);
     const cap = new THREE.Mesh(capGeo, postMat); cap.position.set(x, 3.08, z); cap.rotation.y = Math.PI / 4;
-    scene.add(post, lamp, cap); decor.lamps.push(lamp.position); decor.lampParts.push(post, lamp, cap);
+    defenseWorld.add(post, lamp, cap); decor.lamps.push(lamp.position); decor.lampParts.push(post, lamp, cap);
   }
 }
 // drifting clouds far behind the fort
@@ -1183,8 +1211,10 @@ function fixShades(geo) {
   return geo;
 }
 // Blender props (props.glb): lanterns, trackside dressing, gate pillars and the cannon.
+let PROP = null; // Blender props, kept for the march road
 function dressProps(m) {
   for (const g of Object.values(m)) fixShades(g);
+  PROP = m;
   const mx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), s = new THREE.Vector3();
   const inst = (geo, mat, list, shadow = true) => {
     const mesh = new THREE.InstancedMesh(geo, mat, list.length);
@@ -1192,11 +1222,11 @@ function dressProps(m) {
       mx.compose(v.set(it.x, it.y ?? heightAt(it.x, it.z), it.z), q.setFromEuler(e.set(0, it.yaw ?? 0, 0)), s.setScalar(it.k ?? 1));
       mesh.setMatrixAt(i, mx); if (it.color) mesh.setColorAt(i, it.color);
     });
-    mesh.castShadow = shadow; mesh.receiveShadow = true; scene.add(mesh); return mesh;
+    mesh.castShadow = shadow; mesh.receiveShadow = true; defenseWorld.add(mesh); return mesh;
   };
 
   // Lanterns take over the stand-in posts at the same spots (the halos stay where they were).
-  for (const o of decor.lampParts) scene.remove(o);
+  for (const o of decor.lampParts) defenseWorld.remove(o);
   const lampSpots = decor.lamps.map((p) => ({ x: p.x, y: 0, z: p.z }));
   inst(m.lantern_iron, new THREE.MeshLambertMaterial({ color: 0x3a3358, flatShading: true }), lampSpots);
   inst(m.lantern_glow, decor.lampMat, lampSpots, false);
@@ -1458,7 +1488,7 @@ const Sfx = {
 // ================= State =================
 const state = {
   phase: 'menu', // menu | playing | break | dying | over
-  paused: false, wave: 0, score: 0, best: loadBest(), hp: WALL_HP, shots: 1, rapid: 0,
+  mode: 'defense', paused: false, wave: 0, score: 0, best: loadBest(), year: 0, hp: WALL_HP, shots: 1, rapid: 0,
   fireTimer: 0, waveTime: 0, events: [], evIdx: 0, breakTimer: 0, dyingTimer: 0,
   targetX: 0, shake: 0, hurt: 0, danger: 0, kills: 0, peak: 0,
   ult: 0, ultFx: null, slowmo: 0, flash: 0, bossDown: false,
@@ -1471,7 +1501,8 @@ const bigs = [];
 const pickups = [];
 
 // ================= Gates =================
-const GATE_COLORS = { mul: 0x14c8b8, add: 0x3fcf5e, div: 0xff4d6d };
+const GATE_COLORS = { mul: 0x14c8b8, add: 0x3fcf5e, div: 0xff4d6d, sub: 0xff4d6d, year: 0xffb020, yearNeg: 0x8a4ad8 };
+const NEGATIVE_GATE = new Set(['div', 'sub', 'yearNeg']);
 // Stand-ins centered on their own height; the Blender pillar and plinth (props.glb) replace them, origin on the ground.
 const gateGeo = { pillar: new THREE.CylinderGeometry(0.22, 0.28, 3.3, 12), pillarY: 1.95, base: new THREE.BoxGeometry(0.75, 0.35, 0.75), baseY: 0.17 };
 const gateOrbGeo = new THREE.SphereGeometry(0.28, 14, 10);
@@ -1479,11 +1510,15 @@ const gatePillarMat = new THREE.MeshLambertMaterial({ color: 0xf4f1ff });
 const gateBaseMat = new THREE.MeshLambertMaterial({ color: 0x3a3358 });
 const SHARED_GATE_GEO = new Set([gateGeo.pillar, gateGeo.base, gateOrbGeo]);
 let gates = [];
-const gateText = (d) => (d.kind === 'mul' ? '×' + d.value : d.kind === 'add' ? '+' + d.value : '÷2');
-function gateLabelTex(text) {
+const gateText = (d) => (d.kind === 'mul' ? '×' + d.value : d.kind === 'add' || d.kind === 'year' ? '+' + d.value : d.kind === 'sub' || d.kind === 'yearNeg' ? '-' + d.value : '÷2');
+function gateLabelTex(text, sub = '') {
   return canvasTex(256, 128, (g, w, h) => {
-    g.font = `100px ${DISPLAY_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `${sub ? 82 : 100}px ${DISPLAY_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineJoin = 'round'; g.lineWidth = 16; g.strokeStyle = 'rgba(27,22,64,0.92)';
+    if (sub) { // a year gate: number on top, ANOS underneath
+      const y = h / 2 - 10; g.strokeText(text, w / 2, y); g.fillStyle = '#ffffff'; g.fillText(text, w / 2, y);
+      g.font = `30px ${DISPLAY_FONT}`; g.lineWidth = 9; g.strokeText(sub, w / 2, h - 16); g.fillText(sub, w / 2, h - 16); return;
+    }
     if (text[0] !== '÷') { g.strokeText(text, w / 2, h / 2 + 6); g.fillStyle = '#ffffff'; g.fillText(text, w / 2, h / 2 + 6); return; }
     // Draw the division sign by hand so it never depends on font coverage.
     const digit = text.slice(1), cx = w / 2 - 34, cy = h / 2;
@@ -1520,11 +1555,11 @@ function buildGate(def, slot) {
   }
   add(new THREE.BoxGeometry(w, 0.4, 0.4), colMat, 0, 3.55, 0);
   const panelMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(color) }, uTime: worldTime, uPulse: { value: 0 }, uSign: { value: def.kind === 'div' ? -1 : 1 } },
+    uniforms: { uColor: { value: new THREE.Color(color) }, uTime: worldTime, uPulse: { value: 0 }, uSign: { value: NEGATIVE_GATE.has(def.kind) ? -1 : 1 } },
     vertexShader: GATE_PANEL_VS, fragmentShader: GATE_PANEL_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
   add(new THREE.PlaneGeometry(w - 0.3, 3.2), panelMat, 0, 1.9, 0, false);
-  const labelMat = new THREE.MeshBasicMaterial({ map: gateLabelTex(gateText(def)), transparent: true, depthWrite: false });
+  const labelMat = new THREE.MeshBasicMaterial({ map: gateLabelTex(gateText(def), def.kind.startsWith('year') ? 'ANOS' : ''), transparent: true, depthWrite: false });
   const label = add(new THREE.PlaneGeometry(3.4, 1.7), labelMat, 0, 2.2, 0.1, false);
   label.rotation.x = -0.6; label.renderOrder = 2;
   group.position.set(def.x, 0, def.z); group.scale.setScalar(0.001); scene.add(group);
@@ -1585,6 +1620,7 @@ const PICKUPS = {
   plus: { color: 0xffc629, css: '#ffc629', w: 60 },
   rapid: { color: 0x3ee0ff, css: '#3ee0ff', w: 25 },
   heal: { color: 0xff6f91, css: '#ff6f91', w: 15 },
+  year: { color: 0xffb020, css: '#ffb020', w: 0 },
 };
 function pickupFaceTex(type) {
   return canvasTex(128, 128, (g, w, h) => {
@@ -1593,6 +1629,9 @@ function pickupFaceTex(type) {
     g.fillStyle = '#1b1640';
     if (type === 'plus') {
       g.font = `76px ${DISPLAY_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('+1', w / 2, h / 2 + 5);
+    } else if (type === 'year') {
+      g.font = `54px ${DISPLAY_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('+100', w / 2, h / 2 - 8);
+      g.font = `24px ${DISPLAY_FONT}`; g.fillText('ANOS', w / 2, h / 2 + 30);
     } else if (type === 'rapid') {
       g.beginPath(); g.moveTo(72, 18); g.lineTo(34, 70); g.lineTo(60, 70); g.lineTo(50, 110); g.lineTo(94, 52); g.lineTo(67, 52); g.closePath(); g.fill();
     } else {
@@ -2064,21 +2103,22 @@ function put(key, el, val, prop = 'textContent') {
   if (prop === 'textContent') el.textContent = val; else el.style[prop] = val;
 }
 function updateHud() {
-  put('wave', ui.wave, String(state.wave));
+  const march = state.mode === 'march';
+  put('wave', ui.wave, march ? Math.floor(M.dist).toLocaleString('pt-BR') + ' m' : String(state.wave));
   put('score', ui.score, state.score.toLocaleString('pt-BR'));
   const hpk = Math.max(0, state.hp) / WALL_HP;
   put('hpw', ui.hpFill, (hpk * 100).toFixed(0) + '%', 'width');
   put('hpc', ui.hpFill, hpk > 0.5 ? '#4cd964' : hpk > 0.25 ? '#ffc629' : '#ff4a3d', 'background');
   put('hp', ui.hpText, String(Math.max(0, Math.ceil(state.hp))));
-  put('shots', ui.shots, String(state.shots));
-  put('troops', ui.troops, String(allies.length));
+  put('shots', ui.shots, march ? String(state.year) : String(state.shots));
+  put('troops', ui.troops, String(march ? squadCount() : allies.length));
   const rapidOn = state.rapid > 0;
   if (ui.rapidChip.hidden === rapidOn) ui.rapidChip.hidden = !rapidOn;
   if (rapidOn) put('rapid', ui.rapidT, state.rapid.toFixed(1) + 's');
   const boss = state.phase !== 'over' && bigs.find((b) => b.kind === 'boss' && b.alive);
   const upcoming = state.bossDown && state.wave % 5 === 0 ? state.wave + 1 : state.wave;
   const bio = biomeOf(upcoming), bossWave = Math.ceil(Math.max(1, upcoming) / 5) * 5;
-  put('nextText', ui.nextText, `${bio.short} · onda ${bossWave}`);
+  put('nextText', ui.nextText, march ? `${ERAS[M.era].short} · chefão em ${Math.max(0, Math.ceil(M.bossAt - 140 - M.dist))} m` : `${bio.short} · onda ${bossWave}`);
   put('nextHidden', ui.nextText.parentElement, boss ? 'hidden' : 'visible', 'visibility');
   put('nextDot', ui.nextDot, bio.css, 'background');
   put('nextColor', ui.nextDot, bio.css, 'color');
@@ -2100,7 +2140,7 @@ function updateHud() {
 const SUPABASE_URL = 'https://vnurhkrksmmogobtnvum.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_gI_qLahrIGuYGSVbNs2KWA_oN5TfQ1Y'; // public by design: RLS and the functions in supabase/schema.sql guard the data
 const NICK_RE = /^[A-Za-z0-9_ À-ÖØ-öø-ÿ]{3,16}$/;
-const online = { sb: null, user: null, nickname: null, run: null, period: 'week' };
+const online = { sb: null, user: null, nickname: null, run: null, period: 'week', boardMode: 'defense' };
 const isAnon = () => !!online.user?.is_anonymous;
 const authRedirect = () => location.origin + location.pathname;
 const fmt = (n) => n.toLocaleString('pt-BR');
@@ -2182,7 +2222,7 @@ function onlineRunStart() {
   online.run = null;
   if (!online.sb || location.hash) return; // test shortcuts (#w13t20, #autoplay) never rank
   online.run = ensureSession()
-    .then(() => online.sb.rpc('start_run'))
+    .then(() => online.sb.rpc('start_run', { p_mode: state.mode }))
     .then(({ data, error }) => (error ? null : data))
     .catch(() => null);
 }
@@ -2192,7 +2232,8 @@ async function onlineRunFinish() {
   box.hidden = !pending; form.hidden = true; setMsg(msg, '');
   if (!pending) return;
   line.textContent = 'Enviando pontuação…';
-  const stats = { p_score: state.score, p_wave: state.wave, p_kills: state.kills, p_peak: state.peak };
+  // The march reports meters marched in the wave slot (the server validates them against the run time).
+  const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak };
   const runId = await pending;
   const { data, error } = runId ? await online.sb.rpc('finish_run', { p_run: runId, ...stats }) : { error: true };
   const r = data?.[0];
@@ -2206,13 +2247,14 @@ async function onlineRunFinish() {
 }
 
 // ---- Leaderboard ----
-async function loadBoard(period) {
-  online.period = period;
+async function loadBoard(period = online.period, mode = online.boardMode) {
+  online.period = period; online.boardMode = mode;
   for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.setAttribute('aria-selected', String(t.dataset.period === period));
+  for (const t of document.querySelectorAll('#rankScreen [data-mode]')) t.setAttribute('aria-selected', String(t.dataset.mode === mode));
   const board = $('board'), note = $('boardNote');
   board.replaceChildren(); note.hidden = false; note.textContent = 'Carregando…';
-  const { data, error } = await online.sb.rpc('get_leaderboard', { p_period: period, p_limit: 50 });
-  if (period !== online.period) return;
+  const { data, error } = await online.sb.rpc('get_leaderboard', { p_period: period, p_limit: 50, p_mode: mode });
+  if (period !== online.period || mode !== online.boardMode) return;
   if (error) { note.textContent = 'Não deu para carregar o ranking.'; return; }
   if (!data.length) { note.textContent = period === 'week' ? 'Ninguém pontuou nesta semana ainda. Seja o primeiro!' : 'Ninguém no ranking ainda. Seja o primeiro!'; return; }
   note.hidden = true;
@@ -2226,7 +2268,7 @@ async function loadBoard(period) {
     li.className = (row.is_me ? 'me' : '') + (row.pos <= 3 ? ' top' : '');
     const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = row.pos;
     const nick = document.createElement('span'); nick.className = 'nick'; nick.textContent = row.nickname;
-    const small = document.createElement('small'); small.textContent = 'ONDA ' + row.wave; nick.append(small);
+    const small = document.createElement('small'); small.textContent = mode === 'march' ? fmt(row.wave) + ' M' : 'ONDA ' + row.wave; nick.append(small);
     const pts = document.createElement('span'); pts.className = 'pts'; pts.textContent = fmt(row.score);
     li.append(pos, nick, pts); board.append(li);
   }
@@ -2239,7 +2281,7 @@ function openScreen(id) {
   const from = [ui.menu, ui.over].find((s) => !s.hidden);
   if (from) { screenBack = from; from.hidden = true; }
   const el = $(id); el.hidden = false;
-  if (id === 'rankScreen') loadBoard(online.period);
+  if (id === 'rankScreen') loadBoard(online.period, from === ui.over ? state.mode : online.boardMode);
   if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
   el.querySelector('[data-back]').focus();
 }
@@ -2252,6 +2294,7 @@ $('btnHow').addEventListener('click', () => openScreen('howScreen'));
 $('btnRank').addEventListener('click', () => openScreen('rankScreen'));
 $('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
 for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
+for (const t of document.querySelectorAll('#rankScreen [data-mode]')) t.addEventListener('click', () => loadBoard(undefined, t.dataset.mode));
 $('btnGoogle').addEventListener('click', loginGoogle);
 $('emailForm').addEventListener('submit', (e) => { e.preventDefault(); loginEmail($('emailInput').value.trim()); });
 $('btnSignOut').addEventListener('click', async () => { await online.sb.auth.signOut(); closeScreen($('accountScreen')); });
@@ -2285,6 +2328,525 @@ async function initOnline() {
   for (const el of document.querySelectorAll('[data-online]')) el.hidden = false;
 }
 
+// ================= Modo Marcha =================
+// Second mode, after mobile gun-runners like Timeline Up: the troop marches down an endless road firing ahead.
+// Gates add, multiply or cut soldiers, or move the calendar (eras upgrade the weapons). Shooting a +/- gate raises
+// its number, so a -8 can become a +2. Crate walls block the way, cages hold soldiers to rescue, and every 1000 m a
+// boss stops the road. The world is a treadmill: the troop stays at SQUAD_Z and everything slides toward the camera.
+const SQUAD_Z = 15, MAX_SQUAD = 150, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000;
+const ERAS = [
+  { year: -1e9, name: 'IDADE DA PEDRA', short: 'Pedra', tint: 0x9a7350, shot: 0xc8b8a0, dmg: 1, rate: 1.5, speed: 26, size: 0.2, len: 1 },
+  { year: 500, name: 'ANTIGUIDADE', short: 'Antiga', tint: 0xd09040, shot: 0xffd27a, dmg: 1.5, rate: 1.8, speed: 32, size: 0.1, len: 3 },
+  { year: 1000, name: 'IDADE MÉDIA', short: 'Medieval', tint: 0x8a9ab8, shot: 0xe8eeff, dmg: 2.2, rate: 2, speed: 36, size: 0.09, len: 3.5 },
+  { year: 1500, name: 'ERA DA PÓLVORA', short: 'Pólvora', tint: 0x2f5ac8, shot: 0xffb84a, dmg: 3.2, rate: 2.3, speed: 48, size: 0.1, len: 2.5 },
+  { year: 1900, name: 'ERA MODERNA', short: 'Moderna', tint: 0x5f7f4a, shot: 0xffe066, dmg: 3.3, rate: 3.4, speed: 60, size: 0.08, len: 3 },
+  { year: 2100, name: 'FUTURO', short: 'Futuro', tint: 0x2fd0ff, shot: 0x5ff3ff, dmg: 5, rate: 3.8, speed: 64, size: 0.11, len: 4 },
+  { year: 2500, name: 'ERA CÓSMICA', short: 'Cósmica', tint: 0xb06bff, shot: 0xff8bff, dmg: 7.5, rate: 4.2, speed: 70, size: 0.15, len: 4.5 },
+];
+for (const e of ERAS) { e.tintC = new THREE.Color(e.tint); e.shotC = new THREE.Color(e.shot); }
+const eraOf = (year) => { let i = 0; while (i + 1 < ERAS.length && year >= ERAS[i + 1].year) i++; return i; };
+const M = { speed: 0, dist: 0, scroll: 0, nextSeg: 0, bossAt: BOSS_EVERY, volley: 0, era: 0, walls: [], bolts: [], built: false, best: 0 };
+const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged') n++; return n; };
+
+// ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
+const marchWorld = new THREE.Group(); marchWorld.visible = false; scene.add(marchWorld);
+const CANAL_X = LANE_HALF + 11.5, ROAD_Z0 = -230, ROAD_Z1 = 70, DECOR_SPAN = ROAD_Z1 - ROAD_Z0;
+const marchHeight = (x) => { // valley profile: flat road, a straight canal each side, hills beyond
+  const ax = Math.abs(x), d = Math.abs(ax - CANAL_X) / 2.1;
+  return sstep(ax, 34, 80) * 9 - (1 - sstep(d, 0.45, 1.2)) + 0.14 * Math.exp(-(((d - 1.4) / 0.25) ** 2));
+};
+const marchGroundMat = groundMat.clone();
+marchGroundMat.onBeforeCompile = (sh) => {
+  // Light/dark grass patches computed from world position + scroll, so they travel with the road.
+  sh.uniforms.uScroll = M.scrollU = { value: 0 };
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vWorldXZ;')
+    .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWorldXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec2 vWorldXZ; uniform float uScroll;
+float mh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float mn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mh(i), mh(i + vec2(1, 0)), f.x), mix(mh(i + vec2(0, 1)), mh(i + vec2(1, 1)), f.x), f.y); }`)
+    .replace('#include <color_fragment>', `#include <color_fragment>
+vec2 wp = (vWorldXZ - vec2(0.0, uScroll)) * 0.045;
+diffuseColor.rgb *= 0.88 + 0.24 * (mn(wp) * 0.6 + mn(wp * 2.3) * 0.4);`);
+};
+marchGroundMat.customProgramCacheKey = () => 'march-ground';
+const marchLaneMat = lane.material.clone();
+marchLaneMat.map = laneTex.map.clone(); marchLaneMat.bumpMap = laneTex.bumpMap.clone();
+const marchGrass = grassDetail.clone(); marchGroundMat.map = marchGrass;
+for (const t of [marchGrass, marchLaneMat.map, marchLaneMat.bumpMap]) t.needsUpdate = true;
+{
+  // ground: a strip along z (heights depend on x only)
+  const xs = [], W = 200;
+  for (let x = -W; x <= W; x += Math.abs(x) < 30 ? 0.5 : 4) xs.push(x);
+  const zs = []; for (let z = ROAD_Z0 - 40; z <= ROAD_Z1 + 40; z += 10) zs.push(z);
+  const pos = [], uv = [], col = [], idx = [];
+  for (const z of zs) for (const x of xs) {
+    const h = marchHeight(x), bed = 1 - 0.32 * clamp(-h, 0, 1), edge = 1 - 0.22 * sstep(LANE_HALF + 2.4 - Math.abs(x), 0, 1.4);
+    pos.push(x, h, z); uv.push((x + 350) / 700, 1 - (z + 350) / 700); const c = bed * edge * (1 + Math.max(0, h) * 0.006); col.push(c, c, c);
+  }
+  const XW = xs.length;
+  for (let j = 0; j < zs.length - 1; j++) for (let i = 0; i < XW - 1; i++) { const a = j * XW + i; idx.push(a, a + XW, a + 1, a + 1, a + XW, a + XW + 1); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  const g = new THREE.Mesh(geo, marchGroundMat); g.receiveShadow = true; marchWorld.add(g);
+  // road
+  const len = ROAD_Z1 - ROAD_Z0;
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, len), marchLaneMat);
+  road.rotation.x = -Math.PI / 2; road.position.set(0, 0.02, (ROAD_Z0 + ROAD_Z1) / 2); road.receiveShadow = true; marchWorld.add(road);
+  for (const t of [marchLaneMat.map, marchLaneMat.bumpMap]) t.repeat.set((LANE_HALF * 2) / 4, len / 4);
+  // curbs: one 4-unit period of red/white, slid by scroll mod 4
+  const segs = Math.floor(len / 2) + 2;
+  const curb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 2), new THREE.MeshLambertMaterial(), segs * 2);
+  const mm = new THREE.Matrix4(), cA = new THREE.Color(0xff5d73), cB = new THREE.Color(0xffffff); let k = 0;
+  for (const side of [-1, 1]) for (let i = 0; i < segs; i++) { mm.makeTranslation(side * (LANE_HALF + 0.4), 0.25, ROAD_Z0 + 1 + i * 2); curb.setMatrixAt(k, mm); curb.setColorAt(k, i % 2 ? cA : cB); k++; }
+  curb.castShadow = curb.receiveShadow = true; marchWorld.add(curb); M.curb = curb;
+}
+// Canals: straight liquid strips that rise and fall with the world look, like the defense rivers. Built on the first
+// march because the liquid material is defined further down.
+function buildCanals() {
+  const len = ROAD_Z1 - ROAD_Z0;
+  for (const side of [-1, 1]) {
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(2 * 2.1 * 1.25 + 0.8, len), liqMat(0, len / 3));
+    c.rotation.x = -Math.PI / 2; c.position.set(side * CANAL_X, 0, (ROAD_Z0 + ROAD_Z1) / 2);
+    c.userData.base = LIQ_LEVEL; c.userData.march = true; marchWorld.add(c); liquidPieces.push(c);
+  }
+}
+// Decor slides with the road and wraps from behind the camera back into the fog. Built (or rebuilt once the Blender
+// models arrive) when a march starts.
+const marchDecor = { items: [], meshes: [] };
+function buildMarchDecor() {
+  for (const m of marchDecor.meshes) marchWorld.remove(m);
+  marchDecor.items = []; marchDecor.meshes = [];
+  const lists = {};
+  const put = (model, geo, mat, x, z, k = 1, yaw = rand(0, 6.28), color = null, y = null) => {
+    if (!geo) return;
+    (lists[model] ??= { geo, mat, items: [] }).items.push({ x, z0: z - ROAD_Z0, y: y ?? marchHeight(x), k, yaw, color });
+  };
+  const greens = [0x4fbf6a, 0x3aa65a, 0x6fd07a, 0x2e9a5b, 0x5cc276].map((c) => new THREE.Color(c));
+  const pineGreens = [0x2f8a5a, 0x2a7d55, 0x3d9a62].map((c) => new THREE.Color(c));
+  const tree = (kind, x, z, k) => {
+    const tint = kind.startsWith('pine') ? pineGreens[Math.floor(Math.random() * 3)] : greens[Math.floor(Math.random() * 5)], yaw = rand(0, 6.28);
+    put(kind + '_bark', flora.meshes[kind + '_bark']?.geometry, flora.mats.bark, x, z, k, yaw);
+    put(kind + '_leaf', flora.meshes[kind + '_leaf']?.geometry, flora.mats.leaf, x, z, k, yaw, tint);
+  };
+  for (let i = 0; i < 150; i++) {
+    const side = Math.random() < 0.5 ? -1 : 1, z = ROAD_Z0 + Math.random() * DECOR_SPAN;
+    let x = side * rand(LANE_HALF + 6.5, 70);
+    if (Math.abs(Math.abs(x) - CANAL_X) < 3.6) x += side * 5;
+    const far = Math.abs(x) > 32;
+    tree(far && Math.random() < 0.6 ? (Math.random() < 0.6 ? 'pine1' : 'pine2') : TREE_KINDS[Math.floor(Math.random() * 4)], x, z, rand(0.85, 1.35));
+  }
+  for (let i = 0; i < 70; i++) {
+    const side = i % 2 ? 1 : -1;
+    put('bush' + (1 + (i % 2)) + '_leaf', flora.meshes['bush' + (1 + (i % 2)) + '_leaf']?.geometry, flora.mats.bush, side * rand(LANE_HALF + 1.6, LANE_HALF + 5.5), ROAD_Z0 + Math.random() * DECOR_SPAN, rand(0.7, 1.2), rand(0, 6.28), new THREE.Color([0x57c46b, 0x45b35d, 0x7ad685][i % 3]));
+  }
+  for (let i = 0; i < 40; i++) {
+    let x = (i % 2 ? 1 : -1) * rand(LANE_HALF + 3, 45);
+    if (Math.abs(Math.abs(x) - CANAL_X) < 3.4) x = Math.sign(x) * (CANAL_X + 4);
+    put('rock' + (1 + (i % 3)), flora.meshes['rock' + (1 + (i % 3))]?.geometry, flora.mats.rock, x, ROAD_Z0 + Math.random() * DECOR_SPAN, rand(0.5, 1.4));
+  }
+  if (PROP) {
+    const ironMat = new THREE.MeshLambertMaterial({ color: 0x3a3358, flatShading: true });
+    const wood = new THREE.MeshLambertMaterial({ color: 0xa8774c, flatShading: true, vertexColors: true });
+    const darkWood = new THREE.MeshLambertMaterial({ color: 0x5a3c2a, flatShading: true });
+    const cloth = windy(new THREE.MeshLambertMaterial({ flatShading: true, vertexColors: true, side: THREE.DoubleSide }), 0.06, 3.9, true);
+    for (let z = ROAD_Z0; z < ROAD_Z1; z += 12) for (const side of [-1, 1]) {
+      put('lantern_iron', PROP.lantern_iron, ironMat, side * (LANE_HALF + 1.2), z, 1, 0, null, 0);
+      put('lantern_glow', PROP.lantern_glow, decor.lampMat, side * (LANE_HALF + 1.2), z, 1, 0, null, 0);
+    }
+    for (const side of [-1, 1]) for (let z = ROAD_Z0; z < ROAD_Z1; z += 3) if (vnoise(z * 0.07, side * 7 + 3) > 0.45) put('fence_wood', PROP.fence_wood, wood, side * (LANE_HALF + 6), z, 1, rand(-0.03, 0.03));
+    for (let z = ROAD_Z0 + 6; z < ROAD_Z1; z += 36) {
+      const side = Math.random() < 0.5 ? -1 : 1, x = side * (LANE_HALF + 2.7);
+      put('keg_wood', PROP.keg_wood, wood, x, z); put('keg_iron', PROP.keg_iron, ironMat, x, z);
+      put('crate_wood', PROP.crate_wood, wood, x + side * 0.4, z - 1.2, rand(0.85, 1.1));
+    }
+    const colors = [0xd62246, 0x8a4ad8, 0x2f7bff, 0xffb020];
+    for (let z = ROAD_Z0 + 20, i = 0; z < ROAD_Z1; z += 60, i++) for (const side of [-1, 1]) {
+      put('banner_pole', PROP.banner_pole, darkWood, side * (LANE_HALF + 2.3), z, 1, 0);
+      put('banner_cloth', PROP.banner_cloth, cloth, side * (LANE_HALF + 2.3), z, 1, 0, new THREE.Color(colors[i % 4]));
+    }
+  }
+  for (const [model, L] of Object.entries(lists)) {
+    const mesh = new THREE.InstancedMesh(L.geo, L.mat, L.items.length);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false;
+    L.items.forEach((it, i) => { if (it.color) mesh.setColorAt(i, it.color); });
+    mesh.castShadow = !model.startsWith('lantern_glow'); mesh.receiveShadow = true;
+    marchWorld.add(mesh); marchDecor.meshes.push(mesh); marchDecor.items.push({ mesh, list: L.items });
+  }
+  M.decorWithProps = !!PROP; M.decorWithModels = !!flora.meshes.oak1_bark && flora.meshes.oak1_bark.geometry.type !== 'CylinderGeometry';
+  placeMarchDecor();
+}
+const _dm = new THREE.Matrix4(), _dq = new THREE.Quaternion(), _de = new THREE.Euler(), _dv = new THREE.Vector3(), _ds = new THREE.Vector3();
+function placeMarchDecor() {
+  const s = M.scroll % DECOR_SPAN;
+  for (const { mesh, list } of marchDecor.items) {
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i]; let z = it.z0 + s; if (z >= DECOR_SPAN) z -= DECOR_SPAN;
+      _dm.compose(_dv.set(it.x, it.y, ROAD_Z0 + z), _dq.setFromEuler(_de.set(0, it.yaw, 0)), _ds.setScalar(it.k));
+      mesh.setMatrixAt(i, _dm);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+function scrollMarchWorld(dz) {
+  M.scroll += dz;
+  M.curb.position.z = M.scroll % 4;
+  marchLaneMat.map.offset.y = marchLaneMat.bumpMap.offset.y = (M.scroll / 4) % 1;
+  marchGrass.offset.y = (M.scroll / 700 * 90) % 1;
+  if (M.scrollU) M.scrollU.value = M.scroll;
+  for (const p of liquidPieces) if (p.userData.march) p.material.uniforms.uScroll.value = M.scroll / 3;
+  placeMarchDecor();
+}
+
+// ---- bolts (the troop's shots) ----
+const BOLT_MAX = 600;
+const boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.2, 2.2) });
+const boltMesh = new THREE.InstancedMesh(new THREE.CapsuleGeometry(1, 1, 2, 6).rotateX(Math.PI / 2), boltMat, BOLT_MAX);
+boltMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); boltMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(BOLT_MAX * 3), 3);
+boltMesh.count = 0; boltMesh.frustumCulled = false; scene.add(boltMesh);
+const boltPool = [];
+function fireVolley() {
+  const era = ERAS[M.era], troop = allies.filter((a) => a.alive && a.role === 'squad');
+  if (!troop.length) return;
+  const n = Math.min(troop.length, 22), each = (era.dmg * troop.length) / n;
+  for (let k = 0; k < n && M.bolts.length < BOLT_MAX; k++) {
+    const a = troop[Math.floor(Math.random() * troop.length)];
+    const b = boltPool.pop() || {};
+    b.x = a.x + rand(-0.15, 0.15); b.y = 1.0 + rand(-0.1, 0.15); b.z = a.z - 0.6; b.v = era.speed * rand(0.95, 1.05); b.dmg = each; b.life = 70 / era.speed;
+    M.bolts.push(b);
+  }
+  if (Math.random() < 0.5) Sfx.play('shoot');
+}
+function drawBolts() {
+  const era = ERAS[M.era], a = boltMesh.instanceMatrix.array, c = boltMesh.instanceColor.array, s = era.size, l = era.size * era.len;
+  for (let i = 0; i < M.bolts.length; i++) {
+    const b = M.bolts[i], o = i * 16;
+    a.fill(0, o, o + 16); a[o] = s; a[o + 5] = s; a[o + 10] = l; a[o + 12] = b.x; a[o + 13] = b.y; a[o + 14] = b.z; a[o + 15] = 1;
+    c[i * 3] = era.shotC.r; c[i * 3 + 1] = era.shotC.g; c[i * 3 + 2] = era.shotC.b;
+  }
+  boltMesh.count = M.bolts.length; boltMesh.instanceMatrix.needsUpdate = true; boltMesh.instanceColor.needsUpdate = true;
+}
+
+// ---- walls of crates and cages of prisoners ----
+const crateMat = new THREE.MeshLambertMaterial({ color: 0xa8774c, flatShading: true, vertexColors: true });
+const cageIron = new THREE.MeshLambertMaterial({ color: 0x3a3358, flatShading: true });
+const crateFallback = (() => { const g = new THREE.BoxGeometry(0.8, 0.8, 0.8).translate(0, 0.4, 0); return shadeByHeight(g, 0.9, 1); })();
+function spawnWall(x, w, hp) {
+  const grp = new THREE.Group(), geo = PROP?.crate_wood || crateFallback, cols = Math.max(1, Math.round(w / 0.86));
+  for (let r = 0; r < 2; r++) for (let i = 0; i < cols; i++) {
+    const m = new THREE.Mesh(geo, crateMat); m.position.set((i - (cols - 1) / 2) * 0.86 + (r ? 0.2 : 0), r * 0.82, rand(-0.05, 0.05));
+    m.rotation.y = rand(-0.12, 0.12); m.castShadow = true; grp.add(m);
+  }
+  grp.position.set(x, 0, MARCH_FAR); scene.add(grp);
+  const label = makeLabel(); drawLabel(label, hp); label.sprite.position.set(x, 2.6, MARCH_FAR); scene.add(label.sprite);
+  M.walls.push({ type: 'wall', x, z: MARCH_FAR, half: (cols * 0.86) / 2, hp, maxHp: hp, grp, label, flash: 0 });
+}
+function spawnCage(x, hp, prisoners) {
+  const grp = new THREE.Group(), W = 2.6, H = 2.1;
+  const plate = new THREE.BoxGeometry(W + 0.2, 0.18, W + 0.2), bar = new THREE.CylinderGeometry(0.05, 0.05, H, 6);
+  for (const y of [0.09, H + 0.09]) { const p = new THREE.Mesh(plate, cageIron); p.position.y = y; p.castShadow = true; grp.add(p); }
+  for (let i = 0; i < 6; i++) for (const s of [-1, 1]) {
+    const t = -W / 2 + (i + 0.5) * (W / 6);
+    for (const [bx, bz] of [[t, s * W / 2], [s * W / 2, t]]) { const b = new THREE.Mesh(bar, cageIron); b.position.set(bx, H / 2 + 0.1, bz); grp.add(b); }
+  }
+  grp.position.set(x, 0, MARCH_FAR); scene.add(grp);
+  const label = makeLabel(); drawLabel(label, hp); label.sprite.position.set(x, H + 1.1, MARCH_FAR); scene.add(label.sprite);
+  const cage = { type: 'cage', x, z: MARCH_FAR, half: W / 2, hp, maxHp: hp, grp, label, flash: 0, inmates: [] };
+  for (let i = 0; i < prisoners; i++) {
+    const a = spawnAlly(x + rand(-0.8, 0.8), MARCH_FAR + rand(-0.8, 0.8), 0, 0, 0, 0);
+    if (a) { a.role = 'caged'; a.cage = cage; a.ox = a.x - x; a.oz = a.z - MARCH_FAR; cage.inmates.push(a); }
+  }
+  M.walls.push(cage);
+}
+function removeObstacle(o) {
+  scene.remove(o.grp); scene.remove(o.label.sprite); o.label.tex.dispose(); o.label.sprite.material.dispose();
+  for (const a of o.inmates || []) if (a.role === 'caged') a.alive = false;
+}
+function breakObstacle(o) {
+  o.dead = true; state.score += o.type === 'cage' ? 40 : 25;
+  const c = new THREE.Color(o.type === 'cage' ? 0x6a6a88 : 0xa8774c);
+  debris(o.x, 1, o.z, c, 18, 7, 0.28); smoke(o.x, 0.8, o.z, 5, 1.6, 0xc8b8a0, 0.9); Sfx.play('bigdie');
+  if (o.type === 'cage') {
+    for (const a of o.inmates) if (a.alive) { a.role = 'joining'; a.cage = null; }
+    floatText(`+${o.inmates.length} SOLDADOS`, o.x, 3, o.z, 'cyan'); ring(o.x, o.z, 0x5ff3ff, 6, 0.5);
+  } else if (Math.random() < 0.55) {
+    spawnPickup(Math.random() < 0.5 ? 'year' : randomPickupType(), o.x, o.z);
+  }
+  removeObstacle(o);
+}
+
+// ---- gates: signed numbers; shooting one counts it up ----
+function marchGate(kind, n, x, w) {
+  const def = { kind, value: Math.abs(n), x, z: MARCH_FAR, width: w, amp: 0, speed: 0 };
+  if (kind === 'num') def.kind = n >= 0 ? 'add' : 'sub';
+  if (kind === 'yr') def.kind = n >= 0 ? 'year' : 'yearNeg';
+  const g = buildGate(def, gates.length % 30);
+  g.n = n; g.shootable = kind === 'num' || kind === 'yr'; g.family = kind; g.acc = 0;
+  gates.push(g); return g;
+}
+function setGateNumber(g, n) {
+  if (n === g.n) return;
+  g.n = n; const kind = g.family === 'num' ? (n >= 0 ? 'add' : 'sub') : (n >= 0 ? 'year' : 'yearNeg');
+  if (kind !== g.kind) {
+    g.kind = kind; g.color = GATE_COLORS[kind]; g.colMat.color.setHex(g.color);
+    g.panelMat.uniforms.uColor.value.setHex(g.color); g.panelMat.uniforms.uSign.value = NEGATIVE_GATE.has(kind) ? -1 : 1;
+    ring(g.x, g.z, g.color, 4, 0.4);
+  }
+  g.value = Math.abs(n);
+  g.labelMat.map.dispose(); g.labelMat.map = gateLabelTex(gateText(g), g.family === 'yr' ? 'ANOS' : '');
+}
+function passGate(g) {
+  g.used = true; g.pulse = 1; ring(g.x, SQUAD_Z, g.color, 5, 0.45); Sfx.play('gate');
+  const n = squadCount();
+  if (g.kind === 'add') addSoldiers(g.value, g.x);
+  else if (g.kind === 'mul') addSoldiers(n * (g.value - 1), g.x);
+  else if (g.kind === 'sub') loseSoldiers(g.value);
+  else if (g.kind === 'div') loseSoldiers(Math.ceil(n / 2));
+  else addYears(g.kind === 'year' ? g.value : -g.value);
+}
+function addSoldiers(k, x = null) {
+  k = Math.min(k, MAX_SQUAD - squadCount());
+  for (let i = 0; i < k; i++) {
+    const a = spawnAlly((x ?? M.cx) + rand(-1.5, 1.5), SQUAD_Z + rand(-1.5, 1.5), 0, 0, 0, 1);
+    if (!a) break; a.role = 'joining';
+  }
+  if (k > 0) floatText('+' + k, M.cx, 3, SQUAD_Z, 'cyan');
+}
+function loseSoldiers(k) {
+  const troop = allies.filter((a) => a.alive && a.role !== 'caged');
+  for (let i = 0; i < k && troop.length; i++) {
+    const a = troop.splice(Math.floor(Math.random() * troop.length), 1)[0];
+    a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16);
+  }
+  if (k > 0) { floatText('-' + k, M.cx, 3, SQUAD_Z, 'red'); Sfx.play('cut'); }
+}
+function addYears(y) {
+  state.year = Math.max(0, state.year + y);
+  floatText((y >= 0 ? '+' : '') + y + ' ANOS', M.cx, 3.4, SQUAD_Z, y >= 0 ? 'gold' : 'red');
+  const era = eraOf(state.year);
+  if (era !== M.era) {
+    const up = era > M.era; M.era = era;
+    showBanner(ERAS[era].name, up ? 'A tropa evoluiu: armas mais fortes' : 'Voltou no tempo: armas mais fracas', 2.2, up ? 'win' : 'warn');
+    Sfx.play(up ? 'wave' : 'cut'); sparks(M.cx, 1.5, SQUAD_Z, ERAS[era].tint, 60, 9, 0.8, 0.7, 3, 0.3);
+  }
+}
+
+// ---- the road ahead: one segment every ~25 m, harder with distance ----
+function marchSegment() {
+  const lvl = M.dist / 200;
+  M.segs = (M.segs || 0) + 1;
+  const kind = M.segs <= 3 ? 'gates2' : weighted([ // the first stretch only offers gates, to grow the troop
+    { w: 30, k: 'gates2' }, { w: 12, k: 'gate1' }, { w: 22 + Math.min(20, lvl * 3), k: 'enemies' },
+    { w: lvl > 0.6 ? 14 : 0, k: 'wall' }, { w: lvl > 0.3 ? 10 : 0, k: 'cage' }, { w: 6, k: 'pickups' },
+  ]).k;
+  const scale = 1 + lvl * 0.35;
+  const goodGate = () => weighted([
+    { w: 30, v: ['num', randInt(2, 4 + Math.floor(lvl * 1.5))] }, { w: 16, v: ['mul', 2] }, { w: lvl > 3 ? 6 : 0, v: ['mul', 3] },
+    { w: 24, v: ['yr', Math.round(randInt(5, 15 + lvl * 4) * 10)] },
+  ]).v;
+  const badGate = () => weighted([
+    { w: 26, v: ['num', -randInt(3, Math.round(6 + lvl * 2))] }, { w: lvl > 1 ? 8 : 0, v: ['div', 2] },
+    { w: 14, v: ['yr', -Math.round(randInt(5, 15) * 10)] },
+  ]).v;
+  const make = ([k, n], x, w) => (k === 'mul' || k === 'div' ? (() => { const g = marchGate(k, n, x, w); g.value = n; return g; })() : marchGate(k, n, x, w));
+  if (kind === 'gates2') {
+    const w = rand(4.6, 5.6), shift = rand(-1.2, 1.2), a = goodGate(), b = Math.random() < (M.segs <= 3 ? 0.3 : 0.55) ? badGate() : goodGate();
+    const [l, r] = Math.random() < 0.5 ? [a, b] : [b, a];
+    make(l, shift - w / 2 - 0.4, w); make(r, shift + w / 2 + 0.4, w);
+  } else if (kind === 'gate1') {
+    make(Math.random() < 0.6 ? badGate() : goodGate(), rand(-3, 3), rand(6.5, 8.5));
+  } else if (kind === 'enemies') {
+    const n = Math.round(rand(4, 7) * scale), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
+    for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
+    if (lvl > 1.2 && Math.random() < 0.3 + lvl * 0.05) { spawnBig('brute'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR + rand(-2, 2); b.mesh.position.z = b.z; }
+  } else if (kind === 'wall') {
+    const gap = rand(3, 5), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
+    const lw = gx - gap / 2 + LANE_HALF, rw = LANE_HALF - (gx + gap / 2);
+    if (lw > 1) spawnWall(-LANE_HALF + lw / 2, lw, hp);
+    if (rw > 1) spawnWall(LANE_HALF - rw / 2, rw, hp);
+  } else if (kind === 'cage') {
+    spawnCage(rand(-LANE_HALF + 2, LANE_HALF - 2), Math.round(rand(10, 16) * scale), randInt(3, 6 + Math.floor(lvl)));
+  } else {
+    for (let i = randInt(1, 3); i > 0; i--) spawnPickup(Math.random() < 0.4 ? 'year' : randomPickupType(), rand(-LANE_HALF + 1.5, LANE_HALF - 1.5), MARCH_FAR + rand(-4, 4));
+  }
+}
+
+// ---- per-frame ----
+function startMarch() {
+  Object.assign(M, { speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, era: 0, cx: 0, R: 1, bossLive: false, segs: 0 });
+  for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
+  for (const g of gates) disposeGate(g); gates = [];
+  state.year = 0; state.wave = 1; state.bossDown = false; state.phase = 'playing';
+  if (!M.canals) { buildCanals(); M.canals = true; }
+  if (!M.built || (PROP && !M.decorWithProps) || (!M.decorWithModels && flora.meshes.oak1_bark.geometry.type !== 'CylinderGeometry')) { buildMarchDecor(); M.built = true; }
+  addSoldiers(8, 0);
+  for (const a of allies) { a.x = rand(-1, 1); a.z = SQUAD_Z + rand(-1, 1); }
+  showBanner('MARCHA!', 'Arraste para desviar · atire nos portões para aumentar o número', 2.4);
+}
+function simulateMarch(dt, realDt = dt) {
+  gt += dt;
+  const active = state.phase === 'playing';
+  if (active) {
+    if (keys.has('a') || keys.has('arrowleft')) state.targetX = laneClamp(state.targetX - 18 * dt);
+    if (keys.has('d') || keys.has('arrowright')) state.targetX = laneClamp(state.targetX + 18 * dt);
+  }
+  const n = squadCount(), R = (M.R = 0.55 * Math.sqrt(Math.max(1, n)));
+  const lim = Math.max(0, LANE_HALF - Math.min(R, LANE_HALF - 1) - 0.4);
+  M.cx = M.cx ?? 0; M.cx += (clamp(state.targetX, -lim, lim) - M.cx) * Math.min(1, dt * 10);
+
+  // the road halts while a boss is standing in it
+  const boss = bigs.find((b) => b.alive && b.kind === 'boss');
+  const arena = boss && boss.z > MARCH_FAR + 70;
+  const target = active ? (arena ? 0 : Math.min(15, 8 + M.dist / 350)) : 0;
+  M.speed += (target - M.speed) * Math.min(1, dt * (arena ? 3 : 1.2));
+  const dz = M.speed * dt;
+  if (dz > 0) { M.dist += dz; scrollMarchWorld(dz); if (active) state.score += Math.floor(M.dist) - Math.floor(M.dist - dz); }
+  if (M.bossLive && !boss) { M.bossLive = false; state.bossDown = true; M.bossAt += BOSS_EVERY; } // boss beaten: next one 1000 m on
+  const wave = 1 + Math.floor(Math.min(M.dist, M.bossAt - 1) / 200);
+  if (wave !== state.wave) { state.wave = wave; if (wave % 5 !== 0) state.bossDown = false; }
+
+  // spawn the road ahead; the boss comes just before each 1000 m mark
+  if (active) {
+    if (!boss && !state.bossDown && M.dist >= M.bossAt - 140) {
+      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR; b.speed = 2.2; b.mesh.position.z = b.z; M.bossLive = true;
+    } else if (!arena && M.dist >= M.nextSeg) { marchSegment(); M.nextSeg = M.dist + rand(22, 30) * (M.speed / 10); }
+  }
+
+  // troop formation (sunflower) and the stragglers running to join it
+  let slot = 0;
+  for (const a of allies) {
+    if (!a.alive) continue;
+    if (a.role === 'caged') { a.x = a.cage.x + a.ox; a.z = a.cage.z + a.oz; continue; }
+    const r = 0.55 * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
+    const tx = M.cx + Math.cos(ang) * r, tz = SQUAD_Z + Math.sin(ang) * r * 0.8;
+    const k = a.role === 'joining' ? dt * 3.5 : dt * 9;
+    a.x += (tx - a.x) * Math.min(1, k); a.z += (tz - a.z) * Math.min(1, k);
+    if (a.role === 'joining' && Math.abs(tx - a.x) + Math.abs(tz - a.z) < 0.6) a.role = 'squad';
+  }
+
+  // fire
+  if (active) {
+    if (state.rapid > 0) state.rapid = Math.max(0, state.rapid - dt);
+    M.volley -= dt;
+    const interval = 1 / ERAS[M.era].rate * (state.rapid > 0 ? 0.5 : 1);
+    while (M.volley <= 0) { fireVolley(); M.volley += interval; }
+  }
+  updateShots(dt);
+
+  // everything on the road moves toward the troop
+  for (const g of gates) {
+    g.z += dz; g.group.position.z = g.z;
+    if (!g.used && !g.dying && g.z >= SQUAD_Z && g.z - dz < SQUAD_Z && Math.abs(M.cx - g.x) <= g.half + 0.2 && active) passGate(g);
+    if (g.z > MARCH_BEHIND) g.dying = true;
+  }
+  updateGates(dt);
+  for (const g of gates) g.group.position.z = g.z;
+  for (const o of M.walls) {
+    o.z += dz; o.grp.position.z = o.z; o.label.sprite.position.z = o.z;
+    if (o.flash > 0) { o.flash -= dt * 6; o.grp.scale.setScalar(1 + o.flash * 0.04); }
+    drawLabel(o.label, Math.max(0, Math.ceil(o.hp)));
+    if (o.type === 'wall' && !o.dead && o.z > SQUAD_Z - R - 1 && o.z < SQUAD_Z + R + 1) { // soldiers running into crates die and chip it
+      for (const a of allies) if (a.alive && a.role !== 'caged' && Math.abs(a.x - o.x) < o.half && Math.abs(a.z - o.z) < 0.7) {
+        a.alive = false; o.hp -= 1; o.flash = 1; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16);
+        if (o.hp <= 0) { breakObstacle(o); break; }
+      }
+    }
+    if (o.z > MARCH_BEHIND) { o.dead = true; removeObstacle(o); }
+  }
+  M.walls = M.walls.filter((o) => !o.dead);
+  updateMarchEnemies(dt, dz);
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i]; p.z += dz; p.t += dt;
+    p.mesh.position.set(p.x, 0, p.z); p.box.position.y = 1.0 + Math.sin(p.t * 4) * 0.18; p.box.rotation.y = p.t * 1.6;
+    let gone = false;
+    if (Math.abs(p.z - SQUAD_Z) < 1.6 && Math.abs(p.x - M.cx) < 1.4 + R * 0.6 && active) { collectMarchPickup(p); gone = true; }
+    else if (p.z > MARCH_BEHIND) gone = true;
+    if (gone) { scene.remove(p.mesh); pickups.splice(i, 1); }
+  }
+  updateUltimate(dt, realDt);
+  updateHazards(dt);
+  compact(allies, allyPool); compact(enemies, enemyPool);
+  for (let i = bigs.length - 1; i >= 0; i--) if (!bigs[i].alive) bigs.splice(i, 1);
+  state.peak = Math.max(state.peak, squadCount());
+  state.kills = state.kills || 0;
+  if (active && squadCount() === 0) gameOver();
+}
+function collectMarchPickup(p) {
+  Sfx.play('pickup'); ring(p.x, p.z, PICKUPS[p.type].color, 5, 0.5);
+  burst(p.x, 1, p.z, new THREE.Color(PICKUPS[p.type].color), 14, 6, 0.26);
+  if (p.type === 'plus') addSoldiers(3, p.x);
+  else if (p.type === 'rapid') { state.rapid = 6; floatText('RAJADA!', p.x, 2.4, p.z, 'cyan'); }
+  else if (p.type === 'year') addYears(100);
+  else addSoldiers(2, p.x);
+  state.score += 25;
+}
+function updateShots(dt) {
+  const bolts = M.bolts;
+  for (let i = 0; i < bolts.length; i++) {
+    const b = bolts[i], z0 = b.z; b.z -= b.v * dt; b.life -= dt;
+    let hit = null, hz = -1e9;
+    const consider = (z, r, x, half, obj) => { if (Math.abs(b.x - x) <= half && z + r >= b.z && z - r <= z0 && z > hz) { hz = z; hit = obj; } };
+    for (const e of enemies) if (e.alive) consider(e.z, e.r, e.x, e.r + 0.15, e);
+    for (const g of bigs) if (g.alive) consider(g.z, g.r, g.x, g.r, g);
+    for (const o of M.walls) if (!o.dead) consider(o.z, 0.5, o.x, o.half, o);
+    for (const g of gates) if (g.shootable && !g.dying && !g.used && g.appear > 0.5) consider(g.z, 0.3, g.x, g.half, g);
+    if (hit) {
+      b.life = 0;
+      if (hit.group) { // a gate: each hit counts it up a little, the same for a big or small troop (~2/s early on)
+        const yr = hit.family === 'yr', cap = yr ? 500 : 20;
+        hit.acc += yr ? 0.7 : 0.07; hit.pulse = Math.max(hit.pulse, 0.5);
+        const step = yr ? 10 : 1, inc = Math.floor(hit.acc / step) * step;
+        if (inc) { hit.acc -= inc; if (hit.n < cap) setGateNumber(hit, Math.min(cap, hit.n + inc)); }
+      } else if (hit.grp) { hit.hp -= b.dmg; hit.flash = 1; if (hit.hp <= 0 && !hit.dead) breakObstacle(hit); }
+      else if (hit.mesh) { if (!(hit.shield > 0)) { hit.hp -= b.dmg; hit.flash = 1; if (hit.hp <= 0) killBig(hit); } }
+      else { hit.hp -= b.dmg; hit.flash = 1; if (hit.hp <= 0) killEnemy(hit); }
+      if (Math.random() < 0.4) sparks(b.x, b.y, hz, ERAS[M.era].shot, 2, 3, 0.35, 0.25, 1, 0.4);
+    }
+  }
+  M.bolts = bolts.filter((b) => { if (b.life > 0) return true; boltPool.push(b); return false; });
+}
+function updateMarchEnemies(dt, dz) {
+  const active = state.phase === 'playing';
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    e.z += dz + e.speed * 0.25 * dt; e.x = clamp(e.x + Math.sin(gt * 1.7 + e.phase) * 0.35 * dt, -LANE_HALF + 0.4, LANE_HALF - 0.4);
+    if (e.flash > 0) e.flash -= dt * 6;
+    if (active && e.z > SQUAD_Z - M.R - 1.5 && e.z < SQUAD_Z + M.R + 1.5) { // trade one for one with the troop
+      for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - e.x) ** 2 + (a.z - e.z) ** 2 < (e.r + 0.3) ** 2) {
+        a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1;
+        if (e.hp <= 0) { killEnemy(e); break; }
+      }
+    }
+    if (e.z > MARCH_BEHIND) e.alive = false;
+  }
+  for (const b of bigs) {
+    if (!b.alive) continue;
+    const isBoss = b.kind === 'boss';
+    b.z += dz + (isBoss ? b.speed : b.speed * 0.3) * dt;
+    if (isBoss) { b.z = Math.min(b.z, SQUAD_Z - 3); b.x += clamp(M.cx - b.x, -1, 1) * 1.6 * dt; } // the boss hunts the troop
+    b.x = clamp(b.x + Math.sin(gt * 0.9 + b.phase) * 0.4 * dt, -LANE_HALF + b.r, LANE_HALF - b.r);
+    if (b.flash > 0) b.flash -= dt * 7;
+    const u = b.mesh.userData, ph = gt * (isBoss ? 3.4 : 5) + b.phase, sw = Math.sin(ph);
+    u.legs[0].rotation.x = sw * 0.6; u.legs[1].rotation.x = -sw * 0.6;
+    u.arms[0].rotation.x = -sw * 0.5; u.arms[1].rotation.x = -0.9 + sw * 0.15;
+    u.head.rotation.z = Math.sin(ph * 0.5) * 0.08;
+    b.mesh.position.set(b.x, Math.abs(Math.cos(ph)) * 0.05 * b.scale, b.z); b.mesh.rotation.z = sw * 0.04;
+    if (b.flash > 0) { u.skin.emissive.setRGB(1, 1, 1); u.skin.emissiveIntensity = b.flash * 0.55; }
+    else { u.skin.emissive.setHex(u.glow); u.skin.emissiveIntensity = u.glowI * (0.85 + 0.15 * Math.sin(gt * 6)); }
+    for (const r of u.spin) r.rotation.z += dt * 2.5;
+    if (isBoss && active) bossPower(b, dt);
+    if (b.label) { drawLabel(b.label, Math.max(0, Math.ceil(b.hp))); b.label.sprite.position.set(b.x, b.scale * 1.8 + 0.6, b.z); }
+    if (active && b.z > SQUAD_Z - b.r - 2) { // stomping into the troop
+      for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < (b.r + 0.5) ** 2) {
+        a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); if (!isBoss) { b.hp -= 1; b.flash = 1; if (b.hp <= 0) { killBig(b); break; } }
+      }
+    }
+    if (b.z > MARCH_BEHIND) { b.alive = false; removeBig(b); }
+  }
+}
+
 // ================= Game flow =================
 function clearWorld() {
   clearHazards(); state.bossDown = false;
@@ -2295,29 +2857,54 @@ function clearWorld() {
   for (const p of pickups) scene.remove(p.mesh); pickups.length = 0;
   for (const p of parts) partPool.push(p); parts.length = 0;
   for (const f of floaters) f.el.remove(); floaters.length = 0;
+  for (const g of gates) disposeGate(g); gates = [];
+  for (const o of M.walls) removeObstacle(o); M.walls.length = 0;
+  for (const b of M.bolts) boltPool.push(b); M.bolts.length = 0;
 }
-function startGame() {
+// Shows the arena of a mode: the defense wall and fort, or the endless march road. Also relabels the HUD.
+function setModeScene(mode) {
+  state.mode = mode;
+  defenseWorld.visible = mode === 'defense'; marchWorld.visible = mode === 'march'; player.visible = mode === 'defense';
+  const march = mode === 'march';
+  $('waveK').textContent = march ? 'DIST' : 'ONDA'; $('shotsK').textContent = march ? 'ANO' : 'TIROS';
+  $('hpChip').hidden = march; $('stWaveK').textContent = march ? 'DISTÂNCIA' : 'ONDA';
+  $('overTitle').textContent = march ? 'A TROPA CAIU' : 'O MURO CAIU';
+  fitCamera();
+}
+function startGame(mode = state.mode) {
   if (state.phase === 'playing' || state.phase === 'break') return;
-  Sfx.init(); clearWorld();
-  Object.assign(state, { paused: false, score: 0, hp: WALL_HP, shots: 1, rapid: 0, fireTimer: 0, shake: 0, hurt: 0, kills: 0, peak: 0, targetX: 0, ult: 0, ultFx: null, slowmo: 0, flash: 0 });
+  Sfx.init(); clearWorld(); setModeScene(mode);
+  Object.assign(state, { paused: false, score: 0, hp: WALL_HP, shots: 1, rapid: 0, fireTimer: 0, shake: 0, hurt: 0, kills: 0, peak: 0, targetX: 0, ult: 0, ultFx: null, slowmo: 0, flash: 0, best: loadBest(mode) });
   ultWall.visible = false;
   player.position.x = 0;
   ui.menu.hidden = true; ui.over.hidden = true; ui.pause.hidden = true; ui.hud.hidden = false;
-  startWave(1);
+  if (mode === 'march') startMarch(); else startWave(1);
   onlineRunStart();
   canvas.focus();
 }
+// Back to the home screen (from the pause or game-over screens).
+function goMenu() {
+  state.paused = false; state.phase = 'menu'; online.run = null;
+  clearWorld(); setModeScene('defense'); setLayout(makeLayout(1)); snapLook();
+  ui.hud.hidden = true; ui.over.hidden = true; ui.pause.hidden = true; ui.bossBar.hidden = true; ui.menu.hidden = false;
+  renderBests(); $('btnPlay').focus();
+}
+function renderBests() {
+  const d = loadBest('defense'), m = loadBest('march');
+  $('bestMenu').textContent = `RECORDE ${d.toLocaleString('pt-BR')}` + (m ? ` · MARCHA ${m.toLocaleString('pt-BR')}` : '');
+}
 function gameOver() {
   state.phase = 'dying'; state.dyingTimer = 1.6; state.shake = 1;
-  for (let x = -LANE_HALF + 1; x < LANE_HALF; x += 2) burst(x, 1, DEFENSE_Z + 3, new THREE.Color(0xdfe8ff), 6, 8, 0.35);
+  if (state.mode === 'defense') for (let x = -LANE_HALF + 1; x < LANE_HALF; x += 2) burst(x, 1, DEFENSE_Z + 3, new THREE.Color(0xdfe8ff), 6, 8, 0.35);
   Sfx.play('over');
 }
 function showGameOver() {
   state.phase = 'over';
   const isBest = state.score > state.best;
-  if (isBest) { state.best = state.score; saveBest(state.best); }
+  if (isBest) { state.best = state.score; saveBest(state.best, state.mode); }
   $('stScore').textContent = state.score.toLocaleString('pt-BR');
-  $('stWave').textContent = state.wave; $('stKills').textContent = state.kills.toLocaleString('pt-BR');
+  $('stWave').textContent = state.mode === 'march' ? Math.floor(M.dist).toLocaleString('pt-BR') + ' m' : state.wave;
+  $('stKills').textContent = state.kills.toLocaleString('pt-BR');
   $('stPeak').textContent = state.peak.toLocaleString('pt-BR');
   const bo = $('bestOver');
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
@@ -2334,8 +2921,11 @@ function toggleMute() {
   Sfx.setMuted(!Sfx.muted);
   ui.icoSound.style.opacity = Sfx.muted ? '0.35' : '1';
 }
-$('btnPlay').addEventListener('click', startGame);
-$('btnAgain').addEventListener('click', startGame);
+$('btnPlay').addEventListener('click', () => startGame('defense'));
+$('btnMarch').addEventListener('click', () => startGame('march'));
+$('btnAgain').addEventListener('click', () => startGame());
+$('btnMenuPause').addEventListener('click', goMenu);
+$('btnMenuOver').addEventListener('click', goMenu);
 $('btnResume').addEventListener('click', () => setPaused(false));
 $('btnRestart').addEventListener('click', () => { state.paused = false; state.phase = 'over'; startGame(); });
 $('btnPause').addEventListener('click', () => setPaused(!state.paused));
@@ -2379,6 +2969,7 @@ canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointerc
 
 // ================= Camera fit =================
 const CAM_DIR = new THREE.Vector3(0, 0.78, 1).normalize();
+const CAM_DIR_MARCH = new THREE.Vector3(0, 0.6, 1).normalize(); // lower chase camera behind the marching troop
 const camBase = new THREE.Vector3(), camTarget = new THREE.Vector3();
 let camOverride = null; // local testing only: { pos, look }
 const fitFog = { near: 90, far: 220 };
@@ -2391,13 +2982,16 @@ function fitCamera() {
   post.composer.setPixelRatio(renderer.getPixelRatio()); post.composer.setSize(w, h);
   camera.aspect = w / h; camera.fov = camera.aspect < 0.75 ? 54 : 44; camera.updateProjectionMatrix();
   const bottom = -1 + (125 / h) * 2, top = 1 - (70 / h) * 2, side = 1 - (12 / w) * 2;
-  const near = new THREE.Vector3(0, 0, PLAYER_Z + 1.8), edge = new THREE.Vector3(LANE_HALF + 0.9, 0, PLAYER_Z), far = new THREE.Vector3(0, 3, SPAWN_Z - 5);
+  // Smallest camera distance that keeps the near edge, the lane sides and the far end on screen (per mode).
+  const march = state.mode === 'march', dir = march ? CAM_DIR_MARCH : CAM_DIR, homeZ = march ? SQUAD_Z : PLAYER_Z;
+  const near = new THREE.Vector3(0, 0, homeZ + (march ? 4.5 : 1.8)), edge = new THREE.Vector3(LANE_HALF + 0.9, 0, homeZ);
+  const far = march ? new THREE.Vector3(0, 3, SQUAD_Z - 70) : new THREE.Vector3(0, 3, SPAWN_Z - 5);
   const v = new THREE.Vector3(), t = new THREE.Vector3();
   let best = { d: Infinity, tz: -10 };
-  for (let tz = -34; tz <= 6; tz += 1) {
+  for (let tz = homeZ - 56; tz <= homeZ - 16; tz += 1) {
     t.set(0, 0, tz);
     for (let d = 20; d <= Math.min(best.d, 300); d += 0.5) {
-      camera.position.copy(t).addScaledVector(CAM_DIR, d); camera.lookAt(t); camera.updateMatrixWorld(true);
+      camera.position.copy(t).addScaledVector(dir, d); camera.lookAt(t); camera.updateMatrixWorld(true);
       v.copy(near).project(camera); if (v.z > 1 || v.y < bottom || v.y > top) continue;
       v.copy(edge).project(camera); if (v.z > 1 || v.x > side) continue;
       v.copy(far).project(camera); if (v.z > 1 || v.y > top) continue;
@@ -2406,10 +3000,10 @@ function fitCamera() {
     }
   }
   camTarget.set(0, 0, best.tz);
-  camBase.copy(camTarget).addScaledVector(CAM_DIR, best.d);
+  camBase.copy(camTarget).addScaledVector(dir, best.d);
   camera.position.copy(camBase); camera.lookAt(camTarget); camera.updateMatrixWorld(true);
   fitFog.near = scene.fog.near = best.d * 1.3; fitFog.far = scene.fog.far = best.d * 3.2;
-  const a = new THREE.Vector3(0, 0, PLAYER_Z).project(camera).x, b = new THREE.Vector3(1, 0, PLAYER_Z).project(camera).x;
+  const a = new THREE.Vector3(0, 0, homeZ).project(camera).x, b = new THREE.Vector3(1, 0, homeZ).project(camera).x;
   pxPerUnit = Math.max(4, ((b - a) / 2) * w);
   pointScale.value = (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
 }
@@ -2502,11 +3096,11 @@ varying vec2 vUv;
 void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
 #include <fog_vertex>
 }`;
-const LIQ_FS = `uniform float uT; uniform float uIce; uniform float uRound; uniform float uLen; uniform vec3 uA; uniform vec3 uB; varying vec2 vUv;
+const LIQ_FS = `uniform float uT; uniform float uIce; uniform float uRound; uniform float uLen; uniform float uScroll; uniform vec3 uA; uniform vec3 uB; varying vec2 vUv;
 #include <fog_pars_fragment>
 void main() {
   float edge = uRound > 0.5 ? (1.0 - smoothstep(0.28, 0.5, length(vUv - 0.5))) : smoothstep(0.0, 0.3, vUv.x) * (1.0 - smoothstep(0.7, 1.0, vUv.x));
-  vec2 uv = vUv * vec2(1.0, uLen);
+  vec2 uv = vUv * vec2(1.0, uLen) + vec2(0.0, uScroll);
   float f = sin(uv.y * 1.7 - uT * 1.3 + sin(uv.x * 6.0 + uT) * 1.5) * 0.5 + 0.5;
   float g = sin(uv.y * 3.1 + uT * 0.7 + uv.x * 9.0) * 0.5 + 0.5;
   float n = f * 0.6 + g * 0.4;
@@ -2520,7 +3114,7 @@ void main() {
 }`;
 const liqUniforms = { uT: { value: 0 }, uIce: { value: 0 }, uA: { value: new THREE.Color() }, uB: { value: new THREE.Color() } };
 const liqMat = (round, len) => new THREE.ShaderMaterial({
-  uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...liqUniforms, uRound: { value: round }, uLen: { value: len } },
+  uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...liqUniforms, uRound: { value: round }, uLen: { value: len }, uScroll: { value: 0 } },
   vertexShader: LIQ_VS, fragmentShader: LIQ_FS, fog: true,
 });
 // The liquid sits a little below the banks and is wider than the channel: the terrain hides its edges and draws the shore.
@@ -2538,12 +3132,12 @@ const liquidPieces = [];
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(idx); geo.computeVertexNormals();
-    const river = new THREE.Mesh(geo, liqMat(0, n / 3)); river.userData.base = 0; scene.add(river); liquidPieces.push(river);
+    const river = new THREE.Mesh(geo, liqMat(0, n / 3)); river.userData.base = 0; defenseWorld.add(river); liquidPieces.push(river);
   }
   for (const p of PONDS) {
     const pond = new THREE.Mesh(new THREE.CircleGeometry(p.r * 1.45, 32), liqMat(1, 4));
     pond.rotation.x = -Math.PI / 2; pond.position.set(p.x, 0, p.z);
-    pond.userData.base = baseHeight(p.x, p.z) + LIQ_LEVEL; scene.add(pond); liquidPieces.push(pond);
+    pond.userData.base = baseHeight(p.x, p.z) + LIQ_LEVEL; defenseWorld.add(pond); liquidPieces.push(pond);
   }
 }
 // glowing veins across the lane (lava cracks, frost, toxic veins, void rifts)
@@ -2559,7 +3153,7 @@ const crackMat = new THREE.MeshBasicMaterial({
   transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
 });
 const cracks = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, LANE_LEN), crackMat);
-cracks.rotation.x = -Math.PI / 2; cracks.position.set(0, 0.03, LANE_MID); cracks.visible = false; scene.add(cracks);
+cracks.rotation.x = -Math.PI / 2; cracks.position.set(0, 0.03, LANE_MID); cracks.visible = false; defenseWorld.add(cracks);
 // storm clouds behind the fort
 const stormMat = new THREE.MeshLambertMaterial({ color: 0x5a5470, emissive: 0xb8a8ff, emissiveIntensity: 0, flatShading: true, fog: false });
 const storm = new THREE.Group();
@@ -2585,7 +3179,7 @@ const spikes = new THREE.InstancedMesh(new THREE.ConeGeometry(0.45, 2.6, 5), new
     const [x, z] = dry(() => side * rand(LANE_HALF + 1.3, LANE_HALF + 22), () => rand(LANE_BACK, LANE_FRONT + 6), 0.8);
     m.compose(p.set(x, heightAt(x, z) + 1.1 * k, z), q, s.set(k, k, k)); spikes.setMatrixAt(i, m);
   }
-  spikes.castShadow = true; spikes.visible = false; scene.add(spikes);
+  spikes.castShadow = true; spikes.visible = false; defenseWorld.add(spikes);
 }
 // gravestones for the zombie world
 const graves = new THREE.InstancedMesh(
@@ -2602,7 +3196,7 @@ const graves = new THREE.InstancedMesh(
     const [x, z] = dry(() => side * rand(LANE_HALF + 1.6, LANE_HALF + 18), () => rand(LANE_BACK, LANE_FRONT + 4), 0.6);
     m.compose(p.set(x, heightAt(x, z), z), q, s.set(k, k, k)); graves.setMatrixAt(i, m);
   }
-  graves.castShadow = true; graves.visible = false; scene.add(graves);
+  graves.castShadow = true; graves.visible = false; defenseWorld.add(graves);
 }
 // the black hole hanging over the enemy fort
 const HOLE_POS = new THREE.Vector3(0, 17, -118);
@@ -2633,7 +3227,7 @@ const haloMat = new THREE.SpriteMaterial({
   map: canvasTex(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,220,140,1)'); r.addColorStop(1, 'rgba(255,160,60,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); }),
   color: 0xffd27a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
 });
-for (const p of decor.lamps) { const h = new THREE.Sprite(haloMat); h.position.copy(p); h.scale.setScalar(3.2); scene.add(h); }
+for (const p of decor.lamps) { const h = new THREE.Sprite(haloMat); h.position.copy(p); h.scale.setScalar(3.2); defenseWorld.add(h); }
 const vignette = $('nightVignette');
 
 // ---- lightning ----
@@ -2926,7 +3520,7 @@ function updateAmbience(realDt, dt) {
   amb.bolt = Math.max(0, amb.bolt - realDt * 4);
   hemi.color.copy(L.hemiSky); hemi.groundColor.copy(L.hemiGround); hemi.intensity = L.hemiI + amb.bolt * 2;
   stormMat.emissiveIntensity = amb.bolt * 1.4;
-  groundMat.color.copy(L.ground); lane.material.color.copy(L.lane);
+  groundMat.color.copy(L.ground); lane.material.color.copy(L.lane); marchGroundMat.color.copy(L.ground); marchLaneMat.color.copy(L.lane);
   fort.mat.color.copy(L.fort); fort.mat.emissive.copy(L.fortGlow).multiplyScalar(0.8 + 0.2 * Math.sin(gt * 7));
   for (const l of decor.leaves) l.color.copy(L.leaves);
   decor.rocks.color.copy(L.rock); flora.mats.bush.color.copy(L.bush);
@@ -2944,7 +3538,7 @@ function updateAmbience(realDt, dt) {
   spikes.visible = L.spikes > 0.01; spikes.position.y = -3.2 * (1 - L.spikes);
   graves.visible = L.graves > 0.01; graves.position.y = -1.8 * (1 - L.graves);
   holeGroup.visible = L.hole > 0.01; holeGroup.scale.setScalar(Math.max(0.001, L.hole)); holeGroup.children[0].rotation.z -= realDt * 0.6;
-  portalLight.intensity = 30 + 160 * L.vignette;
+  portalLight.intensity = state.mode === 'march' ? 0 : 30 + 160 * L.vignette;
   haloMat.opacity = Math.min(0.9, 0.08 + L.vignette * 2 + L.storm * 0.3);
   vignette.style.opacity = (L.vignette * 1.6).toFixed(3);
 
@@ -3029,7 +3623,7 @@ function drawCrowds() {
   for (let i = 0; i < allies.length; i++) {
     const a = allies[i], w = Math.sin(gt * 15 + a.phase), bob = a.y > 0 ? a.y : Math.abs(w) * 0.1;
     writeMatrix(ma, i, a.x, bob, a.z, Math.PI, w * 0.06, 1, a.y > 0 ? 1.08 : 1 - Math.abs(w) * 0.04);
-    writeColor(ca, i, a.tint ? COL.allyClone : COL.ally);
+    writeColor(ca, i, state.mode === 'march' ? (a.role === 'caged' ? COL.caged : ERAS[M.era].tintC) : a.tint ? COL.allyClone : COL.ally, a.role === 'joining' ? 0.35 : 0);
   }
   allyMesh.count = allies.length; allyMesh.instanceMatrix.needsUpdate = true; allyMesh.instanceColor.needsUpdate = true;
   ma = enemyMesh.instanceMatrix.array; ca = enemyMesh.instanceColor.array;
@@ -3098,20 +3692,31 @@ function frame(now) {
     if (state.dyingTimer <= 0) showGameOver();
   }
   if (state.phase === 'menu' || state.phase === 'over') { gt += dt; updateGates(dt); updatePickups(dt); }
+  else if (state.mode === 'march') simulateMarch(dt, realDt);
   else simulate(dt, realDt);
   drawCrowds(); drawAmbient(realDt, dt);
+  if (state.mode === 'march') drawBolts(); else boltMesh.count = 0;
   if (state.phase !== 'menu') updateHud();
   render(realDt);
 }
 
 // ================= Boot =================
 try { await Promise.race([document.fonts.load(`64px ${DISPLAY_FONT}`), new Promise((r) => setTimeout(r, 1500))]); } catch { /* fallback font */ }
-$('bestMenu').textContent = 'RECORDE ' + state.best.toLocaleString('pt-BR');
+renderBests();
 initOnline();
 fitCamera();
 setLayout(makeLayout(1));
 requestAnimationFrame(loop);
-if (location.hash === '#autoplay') startGame();
+if (location.hash === '#autoplay') startGame('defense');
+// Local testing: #march starts the march; #march850 starts it 850 m in with a grown, upgraded troop.
+const mh = /^#march(\d+)?$/.exec(location.hash);
+if (mh) {
+  startGame('march');
+  if (mh[1]) {
+    const d = +mh[1]; M.dist = d; M.nextSeg = d + 10; M.segs = 9; M.bossAt = Math.ceil((d + 141) / BOSS_EVERY) * BOSS_EVERY;
+    addSoldiers(45); addYears(Math.min(2600, Math.round(d * 1.3)));
+  }
+}
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.
 // Flags: u fires the ultimate, c puts the camera close to a character, b summons the boss (with frequent lightning), k also kills it.
 const ff = /^#(?:w(\d+))?(?:t(\d+))?([ucbk]*)$/.exec(location.hash);

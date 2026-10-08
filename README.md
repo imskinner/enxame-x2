@@ -4,6 +4,11 @@ Jogo de navegador em 3D (Three.js): seu canhão dispara uma tropa, os portões m
 
 **Jogar:** https://imskinner.github.io/enxame-x2/
 
+## Modos
+
+- **Defesa:** o canhão dispara a tropa, os portões a multiplicam e você segura a horda antes do muro.
+- **Marcha:** a tropa corre por uma estrada sem fim atirando para a frente. Portões dão soldados, multiplicam ou cortam a tropa, ou avançam o calendário. Os anos mudam a era (da Pedra à Cósmica) e com ela as armas. Atirar num portão de número aumenta o valor: um -8 pode virar +2. Há muros de caixotes, jaulas com reféns, brutamontes e um chefão a cada 1000 m. Ranking separado.
+
 ## Controles
 
 - Mover: mouse, arrastar o dedo, `A`/`D` ou `←`/`→`
@@ -43,4 +48,6 @@ Opcional: sem chave configurada o jogo roda 100% offline. Para ligar:
 
 Quem joga entra automaticamente como convidado; ao fim da partida escolhe um apelido. Vincular Google ou e-mail transforma o convidado em conta permanente sem perder os pontos. A pontuação só é gravada pelas funções `start_run`/`finish_run`, que medem o tempo no servidor e recusam valores impossíveis para a onda. Partidas com atalhos de teste na URL não contam.
 
-Atalhos de teste pela URL: `#w13t20` pula para a onda 13 e simula 20 s; flags `u` (ultimate), `c` (câmera próxima), `b` (invoca chefão), `k` (mata o chefão).
+Atalhos de teste pela URL: `#march` inicia a marcha; `#march850` começa aos 850 m com uma tropa já crescida.
+
+Na defesa: `#w13t20` pula para a onda 13 e simula 20 s; flags `u` (ultimate), `c` (câmera próxima), `b` (invoca chefão), `k` (mata o chefão).

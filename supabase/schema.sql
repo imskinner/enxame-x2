@@ -28,9 +28,12 @@ create table if not exists public.runs (
   user_id uuid not null references auth.users on delete cascade,
   started_at timestamptz not null default now(),
   finished_at timestamptz,
-  score int, wave int, kills int, peak int,
-  valid boolean not null default false
+  score int, wave int, kills int, peak int,          -- in the march, wave holds the meters marched
+  valid boolean not null default false,
+  mode text not null default 'defense' check (mode in ('defense', 'march'))
 );
+alter table public.runs add column if not exists mode text not null default 'defense';
+create index if not exists runs_mode_valid_finished on public.runs (mode, finished_at, score desc) where valid;
 create index if not exists runs_user_started on public.runs (user_id, started_at);
 create index if not exists runs_valid_finished on public.runs (finished_at, score desc) where valid;
 
@@ -39,7 +42,8 @@ alter table public.runs enable row level security;
 revoke all on public.runs from anon, authenticated;
 
 -- ================= Funções =================
-create or replace function public.start_run()
+drop function if exists public.start_run();
+create or replace function public.start_run(p_mode text default 'defense')
 returns uuid
 language plpgsql security definer set search_path = ''
 as $$
@@ -51,12 +55,14 @@ begin
   if (select count(*) from public.runs where user_id = auth.uid() and started_at > now() - interval '10 minutes') >= 30 then
     raise exception 'rate_limited';
   end if;
-  insert into public.runs (user_id) values (auth.uid()) returning id into rid;
+  insert into public.runs (user_id, mode) values (auth.uid(), case when p_mode = 'march' then 'march' else 'defense' end)
+    returning id into rid;
   return rid;
 end $$;
 
--- Teto por onda espelha buildWave() do jogo: inimigos comuns + 2 hordas gigantes
--- + brutamontes + chefão + bônus da onda + caixas. Pontuação aceita até 2× esse teto.
+-- Defesa: o teto por onda espelha buildWave() do jogo (inimigos comuns + 2 hordas gigantes + brutamontes + chefão +
+-- bônus da onda + caixas); pontuação aceita até 2x esse teto. Marcha: p_wave são os metros andados e a estrada nunca
+-- passa de 16 m/s, então distância, abates e pontos são limitados pelo tempo da partida.
 create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int)
 returns table (accepted boolean, week_rank int, all_rank int, best int)
 language plpgsql security definer set search_path = ''
@@ -75,16 +81,22 @@ begin
   if not found then raise exception 'invalid_run'; end if;
 
   secs := extract(epoch from now() - r.started_at);
-  select sum(20 * e + 60 * (4 + 1.1 * w) + 50 * w + 1000), sum(e)
-    into max_score, max_kills
-    from (select w, 18 + 11 * w + 0.85 * w * w + 2 * (30 + 7 * w) + 3 + 1.1 * w as e
-          from generate_series(1, greatest(least(p_wave, 500), 1)) w) t;
-
-  ok := p_wave between 1 and 500
-    and p_score between 0 and max_score * 2
-    and p_kills between 0 and max_kills * 1.5
-    and p_peak between 0 and 100000
-    and secs >= (p_wave - 1) * 6;
+  if r.mode = 'march' then
+    ok := p_wave between 0 and secs * 16 + 60
+      and p_kills between 0 and secs * 30 + 50
+      and p_score between 0 and p_wave * 7 + p_kills * 60 + 700 * (p_wave / 1000.0 + 1) + 500
+      and p_peak between 0 and 1000;
+  else
+    select sum(20 * e + 60 * (4 + 1.1 * w) + 50 * w + 1000), sum(e)
+      into max_score, max_kills
+      from (select w, 18 + 11 * w + 0.85 * w * w + 2 * (30 + 7 * w) + 3 + 1.1 * w as e
+            from generate_series(1, greatest(least(p_wave, 500), 1)) w) t;
+    ok := p_wave between 1 and 500
+      and p_score between 0 and max_score * 2
+      and p_kills between 0 and max_kills * 1.5
+      and p_peak between 0 and 100000
+      and secs >= (p_wave - 1) * 6;
+  end if;
 
   update public.runs
     set finished_at = now(), score = p_score, wave = p_wave, kills = p_kills, peak = p_peak, valid = ok
@@ -95,19 +107,19 @@ begin
     return;
   end if;
 
-  -- Posição entre os melhores de cada jogador com apelido (o próprio jogador conta mesmo sem apelido).
+  -- Posição entre os melhores de cada jogador com apelido, no mesmo modo (o próprio jogador conta mesmo sem apelido).
   return query
     with mine as (
       select max(x.score) as all_best,
              max(x.score) filter (where x.finished_at >= week_start) as week_best
-      from public.runs x where x.user_id = auth.uid() and x.valid
+      from public.runs x where x.user_id = auth.uid() and x.valid and x.mode = r.mode
     ), others as (
       select x.user_id,
              max(x.score) as all_best,
              max(x.score) filter (where x.finished_at >= week_start) as week_best
       from public.runs x
       join public.profiles p on p.id = x.user_id
-      where x.valid and x.user_id <> auth.uid()
+      where x.valid and x.mode = r.mode and x.user_id <> auth.uid()
       group by x.user_id
     )
     select true,
@@ -117,16 +129,17 @@ begin
     from mine m;
 end $$;
 
--- p_period: 'week' (semana atual, UTC, começando na segunda) ou 'all'.
+-- p_period: 'week' (semana atual, UTC, começando na segunda) ou 'all'. p_mode: 'defense' ou 'march'.
 -- Devolve o top N e, se o jogador estiver fora dele, a linha dele no fim.
-create or replace function public.get_leaderboard(p_period text default 'week', p_limit int default 50)
+drop function if exists public.get_leaderboard(text, int);
+create or replace function public.get_leaderboard(p_period text default 'week', p_limit int default 50, p_mode text default 'defense')
 returns table (pos int, nickname text, score int, wave int, is_me boolean)
 language sql stable security definer set search_path = ''
 as $$
   with best as (
     select distinct on (r.user_id) r.user_id, r.score, r.wave, r.finished_at
     from public.runs r
-    where r.valid and (p_period = 'all' or r.finished_at >= date_trunc('week', now()))
+    where r.valid and r.mode = p_mode and (p_period = 'all' or r.finished_at >= date_trunc('week', now()))
     order by r.user_id, r.score desc, r.finished_at
   ), ranked as (
     select (rank() over (order by b.score desc))::int as pos, p.nickname, b.score, b.wave, b.finished_at,
@@ -139,9 +152,9 @@ as $$
   limit least(p_limit, 100) + 1;
 $$;
 
-revoke execute on function public.start_run() from public, anon, authenticated;
+revoke execute on function public.start_run(text) from public, anon, authenticated;
 revoke execute on function public.finish_run(uuid, int, int, int, int) from public, anon, authenticated;
-revoke execute on function public.get_leaderboard(text, int) from public, anon, authenticated;
-grant execute on function public.start_run() to authenticated;
+revoke execute on function public.get_leaderboard(text, int, text) from public, anon, authenticated;
+grant execute on function public.start_run(text) to authenticated;
 grant execute on function public.finish_run(uuid, int, int, int, int) to authenticated;
-grant execute on function public.get_leaderboard(text, int) to anon, authenticated;
+grant execute on function public.get_leaderboard(text, int, text) to anon, authenticated;

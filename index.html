@@ -111,6 +111,11 @@ body {
 .ult:disabled { cursor: default; }
 .ult.ready { background: radial-gradient(circle at 40% 35%, #d9fdff, var(--ult) 45%, #1f7bff); color: var(--ink); animation: ultPulse .9s ease-in-out infinite; }
 .ult:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.ab { position: relative; display: grid; }
+.ult.fila { position: absolute; left: 0; bottom: calc(100% + 10px); } /* stacked above the ultimate, under the same thumb */
+.ult.fila .fill { stroke: var(--gold); }
+.ult.fila.ready { background: radial-gradient(circle at 40% 35%, #fff4c2, var(--gold) 50%, #d98a00); color: var(--ink); }
+.ult.fila.on { background: #fff4c2; color: var(--ink); }
 @keyframes ultPulse { 50% { transform: scale(1.08); box-shadow: 0 0 0 9px rgba(95, 243, 255, .3), 0 3px 0 rgba(0, 0, 0, .22); } }
 .ico.power { background: var(--ult); color: var(--ink); }
 #hurt { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; box-shadow: inset 0 0 140px 40px rgba(255, 40, 60, .8); }
@@ -235,10 +240,16 @@ body {
       <div class="chip rapid" id="rapidChip" hidden><span class="k" id="rapidK">RAJADA</span><span class="v" id="rapidT">0</span></div>
     </div>
     <div class="group">
+      <div class="ab">
+      <button class="ult fila" id="btnFila" type="button" aria-label="Afunilar a tropa (S, seta para cima ou clique)" hidden>
+        <svg viewBox="0 0 72 72" aria-hidden="true"><circle class="track" cx="36" cy="36" r="32"/><circle class="fill" id="filaRing" cx="36" cy="36" r="32"/></svg>
+        <span class="lbl">FILA</span>
+      </button>
       <button class="ult" id="btnUlt" type="button" aria-label="Usar o ultimate" disabled>
         <svg viewBox="0 0 72 72" aria-hidden="true"><circle class="track" cx="36" cy="36" r="32"/><circle class="fill" id="ultRing" cx="36" cy="36" r="32"/></svg>
         <span class="lbl">ULTI<br><span id="ultPct">0%</span></span>
       </button>
+      </div>
       <button class="btn-icon" id="btnMute" type="button" aria-label="Ligar ou desligar o som">
         <svg id="icoSound" viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
       </button>
@@ -285,7 +296,7 @@ body {
       <li><span class="ico plus">ANO</span><span>Portões de anos levam a tropa a novas eras, da pedra ao laser: tiros mais fortes e rápidos.</span></li>
       <li><span class="ico horde"><b></b><b></b><b></b></span><span>Quebre muros de caixotes, liberte reféns das jaulas e derrube o chefão a cada 1000 m.</span></li>
     </ul>
-    <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
+    <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Fila (Marcha): <kbd>S</kbd>, <kbd>↑</kbd> ou clique. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
@@ -2083,7 +2094,7 @@ const ui = {
   troops: $('troops'), rapidChip: $('rapidChip'), rapidK: $('rapidK'), rapidT: $('rapidT'), bossBar: $('bossBar'), bossFill: $('bossFill'),
   banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'), floaters: $('floaters'), hurt: $('hurt'),
   menu: $('menu'), pause: $('pauseScreen'), over: $('overScreen'), icoSound: $('icoSound'),
-  ult: $('btnUlt'), ultRing: $('ultRing'), ultPct: $('ultPct'), flash: $('flash'),
+  ult: $('btnUlt'), ultRing: $('ultRing'), ultPct: $('ultPct'), fila: $('btnFila'), filaRing: $('filaRing'), flash: $('flash'),
   nextText: $('nextText'), nextDot: $('nextDot'), bossName: $('bossName'),
 };
 const floaters = [], floaterPool = [];
@@ -2146,6 +2157,13 @@ function updateHud() {
   put('ultRing', ui.ultRing, (201.1 * (1 - uk)).toFixed(1), 'strokeDashoffset');
   put('ultPct', ui.ultPct, ready ? 'JÁ!' : Math.floor(uk * 100) + '%');
   if (ui.ult.classList.contains('ready') !== ready) { ui.ult.classList.toggle('ready', ready); ui.ult.disabled = !ready; }
+  if (ui.fila.hidden === march) ui.fila.hidden = !march;
+  if (march) { // the ring drains while squeezed and refills over the cooldown
+    const on = M.sqT > 0, fk = on ? M.sqT / SQUEEZE_T : 1 - M.sqCd / SQUEEZE_CD, fr = !on && M.sqCd <= 0;
+    put('filaRing', ui.filaRing, (201.1 * (1 - fk)).toFixed(1), 'strokeDashoffset');
+    if (ui.fila.classList.contains('ready') !== fr) ui.fila.classList.toggle('ready', fr);
+    if (ui.fila.classList.contains('on') !== on) ui.fila.classList.toggle('on', on);
+  }
 }
 
 // ================= Online: login, partidas e ranking (Supabase) =================
@@ -2351,9 +2369,12 @@ async function initOnline() {
 // troop's shots and leads into the next boss's world. The world is a treadmill: the troop stays at SQUAD_Z and
 // everything slides toward it.
 const SQUAD_Z = 15, MAX_SQUAD = 150, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
-// The boss halts the road far ahead and walks in. It only uses its powers once inside the troop's base range, so a
-// longer range buys free hits; then it keeps closing in slowly until it stomps the troop.
-const BOSS_HALT_Z = SQUAD_Z - 75, BOSS_REACH = 40, PORTAL_Z = SQUAD_Z - 50;
+// The boss appears out of the fog ~60 m ahead, the road halts at once and it walks at one steady pace. It only uses
+// its powers inside the troop's base range, so a longer range buys free hits; if it is still up, it stomps the troop.
+const BOSS_SPAWN_Z = SQUAD_Z - 62, BOSS_REACH = 40, PORTAL_Z = SQUAD_Z - 50;
+const bossPace = () => 1.5 + 0.05 * Math.min(M.stage, 10);
+// FILA: the troop squeezes into a narrow column for a moment, to pick a gate, slip through a crate wall or dodge.
+const SQUEEZE_T = 2.2, SQUEEZE_CD = 6;
 const MARCH_BOSS_HP = 5; // the march troop fires as one: its bosses need far more health than the defense ones
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 const STATS = {
@@ -2376,6 +2397,7 @@ for (const e of Object.values(ELEMENTS)) { e.tintC = new THREE.Color(e.tint); e.
 const M = {
   speed: 0, dist: 0, scroll: 0, nextSeg: 0, bossAt: BOSS_EVERY, volley: 0, walls: [], bolts: [], portals: [], pools: [],
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
+  hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0,
 };
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
 const shotRange = () => clamp(WEAPON.range + M.stat.range, 32, 70);
@@ -2656,8 +2678,9 @@ function breakObstacle(o) {
   const c = new THREE.Color(o.type === 'cage' ? 0x6a6a88 : 0xa8774c);
   debris(o.x, 1, o.z, c, 18, 7, 0.28); smoke(o.x, 0.8, o.z, 5, 1.6, 0xc8b8a0, 0.9); Sfx.play('bigdie');
   if (o.type === 'cage') {
-    for (const a of o.inmates) if (a.alive) { a.role = 'joining'; a.cage = null; }
-    floatText(`+${o.inmates.length} SOLDADOS`, o.x, 3, o.z, 'cyan'); ring(o.x, o.z, 0x5ff3ff, 6, 0.5);
+    let room = MAX_SQUAD - squadCount(), freed = 0; // the troop never grows past its cap
+    for (const a of o.inmates) if (a.alive) { if (room-- > 0) { a.role = 'joining'; a.cage = null; freed++; } else a.alive = false; }
+    floatText(freed ? `+${freed} SOLDADOS` : 'TROPA CHEIA', o.x, 3, o.z, 'cyan'); ring(o.x, o.z, 0x5ff3ff, 6, 0.5);
   }
   removeObstacle(o);
 }
@@ -2692,6 +2715,10 @@ function upgrade(stat, v) {
   M.stat[stat] += v;
   floatText(`${v >= 0 ? '+' : ''}${v}${STATS[stat].unit} ${STATS[stat].name}`, M.cx, 3.4, SQUAD_Z, v >= 0 ? 'gold' : 'red');
   if (v < 0) Sfx.play('cut');
+}
+function squeeze() {
+  if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0) return;
+  M.sqT = SQUEEZE_T; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
 }
 function addSoldiers(k, x = null) {
   k = Math.min(k, MAX_SQUAD - squadCount());
@@ -2776,7 +2803,7 @@ function enterPortal(p) {
   else if (p.slot == null) M.elements.push(id);
   else M.elements[p.slot] = id;
   for (const q of M.portals) removePortal(q);
-  M.portals.length = 0; M.portalSel = null;
+  M.portals.length = 0; M.portalSel = null; clearWorldHazards();
   M.stage++; M.stageStart = M.dist; M.bossAt = M.dist + BOSS_EVERY; M.nextSeg = M.dist + 14;
   state.bossDown = false; state.wave = M.stage * 5 + 1; snapLook();
   state.flash = 1; state.shake = Math.max(state.shake, 0.4); Sfx.play('warp');
@@ -2823,8 +2850,10 @@ function marchSegment() {
     for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
     if (lvl > 1.2 && Math.random() < 0.3 + lvl * 0.05) { spawnBig('brute'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR + rand(-2, 2); b.mesh.position.z = b.z; }
   } else if (kind === 'wall') {
-    const gap = rand(3, 5), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
+    // the gap narrows with distance: later on, FILA is the clean way through
+    const gap = Math.max(2.2, rand(3, 5) - lvl * 0.12), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
     const lw = gx - gap / 2 + LANE_HALF, rw = LANE_HALF - (gx + gap / 2);
+    if (!M.filaHint) { M.filaHint = true; showBanner('FILA', matchMedia('(pointer: fine)').matches ? 'Clique, S ou ↑ para afunilar e passar pela brecha' : 'Toque em FILA para afunilar e passar pela brecha', 2.8); }
     if (lw > 1) spawnWall(-LANE_HALF + lw / 2, lw, hp);
     if (rw > 1) spawnWall(LANE_HALF - rw / 2, rw, hp);
   } else if (kind === 'cage') {
@@ -2839,10 +2868,10 @@ function marchSegment() {
 function startMarch() {
   Object.assign(M, {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
-    elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null,
+    elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
   });
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
-  for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0;
+  for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
   for (const g of gates) disposeGate(g); gates = [];
   state.wave = 1; state.bossDown = false; state.phase = 'playing';
   if (!M.canals) { buildCanals(); M.canals = true; }
@@ -2868,12 +2897,26 @@ function simulateMarch(dt, realDt = dt) {
     if (keys.has('d') || keys.has('arrowright')) state.targetX = laneClamp(state.targetX + 18 * dt);
   }
   const n = squadCount(), R = (M.R = 0.55 * Math.sqrt(Math.max(1, n)));
-  const lim = Math.max(0, LANE_HALF - Math.min(R, LANE_HALF - 1) - 0.4);
-  M.cx = M.cx ?? 0; M.cx += (clamp(state.targetX, -lim, lim) - M.cx) * Math.min(1, dt * 10);
+  // squeeze: a column about a third as wide (never under 1.4 m half-width) and deeper to hold everyone
+  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = SQUEEZE_CD;
+  else if (M.sqCd > 0) M.sqCd = Math.max(0, M.sqCd - dt);
+  M.sq += ((M.sqT > 0 ? 1 : 0) - M.sq) * Math.min(1, dt * 7);
+  const sqW = Math.min(1, Math.max(1.4, R * 0.33) / R), sqx = 1 + (sqW - 1) * M.sq, sqz = 1 + (Math.min(2, 1 / Math.sqrt(sqW)) - 1) * M.sq;
+  const lim = Math.max(0, LANE_HALF - Math.min(R * sqx, LANE_HALF - 1) - 0.4);
+  // Steering: on ice a loose spring that overshoots; a current or a black hole adds drift and loosens the grip
+  // (both set last frame by the world hazards).
+  const tx = clamp(state.targetX, -lim, lim), slip = iceSlip();
+  M.cx = M.cx ?? 0;
+  if (slip > 0) {
+    const K = 100 * (1 - 0.7 * slip), C = 2 * Math.sqrt(K) * (1 - 0.7 * slip);
+    M.vx += (K * (tx - M.cx) - C * M.vx + M.drift * 4) * dt; M.cx += M.vx * dt;
+  } else { M.vx = 0; M.cx += (tx - M.cx) * Math.min(1, dt * 10 * M.grip) + M.drift * dt; }
+  if (Math.abs(M.cx) > lim) { M.cx = Math.sign(M.cx) * lim; M.vx = 0; }
+  M.drift = 0; M.grip = 1;
 
   // the road halts while a boss is standing in it
   const boss = bigs.find((b) => b.alive && b.kind === 'boss');
-  const arena = boss && boss.z > BOSS_HALT_Z;
+  const arena = !!boss;
   const target = active ? (arena ? 0 : Math.min(15, 8 + M.dist / 350)) : 0;
   M.speed += (target - M.speed) * Math.min(1, dt * (arena ? 3 : 1.2));
   const dz = M.speed * dt;
@@ -2885,7 +2928,7 @@ function simulateMarch(dt, realDt = dt) {
   // spawn the road ahead; the boss comes just before each 1000 m mark
   if (active && !M.portals.length) {
     if (!boss && !state.bossDown && M.dist >= M.bossAt - BOSS_LEAD) {
-      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR; b.mesh.position.z = b.z; M.bossLive = true;
+      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = BOSS_SPAWN_Z; b.mesh.position.z = b.z; M.bossLive = true;
     } else if (!boss && M.dist >= M.nextSeg) { marchSegment(); M.nextSeg = M.dist + rand(22, 30) * (M.speed / 10); }
   }
 
@@ -2902,7 +2945,7 @@ function simulateMarch(dt, realDt = dt) {
       continue;
     }
     const r = 0.55 * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
-    const tx = fx + Math.cos(ang) * r * fk, tz = SQUAD_Z + Math.sin(ang) * r * 0.8;
+    const tx = fx + Math.cos(ang) * r * Math.min(fk, sqx), tz = SQUAD_Z + Math.sin(ang) * r * 0.8 * sqz;
     const k = a.role === 'joining' ? dt * 3.5 : dt * 9;
     a.x += (tx - a.x) * Math.min(1, k); a.z += (tz - a.z) * Math.min(1, k);
     if (a.role === 'joining' && Math.abs(tx - a.x) + Math.abs(tz - a.z) < 0.6) a.role = 'squad';
@@ -2921,11 +2964,19 @@ function simulateMarch(dt, realDt = dt) {
   // everything on the road moves toward the troop
   for (const g of gates) {
     g.z += dz; g.group.position.z = g.z;
+    // in the last 16 m the gate under the troop's center lights up and its neighbor dims
+    const near = !g.used && !g.dying && g.z > SQUAD_Z - 16 && g.z < SQUAD_Z, on = near && Math.abs(M.cx - g.x) <= g.half + 0.2;
+    g.hl = (g.hl || 0) + ((on ? 1 : near ? -1 : 0) - (g.hl || 0)) * Math.min(1, dt * 8);
     if (!g.used && !g.dying && g.z >= SQUAD_Z && g.z - dz < SQUAD_Z && Math.abs(M.cx - g.x) <= g.half + 0.2 && active) passGate(g);
     if (g.z > MARCH_BEHIND) g.dying = true;
   }
   updateGates(dt);
-  for (const g of gates) g.group.position.z = g.z;
+  for (const g of gates) {
+    g.group.position.z = g.z;
+    if (!g.hl) continue;
+    g.panelMat.uniforms.uPulse.value = Math.max(g.pulse, g.hl * 0.6);
+    g.labelMat.opacity = 1 + Math.min(0, g.hl) * 0.6; g.label.scale.multiplyScalar(1 + Math.max(0, g.hl) * 0.25);
+  }
   for (const o of M.walls) {
     o.z += dz; o.grp.position.z = o.z; o.label.sprite.position.z = o.z;
     if (o.flash > 0) { o.flash -= dt * 6; o.grp.scale.setScalar((o.base || 1) * (1 + o.flash * 0.04)); }
@@ -2942,6 +2993,7 @@ function simulateMarch(dt, realDt = dt) {
   M.walls = M.walls.filter((o) => !o.dead);
   updatePortals(dt, dz, active);
   updatePools(dt, dz);
+  updateWorldHazards(dt, dz, active, !!boss || M.portals.length > 0);
   updateMarchEnemies(dt, dz);
   updateUltimate(dt, realDt);
   updateHazards(dt);
@@ -2978,6 +3030,162 @@ function updatePortals(dt, dz, active) {
   if (pair) entered = M.portalSel || entered; // the highlighted one, whatever the edges of the troop touch
   enterPortal(entered);
 }
+// ---- world hazards: each boss's world puts its own trap on the road, from 200 m into the stage and denser toward the
+// boss. Every one is telegraphed (a visible puddle, a glowing crack, a shrinking ring, a shaking grave...). ----
+const HAZARDS = {
+  ice: { title: 'PISTA CONGELADA', hint: 'O chão escorrega: a tropa demora a parar', every: 0 },
+  fire: { title: 'CHÃO EM CHAMAS', hint: 'Desvie das poças de fogo', every: 4.5 },
+  lava: { title: 'FENDAS DE LAVA', hint: 'As fendas brilham antes de explodir', every: 5 },
+  storm: { title: 'TEMPESTADE', hint: 'Saia do círculo antes do raio', every: 3.4 },
+  water: { title: 'CORRENTEZA', hint: 'A água arrasta a tropa para o lado', every: 5.5 },
+  poison: { title: 'GÁS VENENOSO', hint: 'Nuvens tóxicas cruzam a estrada', every: 5 },
+  zombie: { title: 'CEMITÉRIO', hint: 'Mortos saem da terra perto da tropa', every: 4.5 },
+  void: { title: 'RASGOS NO ESPAÇO', hint: 'Buracos negros puxam a tropa', every: 6.5 },
+};
+const stageBiome = () => BIOMES[M.stage % BIOMES.length].id;
+const hazardLevel = () => { const d = M.dist - M.stageStart; return d < 200 ? -1 : clamp((d - 200) / 600, 0, 1); }; // -1: still calm
+const hzDisc = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), hzRing = new THREE.RingGeometry(0.86, 1, 40).rotateX(-Math.PI / 2);
+const hzPlane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), hzBox = new THREE.BoxGeometry(1, 0.08, 1), hzMound = new THREE.SphereGeometry(1, 12, 8), hzOrb = new THREE.SphereGeometry(1, 20, 14), hzTorus = new THREE.TorusGeometry(1, 0.07, 6, 40);
+const hzMat = (color, opacity = 0.6, additive = true) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+const arrowTex = canvasTex(128, 128, (g, w, h) => {
+  g.clearRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,0.85)';
+  g.beginPath(); g.moveTo(30, 34); g.lineTo(70, 64); g.lineTo(30, 94); g.lineTo(46, 94); g.lineTo(86, 64); g.lineTo(46, 34); g.closePath(); g.fill();
+});
+arrowTex.wrapS = arrowTex.wrapT = THREE.RepeatWrapping;
+const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f), poison: new THREE.Color(0x7ad83a), void: new THREE.Color(0xc86bff), zombie: new THREE.Color(0x6a5040) };
+// Road hazards are lighter than boss blows: a touch takes at most one soldier plus 2% of the troop, so a big troop
+// that can't dodge bleeds a little and FILA (squeezing past) is the real answer.
+const hzCap = () => Math.ceil(1 + squadCount() * 0.02);
+function killAlliesInRect(x, z, hw, hd, color) {
+  let n = 0; const cap = hzCap();
+  for (const a of allies) if (a.alive && a.role !== 'caged' && Math.abs(a.x - x) < hw && Math.abs(a.z - z) < hd) {
+    a.alive = false; if (++n % 3 === 0) debris(a.x, 0.6, a.z, color, 1, 4, 0.18);
+    if (n >= cap) break;
+  }
+}
+function addHazard(h, ...meshes) {
+  h.grp = new THREE.Group(); h.grp.add(...meshes); h.grp.position.set(h.x, 0, h.z); h.t = 0; h.tick = 0; scene.add(h.grp); M.hz.push(h); return h;
+}
+function removeHazard(h) {
+  scene.remove(h.grp); h.grp.traverse((o) => { o.material?.map?.dispose(); o.material?.dispose(); });
+}
+function spawnHazard(id, k) {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  switch (id) {
+    case 'fire': {
+      // a scorched dark patch so it reads on the pale road, with a burning rim and core on top
+      const r = rand(1.6, 2.4) + k * 0.5, scorch = new THREE.Mesh(hzDisc, hzMat(0x2a0e06, 0.8, false));
+      const rim = new THREE.Mesh(hzRing, hzMat(0xff5a00, 0.95)), core = new THREE.Mesh(hzDisc, hzMat(0xff8a1a, 0.7));
+      scorch.scale.setScalar(r * 1.08); scorch.position.y = 0.04; rim.scale.setScalar(r); rim.position.y = 0.06; core.scale.setScalar(r * 0.6); core.position.y = 0.05;
+      addHazard({ type: 'fire', x: rand(-LANE_HALF + 2, LANE_HALF - 2), z: MARCH_FAR, r }, scorch, core, rim);
+      break;
+    }
+    case 'lava': {
+      const w = rand(5, 7.5) + k * 2, glow = new THREE.Mesh(hzBox, hzMat(0xff5a1f, 0.3)), crust = new THREE.Mesh(hzBox, hzMat(0x2a1210, 0.85, false));
+      crust.scale.set(w + 0.6, 1, 1.6); crust.position.y = 0.03; glow.scale.set(w, 1.4, 0.7); glow.position.y = 0.06;
+      addHazard({ type: 'lava', x: clamp(rand(-4, 4), -LANE_HALF + w / 2, LANE_HALF - w / 2), z: MARCH_FAR, w, off: rand(0, 3), glow }, crust, glow);
+      break;
+    }
+    case 'storm': { // aimed where the troop will be when it lands
+      const T = 1.25, ring = new THREE.Mesh(hzRing, hzMat(0xfff07a, 0.95)), fill = new THREE.Mesh(hzDisc, hzMat(0x1a1830, 0.35, false));
+      ring.position.y = 0.07; fill.position.y = 0.05; ring.scale.setScalar(2.2); fill.scale.setScalar(2.2);
+      addHazard({ type: 'storm', x: clamp(M.cx + rand(-2.5, 2.5), -LANE_HALF + 1.5, LANE_HALF - 1.5), z: SQUAD_Z - M.speed * T + rand(-1.5, 1.5), r: 2.2, T, ring }, ring, fill);
+      break;
+    }
+    case 'water': {
+      const d = rand(6, 9), dir = side, mat = new THREE.MeshBasicMaterial({ color: 0x5fc8ff, map: arrowTex.clone(), transparent: true, opacity: 0.55, depthWrite: false });
+      mat.map.wrapS = mat.map.wrapT = THREE.RepeatWrapping; mat.map.repeat.set((LANE_HALF * 2) / 2.2 * dir, d / 2.2); mat.map.needsUpdate = true;
+      const band = new THREE.Mesh(hzPlane, mat); band.scale.set(LANE_HALF * 2, 1, d); band.position.y = 0.05;
+      const under = new THREE.Mesh(hzBox, hzMat(0x2a8ad8, 0.35, false)); under.scale.set(LANE_HALF * 2, 1, d); under.position.y = 0.02;
+      addHazard({ type: 'water', x: 0, z: MARCH_FAR, d, dir, mat }, under, band);
+      break;
+    }
+    case 'poison': {
+      const r = 2.2 + k * 0.4, haze = new THREE.Mesh(hzDisc, hzMat(0x4aa82a, 0.5, false));
+      haze.scale.setScalar(r); haze.position.y = 0.05;
+      addHazard({ type: 'poison', x: side * (LANE_HALF + 2), z: MARCH_FAR + 20, r, vx: -side * rand(1.3, 2) }, haze);
+      break;
+    }
+    case 'zombie': { // a grave opens just ahead of the troop
+      const T = 1.6, mound = new THREE.Mesh(hzMound, new THREE.MeshLambertMaterial({ color: 0x5a4030, flatShading: true }));
+      mound.scale.set(1.3, 0.35, 0.9); mound.castShadow = true;
+      addHazard({ type: 'zombie', x: clamp(M.cx + rand(-3, 3), -LANE_HALF + 1.5, LANE_HALF - 1.5), z: SQUAD_Z - M.speed * T - rand(9, 14), T, n: 3 + Math.round(k * 3), mound }, mound);
+      break;
+    }
+    case 'void': {
+      const core = new THREE.Mesh(hzOrb, new THREE.MeshBasicMaterial({ color: 0x07020f })), ring = new THREE.Mesh(hzTorus, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xc86bff).multiplyScalar(1.6) }));
+      const halo = new THREE.Mesh(hzDisc, hzMat(0x2a0a4a, 0.55, false));
+      core.scale.setScalar(0.9); core.position.y = 1.1; ring.scale.setScalar(1.6); ring.position.y = 1.1; halo.scale.setScalar(3.2); halo.position.y = 0.05;
+      addHazard({ type: 'void', x: side * (LANE_HALF - 2.5), z: MARCH_FAR, r: 1.7, ring }, core, ring, halo);
+      break;
+    }
+  }
+}
+// Per-frame behavior of each hazard; returns true once it is spent.
+const HZ_UPDATE = {
+  fire(h, dt, active) {
+    for (let i = 0; i < 4; i++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * h.r; emit(sparkSys, h.x + Math.cos(a) * r, 0.2, h.z + Math.sin(a) * r, 0, rand(1.5, 3.5), 0, Math.random() < 0.5 ? FLAME_A : FLAME_B, rand(0.5, 0.9), 0.45, -0.6, -1, 1); }
+    if (active && (h.tick -= dt) <= 0) { h.tick = 0.5; killAlliesNear(h.x, h.z, h.r, _hzC.fire, hzCap()); }
+  },
+  lava(h, dt, active) { // 1.6 s quiet, 0.8 s glowing warning, 0.9 s eruption
+    const p = (h.t + h.off) % 3.3, m = h.glow.material;
+    if (p < 1.6) { m.opacity = 0.25; h.glow.scale.y = 1.4; }
+    else if (p < 2.4) { m.opacity = 0.45 + 0.4 * Math.abs(Math.sin(gt * 18)); if (Math.random() < 0.4) emit(sparkSys, h.x + rand(-h.w / 2, h.w / 2), 0.2, h.z, 0, rand(1, 2), 0, FLAME_B, 0.4, 0.4, -0.5, 0, 1); }
+    else {
+      m.opacity = 1;
+      for (let i = 0; i < 4; i++) emit(sparkSys, h.x + rand(-h.w / 2, h.w / 2), 0.3, h.z + rand(-0.4, 0.4), rand(-0.5, 0.5), rand(5, 9), 0, Math.random() < 0.5 ? FLAME_A : FLAME_B, rand(0.6, 1.1), 0.6, -0.6, 4, 1);
+      if (active && (h.tick -= dt) <= 0) { h.tick = 0.45; killAlliesInRect(h.x, h.z, h.w / 2, 0.9, _hzC.lava); }
+    }
+  },
+  storm(h, dt, active) {
+    const u = clamp(h.t / h.T, 0, 1); h.ring.scale.setScalar(h.r * (2.2 - 1.2 * u)); h.ring.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(gt * (8 + u * 16)));
+    if (h.t < h.T) return false;
+    strike(h.x, 0, h.z, false, 0xfff07a);
+    if (active) killAlliesNear(h.x, h.z, h.r, new THREE.Color(0xfff07a), hzCap() * 2);
+    return true;
+  },
+  water(h, dt, active) {
+    h.mat.map.offset.x -= dt * 1.6;
+    if (active && Math.abs(h.z - SQUAD_Z) < h.d / 2 + 0.5) { M.drift += h.dir * 6.5; M.grip = Math.min(M.grip, 0.3); if (Math.random() < 0.5) emit(sparkSys, M.cx + rand(-M.R, M.R), 0.3, SQUAD_Z + rand(-1, 1), h.dir * 4, rand(1, 2), 0, toColor(0xbfeaff, 0.1), 0.4, 0.5, -0.6, 0, 0); }
+  },
+  poison(h, dt, active) {
+    h.x += h.vx * dt; h.grp.position.x = h.x;
+    if (Math.random() < 0.8) smoke(h.x + rand(-h.r, h.r) * 0.7, rand(0.3, 1.2), h.z + rand(-h.r, h.r) * 0.7, 1, rand(1.6, 2.4), 0x7ad83a, 1.1);
+    if (active && (h.tick -= dt) <= 0) { h.tick = 0.6; killAlliesNear(h.x, h.z, h.r, _hzC.poison, hzCap()); }
+    return Math.abs(h.x) > LANE_HALF + 4 && Math.sign(h.x) === Math.sign(h.vx);
+  },
+  zombie(h, dt) {
+    const u = h.t / h.T; h.mound.position.x = Math.sin(gt * 40) * 0.08 * u; h.mound.scale.y = 0.35 + 0.15 * u;
+    if (Math.random() < 0.3 + u * 0.5) debris(h.x + rand(-0.8, 0.8), 0.3, h.z, _hzC.zombie, 1, 3, 0.15);
+    if (h.t < h.T) return false;
+    for (let i = 0; i < h.n; i++) spawnEnemy('grunt', clamp(h.x + rand(-1.4, 1.4), -LANE_HALF + 0.5, LANE_HALF - 0.5), h.z + rand(-0.8, 0.8));
+    debris(h.x, 0.4, h.z, _hzC.zombie, 12, 6, 0.25); emit(sparkSys, h.x, 0.6, h.z, 0, 2.5, 0, WISP, 1, 1, -0.3, -0.5, 0); Sfx.play('summon');
+    return true;
+  },
+  void(h, dt, active) {
+    h.ring.rotation.x = 1.2; h.ring.rotation.z += dt * 3; h.grp.children[0].scale.setScalar(0.9 + 0.08 * Math.sin(gt * 6));
+    const a = Math.random() * 6.28; emit(sparkSys, h.x + Math.cos(a) * 3.5, 1.1, h.z + Math.sin(a) * 3.5, -Math.cos(a) * 6, 0, -Math.sin(a) * 6, toColor(0xc86bff, 0.2), 0.45, 0.5, -0.4, 0, 0);
+    const d = Math.abs(h.z - SQUAD_Z);
+    if (active && d < 16) {
+      M.drift += Math.sign(h.x - M.cx) * 5 * (1 - d / 16); M.grip = Math.min(M.grip, 0.5);
+      for (const s of allies) if (s.alive && s.role !== 'caged' && (s.x - h.x) ** 2 + (s.z - h.z) ** 2 < 25) s.x += Math.sign(h.x - s.x) * 3 * dt; // stragglers lean in
+      if ((h.tick -= dt) <= 0) { h.tick = 0.4; killAlliesNear(h.x, h.z, h.r, _hzC.void, hzCap()); }
+    }
+  },
+};
+function updateWorldHazards(dt, dz, active, calm) {
+  const id = stageBiome(), def = HAZARDS[id], k = hazardLevel();
+  if (active && k >= 0 && M.hzShown !== M.stage) { M.hzShown = M.stage; showBanner(def.title, def.hint, 2.6, 'warn'); M.hzT = 1.5; }
+  if (active && !calm && k >= 0 && def.every && (M.hzT -= dt) <= 0) { M.hzT = def.every * (1.5 - 0.7 * k) * rand(0.8, 1.2); spawnHazard(id, k); }
+  for (let i = M.hz.length - 1; i >= 0; i--) {
+    const h = M.hz[i]; h.z += dz; h.t += dt; h.grp.position.z = h.z;
+    if (HZ_UPDATE[h.type](h, dt, active) || h.z > MARCH_BEHIND + 4) { removeHazard(h); M.hz.splice(i, 1); }
+  }
+}
+function clearWorldHazards() { for (const h of M.hz) removeHazard(h); M.hz.length = 0; }
+// ice world: steering turns into a loose spring, so the troop slides past where it was sent
+const iceSlip = () => (stageBiome() === 'ice' && hazardLevel() >= 0 ? 0.5 + 0.5 * hazardLevel() : 0);
+
 // poison element: pools left by the dead hurt the horde walking through them
 function updatePools(dt, dz) {
   const dps = WEAPON.dmg * statMul('dmg') * 5;
@@ -3070,11 +3278,9 @@ function updateMarchEnemies(dt, dz) {
     if (!b.alive) continue;
     const isBoss = b.kind === 'boss';
     if (isBoss) {
-      // strides in fast while out of reach, then closes in slowly with its powers on (see BOSS_REACH)
-      const far = SQUAD_Z - b.z > BOSS_REACH;
-      b.z = Math.min(SQUAD_Z - 4, b.z + dz + (far ? 4.5 : 0.6) * dt);
+      b.z = Math.min(SQUAD_Z - 4, b.z + dz + bossPace() * dt); // one steady pace (see BOSS_REACH)
       b.x += clamp(M.cx - b.x, -1, 1) * 1.6 * dt;
-      b.arrived = !far;
+      b.arrived = SQUAD_Z - b.z <= BOSS_REACH;
     } else b.z += dz + b.speed * 0.3 * dt;
     b.x = clamp(b.x + Math.sin(gt * 0.9 + b.phase) * 0.4 * dt, -LANE_HALF + b.r, LANE_HALF - b.r);
     if (b.flash > 0) b.flash -= dt * 7;
@@ -3113,7 +3319,7 @@ function clearWorld() {
   for (const g of gates) disposeGate(g); gates = [];
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0;
   for (const b of M.bolts) boltPool.push(b); M.bolts.length = 0;
-  for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0;
+  for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
 }
 // Shows the arena of a mode: the defense wall and fort, or the endless march road. Also relabels the HUD.
 function setModeScene(mode) {
@@ -3185,6 +3391,7 @@ $('btnRestart').addEventListener('click', () => { state.paused = false; state.ph
 $('btnPause').addEventListener('click', () => setPaused(!state.paused));
 $('btnMute').addEventListener('click', () => { Sfx.init(); toggleMute(); });
 ui.ult.addEventListener('click', () => { useUltimate(); canvas.focus(); });
+ui.fila.addEventListener('click', () => { squeeze(); canvas.focus(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
 // ================= Input =================
@@ -3197,6 +3404,7 @@ addEventListener('keydown', (e) => {
   if (k === 'p' || k === 'escape') setPaused(!state.paused);
   if (k === 'm') { Sfx.init(); toggleMute(); }
   if ((k === ' ' || k === 'q' || k === 'e') && (state.phase === 'playing' || state.phase === 'break')) { e.preventDefault(); useUltimate(); }
+  if (['shift', 'w', 's', 'arrowup'].includes(k) && state.phase === 'playing') { e.preventDefault(); squeeze(); }
   if ((k === 'enter' || k === ' ') && (state.phase === 'menu' || state.phase === 'over') && document.activeElement?.tagName !== 'BUTTON' && !openSub()) { e.preventDefault(); startGame(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
@@ -3211,7 +3419,11 @@ function groundX(cx, cy) {
 let pxPerUnit = 30, drag = null;
 canvas.addEventListener('pointerdown', (e) => {
   Sfx.init();
-  if (e.pointerType === 'mouse') { const x = groundX(e.clientX, e.clientY); if (x !== null) state.targetX = laneClamp(x); return; }
+  if (e.pointerType === 'mouse') { // the mouse steers by hovering, so a left click is free for FILA on the march
+    const x = groundX(e.clientX, e.clientY); if (x !== null) state.targetX = laneClamp(x);
+    if (e.button === 0) squeeze();
+    return;
+  }
   drag = { id: e.pointerId, sx: e.clientX, base: state.targetX }; canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
@@ -3637,9 +3849,8 @@ function decorateBoss(root, head, t) {
 const fireballs = [], toxic = [];
 const fireballGeo = new THREE.SphereGeometry(0.6, 14, 10), fireballMat = new THREE.MeshBasicMaterial({ color: 0xffb03a });
 // On the march the troop is a dense blob, so one blast could wipe dozens: there it takes at most a couple plus 4% of the troop.
-function killAlliesNear(x, z, r, color) {
+function killAlliesNear(x, z, r, color, cap = state.mode === 'march' ? Math.ceil(2 + squadCount() * 0.04) : Infinity) {
   let n = 0;
-  const cap = state.mode === 'march' ? Math.ceil(2 + squadCount() * 0.04) : Infinity;
   for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - x) ** 2 + (a.z - z) ** 2 < r * r) {
     a.alive = false; if (++n % 3 === 0) debris(a.x, 0.6, a.z, color, 1, 4, 0.18);
     if (n >= cap) break;
@@ -3986,7 +4197,19 @@ const marchBot = () => {
   const prize = M.walls.find((o) => o.type !== 'wall' && !o.dead && ahead(o)); // line up with a cage or relic to shoot it open
   if (prize && (!best || best.z < SQUAD_Z - 28)) x = prize.x;
   for (const o of M.walls) if (o.type === 'wall' && ahead(o) && Math.abs(x - o.x) < o.half + M.R) x = o.x + Math.sign(-o.x || 1) * (o.half + M.R + 0.5);
+  for (const h of M.hz) { // steer around the hazards that hurt (water and void just shove)
+    const r = (h.r || (h.w || 0) / 2) + M.R * 0.8;
+    if (r > M.R * 0.8 && h.z < SQUAD_Z + 2 && h.z > SQUAD_Z - 20 && Math.abs(x - h.x) < r) {
+      x = h.x + (x >= h.x ? 1 : -1) * (r + 0.5);
+      if (h.z > SQUAD_Z - 10) squeeze();
+    }
+  }
   for (const p of M.portals) if (ahead(p) && M.portals.length > 1) x = M.portals[1].x; // always gives up the second element
+  for (const f of fireballs) { // sidestep where the fireball will land
+    const lx = f.mesh.position.x + f.vx * 0.4;
+    if (Math.abs(x - lx) < 2.4 + M.R * 0.5) x = lx + (x >= lx ? 1 : -1) * (2.9 + M.R * 0.5);
+  }
+  if (M.walls.some((o) => o.type === 'wall' && o.z > SQUAD_Z - 10 && o.z < SQUAD_Z && Math.abs(x - o.x) < o.half + M.R)) squeeze(); // slip through crate walls
   state.targetX = laneClamp(x);
 };
 if (mh) {
@@ -4013,7 +4236,7 @@ if (mh) {
     console.log('MARCH', JSON.stringify(log), JSON.stringify(end));
     return end;
   };
-  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, frame };
+  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, frame };
   if (mh[2]) run(+mh[2]);
 }
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.

@@ -2369,13 +2369,13 @@ async function initOnline() {
 // troop's shots and leads into the next boss's world. The world is a treadmill: the troop stays at SQUAD_Z and
 // everything slides toward it.
 const SQUAD_Z = 15, MAX_SQUAD = 150, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
-// The boss appears out of the fog ~60 m ahead, the road halts at once and it walks at one steady pace. It only uses
-// its powers inside the troop's base range, so a longer range buys free hits; if it is still up, it stomps the troop.
-const BOSS_SPAWN_Z = SQUAD_Z - 62, BOSS_REACH = 40, PORTAL_Z = SQUAD_Z - 50;
+// The boss appears out of the fog just beyond the troop's range, the road halts at once and it walks at one steady
+// pace. The moment the troop can hit it, it starts using its powers (first one within a second): no free hits either way.
+const BOSS_GAP = 8, PORTAL_Z = SQUAD_Z - 50;
 const bossPace = () => 1.5 + 0.05 * Math.min(M.stage, 10);
 // FILA: the troop squeezes into a narrow column for a moment, to pick a gate, slip through a crate wall or dodge.
 const SQUEEZE_T = 2.2, SQUEEZE_CD = 6;
-const MARCH_BOSS_HP = 5; // the march troop fires as one: its bosses need far more health than the defense ones
+const MARCH_BOSS_HP = 6; // the march troop fires as one: its bosses need far more health than the defense ones
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 const STATS = {
   rate: { name: 'CADÊNCIA', unit: '%', cap: 30 },
@@ -2928,7 +2928,7 @@ function simulateMarch(dt, realDt = dt) {
   // spawn the road ahead; the boss comes just before each 1000 m mark
   if (active && !M.portals.length) {
     if (!boss && !state.bossDown && M.dist >= M.bossAt - BOSS_LEAD) {
-      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = BOSS_SPAWN_Z; b.mesh.position.z = b.z; M.bossLive = true;
+      spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = SQUAD_Z - shotRange() - BOSS_GAP; b.mesh.position.z = b.z; M.bossLive = true;
     } else if (!boss && M.dist >= M.nextSeg) { marchSegment(); M.nextSeg = M.dist + rand(22, 30) * (M.speed / 10); }
   }
 
@@ -3278,9 +3278,9 @@ function updateMarchEnemies(dt, dz) {
     if (!b.alive) continue;
     const isBoss = b.kind === 'boss';
     if (isBoss) {
-      b.z = Math.min(SQUAD_Z - 4, b.z + dz + bossPace() * dt); // one steady pace (see BOSS_REACH)
+      b.z = Math.min(SQUAD_Z - 4, b.z + dz + bossPace() * dt); // one steady pace
       b.x += clamp(M.cx - b.x, -1, 1) * 1.6 * dt;
-      b.arrived = SQUAD_Z - b.z <= BOSS_REACH;
+      if (!b.arrived && SQUAD_Z - b.z <= shotRange() + b.r) { b.arrived = true; b.abT = 0.8; b.sumT = 2.5; } // in range: attack at once
     } else b.z += dz + b.speed * 0.3 * dt;
     b.x = clamp(b.x + Math.sin(gt * 0.9 + b.phase) * 0.4 * dt, -LANE_HALF + b.r, LANE_HALF - b.r);
     if (b.flash > 0) b.flash -= dt * 7;
@@ -3295,7 +3295,7 @@ function updateMarchEnemies(dt, dz) {
     else if (b.chill > 0) { u.skin.emissive.setHex(0x6ac8ff); u.skin.emissiveIntensity = 0.45; }
     else { u.skin.emissive.setHex(u.glow); u.skin.emissiveIntensity = u.glowI * (0.85 + 0.15 * Math.sin(gt * 6)); }
     for (const r of u.spin) r.rotation.z += dt * 2.5;
-    if (isBoss && active && b.arrived) bossPower(b, dt * (b.chill > 0 ? 0.5 : 0.8)); // a bit slower than in defense; ice slows it more
+    if (isBoss && active && b.arrived) bossPower(b, b.chill > 0 ? dt * 0.6 : dt); // ice slows its powers
     if (b.label) { drawLabel(b.label, Math.max(0, Math.ceil(b.hp))); b.label.sprite.position.set(b.x, b.scale * 1.8 + 0.6, b.z); }
     if (active && b.z > SQUAD_Z - b.r - 2) { // stomping into the troop
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < (b.r + 0.5) ** 2) {

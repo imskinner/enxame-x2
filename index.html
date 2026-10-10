@@ -2143,7 +2143,7 @@ function updateHud() {
   put('hpc', ui.hpFill, hpk > 0.5 ? '#4cd964' : hpk > 0.25 ? '#ffc629' : '#ff4a3d', 'background');
   put('hp', ui.hpText, String(Math.max(0, Math.ceil(state.hp))));
   put('shots', ui.shots, march ? '×' + (statMul('dmg') * statMul('rate')).toFixed(1).replace('.', ',') : String(state.shots));
-  put('troops', ui.troops, String(march ? squadCount() : allies.length));
+  put('troops', ui.troops, march ? squadCount() + '/' + squadCap() : String(allies.length));
   const buff = march && M.triple > state.rapid ? 'triple' : 'rapid', buffT = buff === 'triple' ? M.triple : state.rapid, rapidOn = buffT > 0;
   if (ui.rapidChip.hidden === rapidOn) ui.rapidChip.hidden = !rapidOn;
   if (rapidOn) { put('rapidK', ui.rapidK, buff === 'triple' ? 'TRIPLO' : 'RAJADA'); put('rapid', ui.rapidT, buffT.toFixed(1) + 's'); }
@@ -2377,16 +2377,16 @@ async function initOnline() {
 // a buff once shot free. Every 1000 m a boss blocks the road; beating it opens a vortex that hands its element to the
 // troop's shots and leads into the next boss's world. The world is a treadmill: the troop stays at SQUAD_Z and
 // everything slides toward it.
-const SQUAD_Z = 15, MAX_SQUAD = 150, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
+const SQUAD_Z = 15, SQUAD_BASE = 150, SQUAD_MAX = 300, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
 // The boss appears out of the fog just beyond the troop's range, the road halts at once and it walks at one steady
 // pace. The moment the troop can hit it, it starts using its powers (first one within a second): no free hits either way.
 const BOSS_GAP = 8, PORTAL_Z = SQUAD_Z - 50;
 const bossPace = () => 1.5 + 0.05 * Math.min(M.stage, 10);
 // FILA: the troop squeezes into a narrow column for a moment, to pick a gate, slip through a crate wall or dodge.
 const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6; // with a boss in the road the column holds longer
-// March bosses: the troop fires as one and is capped at 150, so their health follows its own curve (not the defense
-// one): tuned for a 20–30 s fight at the troop a world usually arrives with, and each full lap of the eight worlds adds half.
-const marchBossHp = (theme, wave) => Math.round((7000 + 2000 * M.stage) * theme.hpMul * (1 + cycleOf(wave) * 0.5));
+// March bosses: the troop fires as one, so their health follows its own curve (not the defense one): tuned for a 20–30 s
+// fight at the troop a world usually arrives with, scaled with the troop's cap, and each full lap of the eight worlds adds half.
+const marchBossHp = (theme, wave) => Math.round((7000 + 2000 * M.stage) * (squadCap() / SQUAD_BASE) * theme.hpMul * (1 + cycleOf(wave) * 0.5));
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 // cap: how high one gate counts up when shot; max: the troop's total for the stat, so the weapon can't snowball past it.
 const STATS = {
@@ -2418,6 +2418,7 @@ const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
 const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul') n++; return n; };
+const squadCap = () => Math.min(SQUAD_MAX, SQUAD_BASE + 25 * M.stage); // the cap climbs 25 a world, so every world has room to grow into
 
 // ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
 const marchWorld = new THREE.Group(); marchWorld.visible = false; scene.add(marchWorld);
@@ -2641,7 +2642,7 @@ function spawnCage(x, hp, prisoners) {
   grp.position.set(x, 0, MARCH_FAR); scene.add(grp);
   const label = makeLabel(); drawLabel(label, hp); label.sprite.position.set(x, H + 1.1, MARCH_FAR); scene.add(label.sprite);
   const cage = { type: 'cage', x, z: MARCH_FAR, half: W / 2, hp, maxHp: hp, grp, label, flash: 0, inmates: [] };
-  prisoners = Math.min(prisoners, MAX_SQUAD - squadCount());
+  prisoners = Math.min(prisoners, squadCap() - squadCount());
   for (let i = 0; i < prisoners; i++) {
     const a = spawnAlly(x + rand(-0.8, 0.8), MARCH_FAR + rand(-0.8, 0.8), 0, 0, 0, 0);
     if (a) { a.role = 'caged'; a.cage = cage; a.ox = a.x - x; a.oz = a.z - MARCH_FAR; cage.inmates.push(a); }
@@ -2694,7 +2695,7 @@ function breakObstacle(o) {
   const c = new THREE.Color(o.type === 'cage' ? 0x6a6a88 : 0xa8774c);
   debris(o.x, 1, o.z, c, 18, 7, 0.28); smoke(o.x, 0.8, o.z, 5, 1.6, 0xc8b8a0, 0.9); Sfx.play('bigdie');
   if (o.type === 'cage') {
-    let room = MAX_SQUAD - squadCount(), freed = 0, extra = 0; // the troop never grows past its cap
+    let room = squadCap() - squadCount(), freed = 0, extra = 0; // the troop never grows past its cap
     for (const a of o.inmates) if (a.alive) { if (room-- > 0) { a.role = 'joining'; a.cage = null; freed++; } else { a.alive = false; extra++; } }
     if (freed) floatText(`+${freed} SOLDADOS`, o.x, 3, o.z, 'cyan');
     fullTroop(extra, o.x, o.z, freed ? 4.2 : 3); ring(o.x, o.z, 0x5ff3ff, 6, 0.5);
@@ -2744,7 +2745,7 @@ function squeeze() {
   M.sqT = M.sqMax = M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
 }
 function addSoldiers(k, x = null, text = null) {
-  k = Math.min(k, MAX_SQUAD - squadCount());
+  k = Math.min(k, squadCap() - squadCount());
   for (let i = 0; i < k; i++) {
     const a = spawnAlly((x ?? M.cx) + rand(-1.5, 1.5), SQUAD_Z + rand(-1.5, 1.5), 0, 0, 0, 1);
     if (!a) break; a.role = 'joining';
@@ -2759,7 +2760,7 @@ function fullTroop(extra, x, z, y = 3) {
   const pts = extra * 10; state.score += pts; floatText('TROPA CHEIA: +' + pts, x, y, z, 'gold');
 }
 function recruit(k, x = null, what = null) {
-  const fit = Math.min(k, MAX_SQUAD - squadCount());
+  const fit = Math.min(k, squadCap() - squadCount());
   if (fit > 0) addSoldiers(fit, x, what && `+${fit} ${what}`);
   fullTroop(k - fit, M.cx, SQUAD_Z, fit > 0 ? 4.2 : 3);
 }
@@ -2805,7 +2806,7 @@ function portalLabelTex(text, sub) { // like a gate label, but wide enough for a
   });
 }
 function spawnPortal(x, rx, element, slot, text) {
-  const grp = new THREE.Group(), c = ELEMENTS[element].tintC, ry = 3.6;
+  const grp = new THREE.Group(), c = element ? ELEMENTS[element].tintC : COL.gold, ry = 3.6; // no element: the reinforcements portal
   const mat = new THREE.ShaderMaterial({
     uniforms: { uColor: { value: c.clone() }, uTime: worldTime, uOpen: { value: 0 } },
     vertexShader: GATE_PANEL_VS, fragmentShader: PORTAL_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -2813,8 +2814,8 @@ function spawnPortal(x, rx, element, slot, text) {
   const disc = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); disc.scale.set(rx, ry, 1); disc.position.y = ry + 0.2; grp.add(disc);
   const rimMat = new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(2.2) });
   const rim = new THREE.Mesh(portalRimGeo, rimMat); rim.scale.set(rx, ry, 1); rim.position.y = ry + 0.2; grp.add(rim);
-  const labelMat = new THREE.MeshBasicMaterial({ map: portalLabelTex(text, slot == null ? 'ATRAVESSE PARA ABSORVER' : 'ENTRA ' + ELEMENTS[element].name), transparent: true, depthWrite: false });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(rx > 4 ? 10 : 8, rx > 4 ? 2.5 : 2), labelMat); label.position.set(0, ry * 2 + 1.6, 0.1); label.rotation.x = -0.7; label.renderOrder = 2; grp.add(label);
+  const labelMat = new THREE.MeshBasicMaterial({ map: portalLabelTex(text, !element ? 'ENCHE A TROPA ATÉ O TETO' : slot == null ? 'ATRAVESSE PARA ABSORVER' : 'ENTRA ' + ELEMENTS[element].name), transparent: true, depthWrite: false });
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(rx > 4 ? 10 : rx > 3 ? 8 : 6, rx > 4 ? 2.5 : 2), labelMat); label.position.set(0, ry * 2 + 1.6, 0.1); label.rotation.x = -0.7; label.renderOrder = 2; grp.add(label);
   const z = PORTAL_Z; grp.position.set(x, 0, z); grp.scale.setScalar(0.001); scene.add(grp);
   M.portals.push({ x, z, half: rx, element, slot, grp, mat, rimMat, labelMat, disc, open: 0, hl: 1, rimC: rimMat.color.clone() });
 }
@@ -2832,13 +2833,15 @@ function bossBeaten(b) {
   amb.confetti = 3.2; state.flash = Math.max(state.flash, 0.5);
   ring(b.x, b.z, 0xffe27a, 26, 1.4); ring(b.x, b.z, 0xffffff, 16, 0.9);
   sparks(b.x, 3, b.z, 0xffe27a, 120, 18, 1, 1.2, 10, 0.5);
-  // With a free slot (or the same element again) there is one wide vortex; with both slots full the troop picks which to give up.
-  if (M.elements.length < 2 || hasEl(id)) spawnPortal(0, 6.5, id, null, el.name);
-  else M.elements.forEach((old, i) => spawnPortal(i ? 4.5 : -4.5, 3.6, id, i, 'SAI ' + ELEMENTS[old].name));
+  // The element (with both slots full: which element to give up), next to a portal of reinforcements that fills the
+  // troop to its cap instead: a lifeline for a troop the boss has worn down, at the price of the power.
+  if (M.elements.length < 2 || hasEl(id)) { spawnPortal(-3.4, 4.2, id, null, el.name); spawnPortal(4.6, 3.4, null, null, 'REFORÇOS'); }
+  else { M.elements.forEach((old, i) => spawnPortal(i ? 0 : -6, 2.8, id, i, 'SAI ' + ELEMENTS[old].name)); spawnPortal(6, 2.8, null, null, 'REFORÇOS'); }
 }
 function enterPortal(p) {
-  const id = p.element, el = ELEMENTS[id];
-  if (hasEl(id)) upgrade('dmg', 15);
+  const id = p.element, el = id ? ELEMENTS[id] : null; // no element: the reinforcements portal
+  if (!el) { /* nothing to absorb */ }
+  else if (hasEl(id)) upgrade('dmg', 15);
   else if (p.slot == null) M.elements.push(id);
   else M.elements[p.slot] = id;
   for (const q of M.portals) removePortal(q);
@@ -2846,9 +2849,11 @@ function enterPortal(p) {
   M.stage++; M.stageStart = M.dist; M.bossAt = M.dist + BOSS_EVERY; M.nextSeg = M.dist + 14; M.worldScore = state.score; M.worldKills = state.kills;
   state.bossDown = false; state.wave = M.stage * 5 + 1; snapLook();
   state.flash = 1; state.shake = Math.max(state.shake, 0.4); Sfx.play('warp');
-  showBanner(el.name + '!', el.hint, 3.4, 'win');
-  sparks(M.cx, 1.5, SQUAD_Z, el.tint, 90, 10, 0.9, 0.8, 3, 0.3); ring(M.cx, SQUAD_Z, el.tint, 12, 0.8);
-  recruit(Math.round(MAX_SQUAD * 0.2), M.cx, 'REFÉNS DO CHEFÃO'); // its prisoners join: the troop leaves every world a little bigger
+  const tint = el ? el.tint : 0xffc629;
+  showBanner(el ? el.name + '!' : 'REFORÇOS!', el ? el.hint : 'A tropa entra cheia no próximo mundo', 3.4, 'win');
+  sparks(M.cx, 1.5, SQUAD_Z, tint, 90, 10, 0.9, 0.8, 3, 0.3); ring(M.cx, SQUAD_Z, tint, 12, 0.8);
+  // the element portal frees the boss's prisoners (a fifth of the cap, which just grew); the reinforcements fill the troop
+  if (el) recruit(Math.round(squadCap() * 0.2), M.cx, 'REFÉNS DO CHEFÃO'); else recruit(squadCap() - squadCount(), M.cx, 'REFORÇOS');
 }
 
 // ---- the road ahead: one segment every ~25 m, harder with distance ----
@@ -2947,7 +2952,8 @@ function simulateMarch(dt, realDt = dt) {
     if (keys.has('a') || keys.has('arrowleft')) state.targetX = laneClamp(state.targetX - 18 * dt);
     if (keys.has('d') || keys.has('arrowright')) state.targetX = laneClamp(state.targetX + 18 * dt);
   }
-  const n = squadCount(), R = (M.R = 0.55 * Math.sqrt(Math.max(1, n)));
+  // past 150 soldiers the blob stops growing and packs denser, so a big troop still fits the lane and the gaps
+  const n = squadCount(), dense = Math.min(1, Math.sqrt(SQUAD_BASE / Math.max(1, n))), R = (M.R = 0.55 * dense * Math.sqrt(Math.max(1, n)));
   // combo: kills without losing a soldier push the multiplier on meters and kills up to ×3; every soldier lost knocks it back
   if (active) {
     const lost = Math.max(0, (M.lastN ?? n) - n); M.lastN = n;
@@ -3006,7 +3012,7 @@ function simulateMarch(dt, realDt = dt) {
       if (a.life <= 0 || a.z < MARCH_FAR) { a.alive = false; debris(a.x, 0.6, a.z, ELEMENTS.zombie.tintC, 4, 4, 0.2); }
       continue;
     }
-    const r = 0.55 * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
+    const r = 0.55 * dense * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
     const tx = fx + Math.cos(ang) * r * Math.min(fk, sqx), tz = SQUAD_Z + Math.sin(ang) * r * 0.8 * sqz;
     const k = a.role === 'joining' ? dt * 3.5 : dt * 9;
     a.x += (tx - a.x) * Math.min(1, k); a.z += (tz - a.z) * Math.min(1, k);
@@ -4326,7 +4332,10 @@ const marchBot = () => {
       if (h.z > SQUAD_Z - 10) squeeze();
     }
   }
-  for (const p of M.portals) if (ahead(p) && M.portals.length > 1) x = M.portals[1].x; // always gives up the second element
+  if (M.portals.length && ahead(M.portals[0])) { // reinforcements when worn down, else the first element portal (gives up the older element)
+    const weak = squadCount() < squadCap() * 0.5, pick = M.portals.find((p) => (weak ? !p.element : p.element));
+    if (pick) x = pick.x;
+  }
   for (const f of fireballs) { // sidestep where the fireball will land
     const lx = f.mesh.position.x + f.vx * 0.4;
     if (Math.abs(x - lx) < 2.4 + M.R * 0.5) x = lx + (x >= lx ? 1 : -1) * (2.9 + M.R * 0.5);

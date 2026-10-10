@@ -39,6 +39,8 @@ body {
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
 
 /* HUD */
+#fps { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 2px); left: 50%; transform: translateX(-50%); z-index: 60; pointer-events: none;
+  font: 600 11px/1.4 ui-monospace, Menlo, Consolas, monospace; color: #fff; background: rgba(27, 22, 64, .72); padding: 2px 8px; border-radius: 8px; white-space: nowrap; }
 .hud-top, .hud-bottom {
   position: fixed; left: 0; right: 0; z-index: 5; pointer-events: none;
   display: flex; justify-content: space-between; gap: 8px; padding-inline: 16px;
@@ -224,6 +226,7 @@ body {
 <div id="nightVignette"></div>
 <div id="floaters"></div>
 
+<div id="fps" hidden></div>
 <div id="hud" hidden>
   <div class="hud-top">
     <div class="stack-left">
@@ -3381,7 +3384,11 @@ function updateMarchEnemies(dt, dz) {
       // one steady pace up to the troop's front, where it halts and rages (powers 1.5× faster) instead of trampling the
       // formation: a fight the troop is losing bleeds it, it doesn't wipe it in seconds
       b.z = Math.min(SQUAD_Z - 9, b.z + dz + bossPace() * dt);
-      if (!b.rage && b.z >= SQUAD_Z - 9) { b.rage = true; floatText('FÚRIA!', b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.6); state.flash = Math.max(state.flash, 0.3); Sfx.play('boss'); }
+      if (!b.rage && b.z >= SQUAD_Z - 9) { b.rage = true; b.rageT = 0; b.rageF = 1.5; floatText('FÚRIA!', b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.6); state.flash = Math.max(state.flash, 0.3); Sfx.play('boss'); }
+      if (b.rage) { // and it climbs a step every 20 s (up to 3×), so a fight the troop can't win ends instead of stalling for minutes
+        b.rageT += dt; const f = Math.min(3, 1.5 + Math.floor(b.rageT / 20) * 0.5);
+        if (f !== b.rageF) { b.rageF = f; floatText(`FÚRIA ×${f.toFixed(1).replace('.', ',')}`, b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.5); Sfx.play('boss'); }
+      }
       b.x += clamp(M.cx - b.x, -1, 1) * 1.6 * dt;
       if (!b.arrived && SQUAD_Z - b.z <= shotRange() + b.r) { // in range: attack at once, and its relic lands on the road
         b.arrived = true; b.abT = 0.8; b.sumT = 2.5;
@@ -3401,7 +3408,7 @@ function updateMarchEnemies(dt, dz) {
     else if (b.chill > 0) { u.skin.emissive.setHex(0x6ac8ff); u.skin.emissiveIntensity = 0.45; }
     else { u.skin.emissive.setHex(u.glow); u.skin.emissiveIntensity = u.glowI * (0.85 + 0.15 * Math.sin(gt * 6)); }
     for (const r of u.spin) r.rotation.z += dt * 2.5;
-    if (isBoss && active && b.arrived) bossPower(b, (b.chill > 0 ? 0.6 : 1) * (b.rage ? 1.5 : 1) * dt); // ice slows its powers, rage speeds them
+    if (isBoss && active && b.arrived) bossPower(b, (b.chill > 0 ? 0.6 : 1) * (b.rage ? b.rageF : 1) * dt); // ice slows its powers, rage speeds them
     if (b.label) { drawLabel(b.label, Math.max(0, Math.ceil(b.hp))); b.label.sprite.position.set(b.x, b.scale * 1.8 + 0.6, b.z); }
     if (active && b.z > SQUAD_Z - b.r - 2) { // stomping into the troop
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < (b.r + 0.5) ** 2) {
@@ -4005,11 +4012,11 @@ function waterJet(b) {
   });
 }
 function poisonCloud(b) {
-  if (toxic.length >= 5) toxic.shift();
   const a = state.mode === 'march' ? frontAlly(b) : null;
   const c = a ? { x: clamp(a.x + rand(-2, 2), -LANE_HALF + 2, LANE_HALF - 2), z: a.z - rand(1, 3), r: 2.2, life: 4 }
     : { x: clamp(b.x + rand(-5, 5), -LANE_HALF + 2, LANE_HALF - 2), z: Math.min(b.z + rand(4, 14), DEFENSE_Z - 4), r: 2.4, life: 5 };
-  toxic.push(c); ring(c.x, c.z, 0x9cff4a, 5, 0.6); Sfx.play('gas');
+  const settle = () => { if (toxic.length >= 5) toxic.shift(); toxic.push(c); ring(c.x, c.z, 0x9cff4a, 5, 0.6); Sfx.play('gas'); };
+  if (a) markBlast(c.x, c.z, c.r, 1.0, 0x9cff4a, settle); else settle(); // on the march the spot is marked first, like the other blows
 }
 function raiseDead(b) {
   const n = 6 + Math.floor(state.wave / 5);
@@ -4284,9 +4291,23 @@ function drawAmbient(realDt, dt) {
 }
 let last = performance.now();
 function loop(now) { requestAnimationFrame(loop); frame(now); }
+// #fps in the URL shows frame rate, worst frame, draw calls and crowd sizes: for checking a phone without devtools.
+const fpsBox = location.hash.includes('fps') ? $('fps') : null; if (fpsBox) fpsBox.hidden = false;
+let fpsN = 0, fpsT = 0, fpsWorst = 0;
+function showFps(rawDt) { // called at the top of the frame: the renderer's counters still hold the whole previous frame
+  renderer.info.autoReset = false; // so they add up over every pass of the bloom, not just the last one
+  fpsN++; fpsT += rawDt; fpsWorst = Math.max(fpsWorst, rawDt);
+  if (fpsT >= 0.5) {
+    const inf = renderer.info.render;
+    fpsBox.textContent = `${Math.round(fpsN / fpsT)} fps · pior ${Math.round(fpsWorst * 1000)} ms · ${inf.calls} draws · ${Math.round(inf.triangles / 1000)}k tris · bloom ${post.on ? 'on' : 'off'} · tropa ${allies.length} · inimigos ${enemies.length}`;
+    fpsN = 0; fpsT = 0; fpsWorst = 0;
+  }
+  renderer.info.reset();
+}
 function frame(now) {
   if (innerWidth !== fitW || innerHeight !== fitH) fitCamera();
-  const realDt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now);
+  const rawDt = (now - last) / 1000, realDt = clamp(rawDt, 0, 0.05); last = Math.max(last, now);
+  if (fpsBox) showFps(rawDt);
   if (state.paused) { render(realDt); return; }
   let dt = realDt;
   if (state.slowmo > 0) { state.slowmo -= realDt; dt *= 0.3; }

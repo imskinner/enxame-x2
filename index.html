@@ -61,6 +61,15 @@ body {
 .hp .bar i { display: block; height: 100%; width: 100%; background: var(--ok); border-radius: 6px; transition: width .2s; }
 .chip.rapid { background: #0f8ea8; }
 .chip.combo { background: #b9770e; }
+.chip.contracts { background: #5a3c9a; }
+.board .nick small.con { margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: #5a3c9a; color: #fff; }
+.contracts { display: grid; gap: 8px; margin: 0 0 14px; }
+.contracts button { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; text-align: left; border: 2px solid rgba(27, 22, 64, .15); border-radius: 12px; padding: 10px 12px; background: var(--paper); font: 800 14px var(--font-body); color: var(--ink); cursor: pointer; letter-spacing: .04em; }
+.contracts button small { grid-column: 1; font-weight: 600; letter-spacing: 0; color: var(--muted); }
+.contracts button b { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--muted); }
+.contracts button[aria-pressed="true"] { border-color: var(--gold); background: #fff3c4; }
+.contracts button[aria-pressed="true"] b { color: var(--ink); }
+.contracts button:focus-visible { outline: 3px solid var(--gold); }
 .btn-icon {
   pointer-events: auto; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: var(--panel); color: var(--on-dark); display: grid; place-items: center; cursor: pointer;
@@ -243,6 +252,7 @@ body {
       <div class="chip"><span class="k">TROPA</span><span class="v" id="troops">0</span></div>
       <div class="chip rapid" id="rapidChip" hidden><span class="k" id="rapidK">RAJADA</span><span class="v" id="rapidT">0</span></div>
       <div class="chip combo" id="comboChip" hidden><span class="k">COMBO</span><span class="v" id="comboV">×1,0</span></div>
+      <div class="chip contracts" id="contractsChip" hidden><span class="k">CONTRATOS</span><span class="v" id="contractsV">×1</span></div>
     </div>
     <div class="group">
       <div class="ab">
@@ -279,6 +289,9 @@ body {
       <button class="btn alt" id="btnRank" type="button" data-online hidden>RANKING</button>
       <button class="btn alt" id="btnHow" type="button">COMO JOGAR</button>
     </div>
+    <div class="row2">
+      <button class="btn alt" id="btnContracts" type="button">CONTRATOS <span id="contractsTag"></span></button>
+    </div>
     <p class="best" id="bestMenu">RECORDE 0</p>
     <p class="account" id="accountLine" data-online hidden></p>
   </div>
@@ -302,6 +315,16 @@ body {
       <li><span class="ico horde"><b></b><b></b><b></b></span><span>Quebre muros de caixotes, liberte reféns das jaulas e derrube o chefão a cada 1000 m.</span></li>
     </ul>
     <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Fila (Marcha): <kbd>S</kbd>, <kbd>↑</kbd> ou clique. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
+<div class="screen sub" id="contractsScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">CONTRATOS</h2>
+    <p class="note">Dificuldades extras para a marcha que multiplicam a pontuação. Até três por partida; o ranking mostra o multiplicador.</p>
+    <div class="contracts" id="contractList"></div>
+    <p class="note center" id="contractsMul"></p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
@@ -369,6 +392,7 @@ body {
       <div class="stat"><div class="k">ABATES</div><div class="v" id="stKills">0</div></div>
       <div class="stat"><div class="k">MAIOR TROPA</div><div class="v" id="stPeak">0</div></div>
     </div>
+    <p class="note center" id="overContracts" hidden></p>
     <div class="overOnline" id="overOnline" hidden>
       <p class="rankline" id="overRank"></p>
       <form class="field" id="overNickForm" hidden>
@@ -1821,7 +1845,7 @@ function removeBig(b) {
 }
 function killEnemy(e, fromUlt = false) {
   const march = state.mode === 'march';
-  e.alive = false; state.score += march ? Math.round(e.score * M.combo) : e.score; state.kills++;
+  e.alive = false; state.score += march ? Math.round(e.score * M.combo * M.cMul) : e.score; state.kills++;
   if (march && !fromUlt) M.comboK++; // the ultimate's kills don't build the combo
   debris(e.x, 0.7, e.z, e.color, fromUlt ? 2 : 4, 5, 0.2);
   sparks(e.x, 0.8, e.z, e.color, fromUlt ? 3 : 6, 5, 0.5, 0.4, 2);
@@ -1831,7 +1855,7 @@ function killEnemy(e, fromUlt = false) {
   else if (Math.random() < (e.kind === 'runner' ? 0.02 : 0.012)) spawnPickup(randomPickupType(), e.x, e.z);
 }
 function killBig(b, fromUlt = false) {
-  b.alive = false; state.score += b.score; state.kills++;
+  b.alive = false; state.score += state.mode === 'march' ? Math.round(b.score * M.cMul) : b.score; state.kills++;
   const isBoss = b.kind === 'boss', c = new THREE.Color(isBoss ? 0x6a2c91 : 0xa3326b);
   debris(b.x, 1.5, b.z, c, isBoss ? 40 : 16, isBoss ? 12 : 8, isBoss ? 0.4 : 0.3);
   sparks(b.x, 1.8, b.z, c, isBoss ? 90 : 36, isBoss ? 13 : 9, 0.9, 0.7, 3);
@@ -2100,7 +2124,7 @@ function updateUltimate(dt, realDt) {
 // ================= UI =================
 const ui = {
   hud: $('hud'), wave: $('waveNum'), score: $('score'), hpFill: $('hpFill'), hpText: $('hpText'), shots: $('shots'),
-  troops: $('troops'), rapidChip: $('rapidChip'), rapidK: $('rapidK'), rapidT: $('rapidT'), comboChip: $('comboChip'), comboV: $('comboV'), bossBar: $('bossBar'), bossFill: $('bossFill'),
+  troops: $('troops'), rapidChip: $('rapidChip'), rapidK: $('rapidK'), rapidT: $('rapidT'), comboChip: $('comboChip'), comboV: $('comboV'), contractsChip: $('contractsChip'), contractsV: $('contractsV'), bossBar: $('bossBar'), bossFill: $('bossFill'),
   banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'), floaters: $('floaters'), hurt: $('hurt'),
   menu: $('menu'), pause: $('pauseScreen'), over: $('overScreen'), icoSound: $('icoSound'),
   ult: $('btnUlt'), ultRing: $('ultRing'), ultPct: $('ultPct'), fila: $('btnFila'), filaRing: $('filaRing'), flash: $('flash'),
@@ -2169,7 +2193,11 @@ function updateHud() {
   put('ultRing', ui.ultRing, (201.1 * (1 - uk)).toFixed(1), 'strokeDashoffset');
   put('ultPct', ui.ultPct, ready ? 'JÁ!' : Math.floor(uk * 100) + '%');
   if (ui.ult.classList.contains('ready') !== ready) { ui.ult.classList.toggle('ready', ready); ui.ult.disabled = !ready; }
-  if (ui.fila.hidden === march) ui.fila.hidden = !march;
+  const filaOn = march && !con('nofila');
+  if (ui.fila.hidden === filaOn) ui.fila.hidden = !filaOn;
+  const conOn = march && M.cMul > 1;
+  if (ui.contractsChip.hidden === conOn) ui.contractsChip.hidden = !conOn;
+  if (conOn) put('con', ui.contractsV, '×' + fmtMul(M.cMul));
   if (march) { // the ring drains while squeezed and refills over the cooldown
     const on = M.sqT > 0, fk = on ? M.sqT / M.sqMax : 1 - M.sqCd / M.sqCdMax, fr = !on && M.sqCd <= 0;
     put('filaRing', ui.filaRing, (201.1 * (1 - fk)).toFixed(1), 'strokeDashoffset');
@@ -2279,6 +2307,7 @@ async function onlineRunFinish() {
   line.textContent = 'Enviando pontuação…';
   // The march reports meters marched in the wave slot (the server validates them against the run time).
   const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak };
+  if (state.mode === 'march' && M.contracts.size) stats.p_contracts = [...M.contracts].join(','); // only sent when used: the old finish_run still takes a plain run
   const runId = await pending;
   const { data, error } = runId ? await online.sb.rpc('finish_run', { p_run: runId, ...stats }) : { error: true };
   const r = data?.[0];
@@ -2314,6 +2343,8 @@ async function loadBoard(period = online.period, mode = online.boardMode) {
     const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = row.pos;
     const nick = document.createElement('span'); nick.className = 'nick'; nick.textContent = row.nickname;
     const small = document.createElement('small'); small.textContent = mode === 'march' ? fmt(row.wave) + ' M' : 'ONDA ' + row.wave; nick.append(small);
+    const ids = (row.contracts || '').split(',').filter((id) => CONTRACTS[id]);
+    if (ids.length) { const tag = document.createElement('small'); tag.className = 'con'; tag.textContent = '×' + fmtMul(contractMul(ids)); nick.append(tag); }
     const pts = document.createElement('span'); pts.className = 'pts'; pts.textContent = fmt(row.score);
     li.append(pos, nick, pts); board.append(li);
   }
@@ -2328,7 +2359,27 @@ function openScreen(id) {
   const el = $(id); el.hidden = false;
   if (id === 'rankScreen') loadBoard(online.period, from === ui.over ? state.mode : online.boardMode);
   if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
+  if (id === 'contractsScreen') renderContracts();
   el.querySelector('[data-back]').focus();
+}
+function renderContracts() {
+  const list = $('contractList'); list.textContent = '';
+  for (const [id, c] of Object.entries(CONTRACTS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(contractsPick.includes(id)));
+    const name = document.createElement('span'), mul = document.createElement('b'), hint = document.createElement('small');
+    name.textContent = c.name; mul.textContent = '×' + fmtMul(c.mul); hint.textContent = c.hint; b.append(name, mul, hint);
+    b.addEventListener('click', () => {
+      if (contractsPick.includes(id)) contractsPick = contractsPick.filter((x) => x !== id);
+      else if (contractsPick.length < MAX_CONTRACTS) contractsPick.push(id);
+      else { setMsg($('contractsMul'), `Só ${MAX_CONTRACTS} contratos por partida`); return; }
+      try { localStorage.setItem(CONTRACT_KEY, JSON.stringify(contractsPick)); } catch { /* private mode */ }
+      renderContracts();
+    });
+    list.append(b);
+  }
+  const mul = contractMul(contractsPick);
+  $('contractsMul').textContent = contractsPick.length ? `${contractsPick.length} de ${MAX_CONTRACTS} · pontuação ×${fmtMul(mul)}` : 'Nenhum contrato ativo';
+  $('contractsTag').textContent = contractsPick.length ? '×' + fmtMul(mul) : '';
 }
 function closeScreen(el) {
   el.hidden = true;
@@ -2336,6 +2387,7 @@ function closeScreen(el) {
 }
 for (const b of document.querySelectorAll('[data-back]')) b.addEventListener('click', () => closeScreen(b.closest('.screen')));
 $('btnHow').addEventListener('click', () => openScreen('howScreen'));
+$('btnContracts').addEventListener('click', () => openScreen('contractsScreen'));
 $('btnRank').addEventListener('click', () => openScreen('rankScreen'));
 $('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
 for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
@@ -2386,6 +2438,19 @@ const SQUAD_Z = 15, SQUAD_BASE = 150, SQUAD_MAX = 300, MARCH_FAR = -150, MARCH_B
 const BOSS_GAP = 8, PORTAL_Z = SQUAD_Z - 50;
 const bossPace = () => 1.5 + 0.05 * Math.min(M.stage, 10);
 // FILA: the troop squeezes into a narrow column for a moment, to pick a gate, slip through a crate wall or dodge.
+// Contracts: optional handicaps picked before a march that multiply its score. Skill turned into points, never sold.
+const CONTRACTS = {
+  nofila: { name: 'SEM FILA', hint: 'A habilidade some', mul: 1.4 },
+  noref: { name: 'SEM REFORÇOS', hint: 'O portal de reforços não aparece', mul: 1.2 },
+  fury: { name: 'FÚRIA DESDE O INÍCIO', hint: 'Golpes do chefão 1,5× mais rápidos a luta toda', mul: 1.3 },
+  narrow: { name: 'BRECHAS ESTREITAS', hint: 'Brechas de muros e padrões 25% menores', mul: 1.25 },
+  horde: { name: 'HORDA DOBRADA', hint: 'O dobro de inimigos por trecho', mul: 1.2 },
+  lean: { name: 'TROPA ENXUTA', hint: 'Teto da tropa pela metade', mul: 1.5 },
+};
+const CONTRACT_KEY = 'enxame-x2-contracts', MAX_CONTRACTS = 3;
+let contractsPick = (() => { try { return JSON.parse(localStorage.getItem(CONTRACT_KEY)) || []; } catch { return []; } })().filter((id) => CONTRACTS[id]).slice(0, MAX_CONTRACTS);
+const contractMul = (ids) => { let m = 1; for (const id of ids) m *= CONTRACTS[id].mul; return Math.round(m * 100) / 100; };
+const fmtMul = (m) => m.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6, SQUEEZE_CD_BOSS = 3.5; // with a boss in the road the column holds longer and comes back sooner: it's the dodge
 // March bosses: the troop fires as one, so their health follows its own curve (not the defense one): tuned for a 20–30 s
 // fight at the troop a world usually arrives with and scaled with the troop's cap. After the first lap of the eight worlds
@@ -2414,15 +2479,16 @@ const M = {
   speed: 0, dist: 0, scroll: 0, nextSeg: 0, bossAt: BOSS_EVERY, volley: 0, walls: [], bolts: [], portals: [], pools: [],
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
   hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1,
-  combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
+  combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0, contracts: new Set(), cMul: 1,
 };
+const con = (id) => M.contracts.has(id);
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
 const shotRange = () => clamp(WEAPON.range + M.stat.range, 32, 70);
 const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
 const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul') n++; return n; };
-const squadCap = () => Math.min(SQUAD_MAX, SQUAD_BASE + 25 * M.stage); // the cap climbs 25 a world, so every world has room to grow into
+const squadCap = () => Math.round(Math.min(SQUAD_MAX, SQUAD_BASE + 25 * M.stage) * (con('lean') ? 0.5 : 1)); // the cap climbs 25 a world, so every world has room to grow into
 
 // ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
 const marchWorld = new THREE.Group(); marchWorld.visible = false; scene.add(marchWorld);
@@ -2690,7 +2756,7 @@ function removeObstacle(o) {
   for (const a of o.inmates || []) if (a.role === 'caged') a.alive = false;
 }
 function breakObstacle(o) {
-  o.dead = true; state.score += o.type === 'wall' ? 25 : 40;
+  o.dead = true; state.score += Math.round((o.type === 'wall' ? 25 : 40) * M.cMul);
   if (o.type === 'relic') {
     const r = RELICS[o.buff], c = new THREE.Color(PICKUPS[o.buff].color);
     debris(o.x, 1.3, o.z, new THREE.Color(0x55556e), 16, 8, 0.2); sparks(o.x, 1.3, o.z, c, 50, 9, 0.8, 0.6, 2, 0.4);
@@ -2746,7 +2812,7 @@ function upgrade(stat, v) {
   if (v < 0) Sfx.play('cut');
 }
 function squeeze() {
-  if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0) return;
+  if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0 || con('nofila')) return;
   M.sqT = M.sqMax = M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
 }
 function addSoldiers(k, x = null, text = null) {
@@ -2762,7 +2828,7 @@ function addSoldiers(k, x = null, text = null) {
 // made the damage gates meaningless.)
 function fullTroop(extra, x, z, y = 3) {
   if (extra <= 0) return;
-  const pts = extra * 10; state.score += pts; floatText('TROPA CHEIA: +' + pts, x, y, z, 'gold');
+  const pts = Math.round(extra * 10 * M.cMul); state.score += pts; floatText('TROPA CHEIA: +' + pts, x, y, z, 'gold');
 }
 function recruit(k, x = null, what = null) {
   const fit = Math.min(k, squadCap() - squadCount());
@@ -2831,7 +2897,7 @@ function bossBeaten(b) {
   M.bossLive = false; state.bossDown = true;
   const id = b.theme.id, el = ELEMENTS[id];
   // dropped before it got within 20 m of the troop: a bonus on top of the boss's own points (600 per world)
-  if (SQUAD_Z - b.z > 20) { const bonus = 300 * (M.stage + 1); state.score += bonus; floatText(`+${bonus} DE LONGE`, b.x, b.scale * 1.5 + 1.6, b.z, 'gold'); }
+  if (SQUAD_Z - b.z > 20) { const bonus = Math.round(300 * (M.stage + 1) * M.cMul); state.score += bonus; floatText(`+${bonus} DE LONGE`, b.x, b.scale * 1.5 + 1.6, b.z, 'gold'); }
   const pts = state.score - M.worldScore, kills = state.kills - M.worldKills;
   Sfx.play('victory'); showBanner('VITÓRIA!', `Mundo ${M.stage + 1}: ${pts.toLocaleString('pt-BR')} pts, ${kills} abates · portal: ${el.name}`, 3.6, 'win');
   addUlt(ULT_MAX * 0.5); floatText('ULTIMATE +50%', M.cx, 3.6, SQUAD_Z, 'cyan');
@@ -2840,8 +2906,9 @@ function bossBeaten(b) {
   sparks(b.x, 3, b.z, 0xffe27a, 120, 18, 1, 1.2, 10, 0.5);
   // The element (with both slots full: which element to give up), next to a portal of reinforcements that fills the
   // troop to its cap instead: a lifeline for a troop the boss has worn down, at the price of the power.
-  if (M.elements.length < 2 || hasEl(id)) { spawnPortal(-3.4, 4.2, id, null, el.name); spawnPortal(4.6, 3.4, null, null, 'REFORÇOS'); }
-  else { M.elements.forEach((old, i) => spawnPortal(i ? 0 : -6, 2.8, id, i, 'SAI ' + ELEMENTS[old].name)); spawnPortal(6, 2.8, null, null, 'REFORÇOS'); }
+  const ref = !con('noref'); // the reinforcements portal is what the SEM REFORÇOS contract gives up
+  if (M.elements.length < 2 || hasEl(id)) { spawnPortal(ref ? -3.4 : 0, ref ? 4.2 : 6.5, id, null, el.name); if (ref) spawnPortal(4.6, 3.4, null, null, 'REFORÇOS'); }
+  else { M.elements.forEach((old, i) => spawnPortal(ref ? (i ? 0 : -6) : (i ? 4.5 : -4.5), ref ? 2.8 : 3.6, id, i, 'SAI ' + ELEMENTS[old].name)); if (ref) spawnPortal(6, 2.8, null, null, 'REFORÇOS'); }
 }
 function enterPortal(p) {
   const id = p.element, el = id ? ELEMENTS[id] : null; // no element: the reinforcements portal
@@ -2901,12 +2968,12 @@ function marchSegment() {
     const side = Math.random() < 0.5 ? -1 : 1; // off-center, so even the widest troop can go around it; from the third world it sways
     make(Math.random() < 0.6 ? badGate() : goodGate(), side * rand(3.5, 5), rand(5, 6.5), M.stage >= 2 ? rand(1.5, 2.5) : 0);
   } else if (kind === 'enemies') {
-    const n = Math.round(rand(4, 7) * scale * (rush ? 1.2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
+    const n = Math.round(rand(4, 7) * scale * (rush ? 1.2 : 1) * (con('horde') ? 2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
     for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
     if (lvl > 1.2 && Math.random() < 0.3 + lvl * 0.05) { spawnBig('brute'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR + rand(-2, 2); b.mesh.position.z = b.z; }
   } else if (kind === 'wall') {
     // the gap narrows with distance (never under 3.2 m): later on, FILA is the clean way through, and the column thins to fit
-    const gap = Math.max(3.2, rand(3, 5) - lvl * 0.12), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
+    const gap = Math.max(3.2, rand(3, 5) - lvl * 0.12) * (con('narrow') ? 0.75 : 1), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
     const lw = gx - gap / 2 + LANE_HALF, rw = LANE_HALF - (gx + gap / 2);
     if (!M.filaHint) { M.filaHint = true; showBanner('FILA', matchMedia('(pointer: fine)').matches ? 'Clique, S ou ↑ para afunilar e passar pela brecha' : 'Toque em FILA para afunilar e passar pela brecha', 2.8); }
     if (lw > 1) spawnWall(-LANE_HALF + lw / 2, lw, hp, gap / 2);
@@ -2932,6 +2999,7 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
+    contracts: new Set(contractsPick), cMul: contractMul(contractsPick),
   });
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
   for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
@@ -2996,7 +3064,7 @@ function simulateMarch(dt, realDt = dt) {
   const target = active ? (arena ? 0 : Math.min(15, 8 + M.dist / 350)) : 0;
   M.speed += (target - M.speed) * Math.min(1, dt * (arena ? 3 : 1.2));
   const dz = M.speed * dt;
-  if (dz > 0) { M.dist += dz; scrollMarchWorld(dz); if (active) { M.scoreAcc += dz * M.combo; const add = Math.floor(M.scoreAcc); M.scoreAcc -= add; state.score += add; } }
+  if (dz > 0) { M.dist += dz; scrollMarchWorld(dz); if (active) { M.scoreAcc += dz * M.combo * M.cMul; const add = Math.floor(M.scoreAcc); M.scoreAcc -= add; state.score += add; } }
   // five waves of look per stage; the boss closes the fifth and the world holds there until the vortex
   const wave = 1 + M.stage * 5 + Math.floor(clamp(M.dist - M.stageStart, 0, BOSS_EVERY - 1) / 200);
   if (wave !== state.wave) { state.wave = wave; if (wave % 5 !== 0) state.bossDown = false; }
@@ -3112,7 +3180,7 @@ const HAZARDS = {
   ice: { title: 'PISTA CONGELADA', hint: 'O chão escorrega: a tropa demora a parar', every: 0 },
   fire: { title: 'CHÃO EM CHAMAS', hint: 'Desvie das poças de fogo', every: 4.5 },
   lava: { title: 'FENDAS DE LAVA', hint: 'As fendas brilham antes de explodir', every: 5 },
-  storm: { title: 'TEMPESTADE', hint: 'Saia do círculo antes do raio', every: 3.4 },
+  storm: { title: 'TEMPESTADE', hint: 'Saia do círculo antes do raio', every: 5 },
   water: { title: 'CORRENTEZA', hint: 'A água arrasta a tropa para o lado', every: 5.5 },
   poison: { title: 'GÁS VENENOSO', hint: 'Nuvens tóxicas cruzam a estrada', every: 5 },
   zombie: { title: 'CEMITÉRIO', hint: 'Mortos saem da terra perto da tropa', every: 4.5 },
@@ -3129,9 +3197,9 @@ const arrowTex = canvasTex(128, 128, (g, w, h) => {
 });
 arrowTex.wrapS = arrowTex.wrapT = THREE.RepeatWrapping;
 const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f), poison: new THREE.Color(0x7ad83a), void: new THREE.Color(0xc86bff), zombie: new THREE.Color(0x6a5040) };
-// Road hazards are lighter than boss blows: a touch takes at most 2% of the troop (at least one soldier), so a big troop
-// that can't dodge bleeds a little and FILA (squeezing past) is the real answer. A boss blow takes up to 5% (at least
-// two): proportional, so a small troop isn't bled dry by the same blows that a full one shrugs off.
+// Road hazards, like the boss patterns, kill everyone they touch: each one is visible from far off and leaves a way
+// around (or a quiet phase to cross in), so a loss is a loss of attention, never of luck. hzCap stays for the odd
+// touch that isn't a dodge test (a boss's lingering gas, the stomp of a passing brute).
 const hzCap = () => Math.max(1, Math.ceil(squadCount() * 0.02));
 const blowCap = () => Math.max(2, Math.ceil(squadCount() * 0.05));
 function killAlliesInRect(x, z, hw, hd, color, cap = hzCap()) {
@@ -3165,10 +3233,10 @@ function spawnHazard(id, k) {
       addHazard({ type: 'lava', x: clamp(rand(-4, 4), -LANE_HALF + w / 2, LANE_HALF - w / 2), z: MARCH_FAR, w, off: rand(0, 3), glow }, crust, glow);
       break;
     }
-    case 'storm': { // aimed where the troop will be when it lands
-      const T = 1.25, ring = new THREE.Mesh(hzRing, hzMat(0xfff07a, 0.95)), fill = new THREE.Mesh(hzDisc, hzMat(0x1a1830, 0.35, false));
+    case 'storm': { // aimed at one edge of the troop, where it will be when it lands: a step the other way clears it
+      const T = 1.4, ring = new THREE.Mesh(hzRing, hzMat(0xfff07a, 0.95)), fill = new THREE.Mesh(hzDisc, hzMat(0x1a1830, 0.35, false));
       ring.position.y = 0.07; fill.position.y = 0.05; ring.scale.setScalar(2.2); fill.scale.setScalar(2.2);
-      addHazard({ type: 'storm', x: clamp(M.cx + rand(-2.5, 2.5), -LANE_HALF + 1.5, LANE_HALF - 1.5), z: SQUAD_Z - M.speed * T + rand(-1.5, 1.5), r: 2.2, T, ring }, ring, fill);
+      addHazard({ type: 'storm', x: clamp(M.cx + side * (M.R + 0.6) + rand(-0.5, 0.5), -LANE_HALF + 1.5, LANE_HALF - 1.5), z: SQUAD_Z - M.speed * T + rand(-1.5, 1.5), r: 2.2, T, ring }, ring, fill);
       break;
     }
     case 'water': {
@@ -3264,7 +3332,7 @@ const HZ_UPDATE = {
   },
   fire(h, dt, active) {
     for (let i = 0; i < 4; i++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * h.r; emit(sparkSys, h.x + Math.cos(a) * r, 0.2, h.z + Math.sin(a) * r, 0, rand(1.5, 3.5), 0, Math.random() < 0.5 ? FLAME_A : FLAME_B, rand(0.5, 0.9), 0.45, -0.6, -1, 1); }
-    if (active && (h.tick -= dt) <= 0) { h.tick = 0.5; killAlliesNear(h.x, h.z, h.r, _hzC.fire, hzCap()); }
+    if (active && (h.tick -= dt) <= 0) { h.tick = 0.5; killAlliesNear(h.x, h.z, h.r, _hzC.fire, Infinity); }
   },
   lava(h, dt, active) { // 1.6 s quiet, 0.8 s glowing warning, 0.9 s eruption
     const p = (h.t + h.off) % 3.3, m = h.glow.material;
@@ -3273,14 +3341,14 @@ const HZ_UPDATE = {
     else {
       m.opacity = 1;
       for (let i = 0; i < 4; i++) emit(sparkSys, h.x + rand(-h.w / 2, h.w / 2), 0.3, h.z + rand(-0.4, 0.4), rand(-0.5, 0.5), rand(5, 9), 0, Math.random() < 0.5 ? FLAME_A : FLAME_B, rand(0.6, 1.1), 0.6, -0.6, 4, 1);
-      if (active && (h.tick -= dt) <= 0) { h.tick = 0.45; killAlliesInRect(h.x, h.z, h.w / 2, 0.9, _hzC.lava); }
+      if (active && (h.tick -= dt) <= 0) { h.tick = 0.45; killAlliesInRect(h.x, h.z, h.w / 2, 0.9, _hzC.lava, Infinity); }
     }
   },
   storm(h, dt, active) {
     const u = clamp(h.t / h.T, 0, 1); h.ring.scale.setScalar(h.r * (2.2 - 1.2 * u)); h.ring.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(gt * (8 + u * 16)));
     if (h.t < h.T) return false;
     strike(h.x, 0, h.z, false, 0xfff07a);
-    if (active) killAlliesNear(h.x, h.z, h.r, new THREE.Color(0xfff07a), hzCap() * 2);
+    if (active) killAlliesNear(h.x, h.z, h.r, new THREE.Color(0xfff07a), Infinity);
     return true;
   },
   water(h, dt, active) {
@@ -3290,7 +3358,7 @@ const HZ_UPDATE = {
   poison(h, dt, active) {
     h.x += h.vx * dt; h.grp.position.x = h.x;
     if (Math.random() < 0.8) smoke(h.x + rand(-h.r, h.r) * 0.7, rand(0.3, 1.2), h.z + rand(-h.r, h.r) * 0.7, 1, rand(1.6, 2.4), 0x7ad83a, 1.1);
-    if (active && (h.tick -= dt) <= 0) { h.tick = 0.6; killAlliesNear(h.x, h.z, h.r, _hzC.poison, hzCap()); }
+    if (active && (h.tick -= dt) <= 0) { h.tick = 0.6; killAlliesNear(h.x, h.z, h.r, _hzC.poison, Infinity); }
     return Math.abs(h.x) > LANE_HALF + 4 && Math.sign(h.x) === Math.sign(h.vx);
   },
   zombie(h, dt) {
@@ -3308,7 +3376,7 @@ const HZ_UPDATE = {
     if (active && d < 16) {
       M.drift += Math.sign(h.x - M.cx) * 5 * (1 - d / 16); M.grip = Math.min(M.grip, 0.5);
       for (const s of allies) if (s.alive && s.role !== 'caged' && (s.x - h.x) ** 2 + (s.z - h.z) ** 2 < 25) s.x += Math.sign(h.x - s.x) * 3 * dt; // stragglers lean in
-      if ((h.tick -= dt) <= 0) { h.tick = 0.4; killAlliesNear(h.x, h.z, h.r, _hzC.void, hzCap()); }
+      if ((h.tick -= dt) <= 0) { h.tick = 0.4; killAlliesNear(h.x, h.z, h.r, _hzC.void, Infinity); }
     }
   },
 };
@@ -3520,6 +3588,8 @@ function showGameOver() {
   $('stWave').textContent = state.mode === 'march' ? Math.floor(M.dist).toLocaleString('pt-BR') + ' m' : state.wave;
   $('stKills').textContent = state.kills.toLocaleString('pt-BR');
   $('stPeak').textContent = state.peak.toLocaleString('pt-BR');
+  const oc = $('overContracts'); oc.hidden = !(state.mode === 'march' && M.cMul > 1);
+  if (!oc.hidden) oc.textContent = [...M.contracts].map((id) => CONTRACTS[id].name).join(' · ') + ` · pontuação ×${fmtMul(M.cMul)}`;
   const bo = $('bestOver');
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
   bo.classList.toggle('newbest', isBest);
@@ -4125,7 +4195,7 @@ const patSide = () => { // one side of the road burns; the other side (11.5 m) a
   return [{ kind: 'rect', x: side * (LANE_HALF - w / 2), z: SQUAD_Z, hw: w / 2, hd: 7 }];
 };
 const patGap = (r, pull = false) => { // discs across the road with one gap the column fits through
-  const g = Math.max(3.6, 5.5 - 0.6 * marchCycle());
+  const g = Math.max(3.6, 5.5 - 0.6 * marchCycle()) * (con('narrow') ? 0.75 : 1);
   let gx = rand(-5.5, 5.5); if (Math.random() < 0.7 && Math.abs(gx - M.cx) < 3) gx = clamp(M.cx + (Math.random() < 0.5 ? -4 : 4), -5.5, 5.5);
   const zones = [];
   for (let x = gx - g / 2 - r; x > -LANE_HALF - r * 0.5; x -= r * 1.9) zones.push({ kind: 'disc', x, z: SQUAD_Z + rand(-1, 1), r, pull });
@@ -4140,7 +4210,7 @@ const patStripes = (k) => { // the road in k stripes, one of them safe (the colu
   return zones;
 };
 const patRain = (n, r) => { // scattered discs that leave one corridor
-  const g = Math.max(3.8, 5.2 - 0.5 * marchCycle());
+  const g = Math.max(3.8, 5.2 - 0.5 * marchCycle()) * (con('narrow') ? 0.75 : 1);
   let gx = rand(-6, 6); if (Math.random() < 0.7 && Math.abs(gx - M.cx) < 3) gx = clamp(M.cx + (Math.random() < 0.5 ? -4 : 4), -6, 6);
   const zones = [];
   for (let i = 0; i < n * 5 && zones.length < n; i++) {
@@ -4177,11 +4247,11 @@ function marchBossPower(b, dt) {
   if (t === 'void') vortex(b, dt);
   if (b.abT > 0) return;
   b.patN = (b.patN || 0) + 1;
-  b.abT = PAT.every[t] * Math.max(0.7, 1 - 0.1 * c);
+  b.abT = PAT.every[t] * Math.max(0.7, 1 - 0.1 * c) / (con('fury') ? 1.5 : 1);
   const warn = M.stage < 2 ? 1.6 : Math.max(0.9, 1.4 - 0.15 * c); // the first two worlds teach the reading with a longer warning
   // every other blow needs the FILA column, but only when FILA will be back by the impact: using it to focus fire means
   // the next blows are the ones the whole troop sidesteps. The player never faces a gap with no way through.
-  const fila = b.patN % 2 === 0 && M.sqT <= 0 && M.sqCd <= warn * 0.5;
+  const fila = b.patN % 2 === 0 && M.sqT <= 0 && M.sqCd <= warn * 0.5 && !con('nofila');
   markPattern(PATTERNS[t][fila ? 1 : 0](), warn, PAT.color[t], PAT_FX[t]);
   Sfx.play('warn');
 }
@@ -4446,7 +4516,7 @@ function frame(now) {
 
 // ================= Boot =================
 try { await Promise.race([document.fonts.load(`64px ${DISPLAY_FONT}`), new Promise((r) => setTimeout(r, 1500))]); } catch { /* fallback font */ }
-renderBests();
+renderBests(); renderContracts();
 initOnline();
 fitCamera();
 setLayout(makeLayout(1));

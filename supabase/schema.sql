@@ -33,6 +33,7 @@ create table if not exists public.runs (
   mode text not null default 'defense' check (mode in ('defense', 'march'))
 );
 alter table public.runs add column if not exists mode text not null default 'defense';
+alter table public.runs add column if not exists contracts text; -- march contracts used, comma-separated ids (nofila, noref, fury, narrow, horde, lean)
 create index if not exists runs_mode_valid_finished on public.runs (mode, finished_at, score desc) where valid;
 create index if not exists runs_user_started on public.runs (user_id, started_at);
 create index if not exists runs_valid_finished on public.runs (finished_at, score desc) where valid;
@@ -65,7 +66,8 @@ end $$;
 -- passa de 16 m/s, então distância, abates e pontos são limitados pelo tempo da partida; os chefões (um a cada 1000 m,
 -- ~140 m antes da marca) valem 900 × mundo, a tropa cheia converte soldados em pontos e o combo multiplica metros e
 -- abates por até 3, daí os 12 pontos por metro.
-create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int)
+drop function if exists public.finish_run(uuid, int, int, int, int);
+create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int, p_contracts text default null)
 returns table (accepted boolean, week_rank int, all_rank int, best int)
 language plpgsql security definer set search_path = ''
 as $$
@@ -75,6 +77,7 @@ declare
   max_score numeric;
   max_kills numeric;
   bosses numeric;
+  ncon int;
   ok boolean;
   week_start timestamptz := date_trunc('week', now());
 begin
@@ -86,9 +89,12 @@ begin
   secs := extract(epoch from now() - r.started_at);
   if r.mode = 'march' then
     bosses := floor((p_wave + 140) / 1000.0);
+    -- contracts multiply the score (up to ×2.73 with three); the client reports which ones it ran under
+    ncon := least(3, coalesce(array_length(string_to_array(coalesce(p_contracts, ''), ','), 1), 0));
+    if p_contracts = '' then ncon := 0; end if;
     ok := p_wave between 0 and secs * 16 + 60
       and p_kills between 0 and secs * 30 + 50
-      and p_score between 0 and p_wave * 12 + p_kills * 60 + 450 * bosses * (bosses + 1) + 500
+      and p_score between 0 and (p_wave * 12 + p_kills * 60 + 450 * bosses * (bosses + 1) + 500) * (1 + 0.65 * ncon)
       and p_peak between 0 and 1000;
   else
     select sum(20 * e + 60 * (4 + 1.1 * w) + 50 * w + 1000), sum(e)
@@ -103,7 +109,7 @@ begin
   end if;
 
   update public.runs
-    set finished_at = now(), score = p_score, wave = p_wave, kills = p_kills, peak = p_peak, valid = ok
+    set finished_at = now(), score = p_score, wave = p_wave, kills = p_kills, peak = p_peak, valid = ok, contracts = nullif(p_contracts, '')
     where id = p_run;
 
   if not ok then
@@ -137,28 +143,28 @@ end $$;
 -- Devolve o top N e, se o jogador estiver fora dele, a linha dele no fim.
 drop function if exists public.get_leaderboard(text, int);
 create or replace function public.get_leaderboard(p_period text default 'week', p_limit int default 50, p_mode text default 'defense')
-returns table (pos int, nickname text, score int, wave int, is_me boolean)
+returns table (pos int, nickname text, score int, wave int, is_me boolean, contracts text)
 language sql stable security definer set search_path = ''
 as $$
   with best as (
-    select distinct on (r.user_id) r.user_id, r.score, r.wave, r.finished_at
+    select distinct on (r.user_id) r.user_id, r.score, r.wave, r.finished_at, r.contracts
     from public.runs r
     where r.valid and r.mode = p_mode and (p_period = 'all' or r.finished_at >= date_trunc('week', now()))
     order by r.user_id, r.score desc, r.finished_at
   ), ranked as (
-    select (rank() over (order by b.score desc))::int as pos, p.nickname, b.score, b.wave, b.finished_at,
+    select (rank() over (order by b.score desc))::int as pos, p.nickname, b.score, b.wave, b.finished_at, b.contracts,
            b.user_id is not distinct from auth.uid() as is_me
     from best b join public.profiles p on p.id = b.user_id
   )
-  select pos, nickname, score, wave, is_me from ranked
+  select pos, nickname, score, wave, is_me, contracts from ranked
   where pos <= least(p_limit, 100) or is_me
   order by pos, finished_at
   limit least(p_limit, 100) + 1;
 $$;
 
 revoke execute on function public.start_run(text) from public, anon, authenticated;
-revoke execute on function public.finish_run(uuid, int, int, int, int) from public, anon, authenticated;
+revoke execute on function public.finish_run(uuid, int, int, int, int, text) from public, anon, authenticated;
 revoke execute on function public.get_leaderboard(text, int, text) from public, anon, authenticated;
 grant execute on function public.start_run(text) to authenticated;
-grant execute on function public.finish_run(uuid, int, int, int, int) to authenticated;
+grant execute on function public.finish_run(uuid, int, int, int, int, text) to authenticated;
 grant execute on function public.get_leaderboard(text, int, text) to anon, authenticated;

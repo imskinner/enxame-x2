@@ -1797,7 +1797,7 @@ function spawnBig(kind, x) {
   const theme = isBoss ? biomeOf(n) : null;
   const mesh = buildOgre(isBoss, theme);
   const b = isBoss
-    ? { hp: state.mode === 'march' ? marchBossHp(theme, n) : Math.round((220 + n * 75) * theme.hpMul * (1 + cycleOf(n) * 0.5)), speed: 1.35 + n * 0.02, scale: 4.2, r: 2.1, dmg: 25, score: state.mode === 'march' ? 600 * (M.stage + 1) : 600, knock: 0.004, ult: 30 }
+    ? { hp: state.mode === 'march' ? marchBossHp(theme) : Math.round((220 + n * 75) * theme.hpMul * (1 + cycleOf(n) * 0.5)), speed: 1.35 + n * 0.02, scale: 4.2, r: 2.1, dmg: 25, score: state.mode === 'march' ? 600 * (M.stage + 1) : 600, knock: 0.004, ult: 30 }
     : { hp: Math.round(12 + n * 5 + n * n * 0.2), speed: Math.min(3.9, 2.3 + n * 0.08), scale: 2.1, r: 0.95, dmg: 6, score: 60, knock: 0.012, ult: 7 };
   Object.assign(b, {
     kind, mesh, maxHp: b.hp, x: x ?? (isBoss ? 0 : rand(-LANE_HALF + 2, LANE_HALF - 2)), z: SPAWN_Z - 1,
@@ -2171,7 +2171,7 @@ function updateHud() {
   if (ui.ult.classList.contains('ready') !== ready) { ui.ult.classList.toggle('ready', ready); ui.ult.disabled = !ready; }
   if (ui.fila.hidden === march) ui.fila.hidden = !march;
   if (march) { // the ring drains while squeezed and refills over the cooldown
-    const on = M.sqT > 0, fk = on ? M.sqT / M.sqMax : 1 - M.sqCd / SQUEEZE_CD, fr = !on && M.sqCd <= 0;
+    const on = M.sqT > 0, fk = on ? M.sqT / M.sqMax : 1 - M.sqCd / M.sqCdMax, fr = !on && M.sqCd <= 0;
     put('filaRing', ui.filaRing, (201.1 * (1 - fk)).toFixed(1), 'strokeDashoffset');
     if (ui.fila.classList.contains('ready') !== fr) ui.fila.classList.toggle('ready', fr);
     if (ui.fila.classList.contains('on') !== on) ui.fila.classList.toggle('on', on);
@@ -2386,10 +2386,11 @@ const SQUAD_Z = 15, SQUAD_BASE = 150, SQUAD_MAX = 300, MARCH_FAR = -150, MARCH_B
 const BOSS_GAP = 8, PORTAL_Z = SQUAD_Z - 50;
 const bossPace = () => 1.5 + 0.05 * Math.min(M.stage, 10);
 // FILA: the troop squeezes into a narrow column for a moment, to pick a gate, slip through a crate wall or dodge.
-const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6; // with a boss in the road the column holds longer
+const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6, SQUEEZE_CD_BOSS = 3.5; // with a boss in the road the column holds longer and comes back sooner: it's the dodge
 // March bosses: the troop fires as one, so their health follows its own curve (not the defense one): tuned for a 20–30 s
-// fight at the troop a world usually arrives with, scaled with the troop's cap, and each full lap of the eight worlds adds half.
-const marchBossHp = (theme, wave) => Math.round((7000 + 2000 * M.stage) * (squadCap() / SQUAD_BASE) * theme.hpMul * (1 + cycleOf(wave) * 0.5));
+// fight at the troop a world usually arrives with and scaled with the troop's cap. After the first lap of the eight worlds
+// it grows only a little: from there the patterns get harder, not the number.
+const marchBossHp = (theme) => Math.round((M.stage < BIOMES.length ? 7000 + 2000 * M.stage : 21000 + 600 * (M.stage - BIOMES.length + 1)) * (squadCap() / SQUAD_BASE) * theme.hpMul);
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 // cap: how high one gate counts up when shot; max: the troop's total for the stat, so the weapon can't snowball past it.
 const STATS = {
@@ -2412,7 +2413,7 @@ for (const e of Object.values(ELEMENTS)) { e.tintC = new THREE.Color(e.tint); e.
 const M = {
   speed: 0, dist: 0, scroll: 0, nextSeg: 0, bossAt: BOSS_EVERY, volley: 0, walls: [], bolts: [], portals: [], pools: [],
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
-  hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, relicStage: -1,
+  hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1,
   combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
 };
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
@@ -2597,7 +2598,8 @@ function fireVolley() {
   const life = shotRange() / WEAPON.speed, fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = hasEl('water') ? 1 : 0;
   // FILA focuses the fire: while squeezed the bolts converge on the boss (or on the column's center line), so the shots
   // from the edges of the troop land too instead of passing beside it.
-  const boss = bigs.find((b) => b.alive && b.kind === 'boss'), aimX = boss ? boss.x : M.cx, focus = M.sq > 0.5 ? M.sq : 0;
+  // (a third of that focus is always on during a fight, so sidestepping the patterns doesn't throw the whole volley wide)
+  const boss = bigs.find((b) => b.alive && b.kind === 'boss'), aimX = boss ? boss.x : M.cx, focus = boss ? Math.max(0.35, M.sq) : M.sq > 0.5 ? M.sq : 0;
   for (let k = 0; k < n; k++) for (const vx of fan) {
     if (M.bolts.length >= BOLT_MAX) break;
     const a = troop[Math.floor(Math.random() * troop.length)];
@@ -2870,7 +2872,9 @@ function marchSegment() {
     { w: 28, k: 'gates2' }, { w: 10, k: 'gate1' }, { w: 24 + Math.min(20, lvl * 3), k: 'enemies' },
     { w: lvl > 0.6 ? 12 : 0, k: 'wall' }, { w: lvl > 0.15 ? 16 : 0, k: 'cage' }, { w: 10, k: 'relic' },
   ]).k;
-  const scale = 1 + lvl * 0.35;
+  // the horde grows fast over the first 4 km and slowly after: past that the pressure comes from the bosses' patterns,
+  // not from packs the bolt wall can't keep up with
+  const scale = 1 + 0.35 * Math.min(lvl, 20) + 0.08 * Math.max(0, lvl - 20);
   const stat = () => weighted([{ w: 40, k: 'rate' }, { w: 40, k: 'dmg' }, { w: 20, k: 'range' }]).k;
   const goodGate = () => {
     const s = stat();
@@ -2927,7 +2931,7 @@ function startMarch() {
   Object.assign(M, {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
-    sqMax: SQUEEZE_T, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
+    sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
   });
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
   for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
@@ -2955,8 +2959,9 @@ function simulateMarch(dt, realDt = dt) {
     if (keys.has('a') || keys.has('arrowleft')) state.targetX = laneClamp(state.targetX - 18 * dt);
     if (keys.has('d') || keys.has('arrowright')) state.targetX = laneClamp(state.targetX + 18 * dt);
   }
-  // past 150 soldiers the blob stops growing and packs denser, so a big troop still fits the lane and the gaps
-  const n = squadCount(), dense = Math.min(1, Math.sqrt(SQUAD_BASE / Math.max(1, n))), R = (M.R = 0.55 * dense * Math.sqrt(Math.max(1, n)));
+  // a tight blob (radius 5 m at 150) so the full troop can sidestep a pattern; past 150 soldiers it stops growing and
+  // packs denser, so a big troop still fits the lane and the gaps
+  const n = squadCount(), dense = Math.min(1, Math.sqrt(SQUAD_BASE / Math.max(1, n))), R = (M.R = 0.42 * dense * Math.sqrt(Math.max(1, n)));
   // combo: kills without losing a soldier push the multiplier on meters and kills up to ×3; every soldier lost knocks it back
   if (active) {
     const lost = Math.max(0, (M.lastN ?? n) - n); M.lastN = n;
@@ -2967,7 +2972,7 @@ function simulateMarch(dt, realDt = dt) {
   }
   // squeeze: a column about a third as wide (never under 1.4 m half-width) and deeper to hold everyone, or thinner
   // still to fit the crate-wall gap just ahead
-  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = SQUEEZE_CD;
+  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = M.sqCdMax = M.bossLive ? SQUEEZE_CD_BOSS : SQUEEZE_CD;
   else if (M.sqCd > 0) M.sqCd = Math.max(0, M.sqCd - dt);
   M.sq += ((M.sqT > 0 ? 1 : 0) - M.sq) * Math.min(1, dt * 7);
   let sqHalf = Math.max(1.4, R * 0.33);
@@ -3015,7 +3020,7 @@ function simulateMarch(dt, realDt = dt) {
       if (a.life <= 0 || a.z < MARCH_FAR) { a.alive = false; debris(a.x, 0.6, a.z, ELEMENTS.zombie.tintC, 4, 4, 0.2); }
       continue;
     }
-    const r = 0.55 * dense * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
+    const r = 0.42 * dense * Math.sqrt(slot + 0.5), ang = slot * 2.39996; slot++;
     const tx = fx + Math.cos(ang) * r * Math.min(fk, sqx), tz = SQUAD_Z + Math.sin(ang) * r * 0.8 * sqz;
     const k = a.role === 'joining' ? dt * 3.5 : dt * 9;
     a.x += (tx - a.x) * Math.min(1, k); a.z += (tz - a.z) * Math.min(1, k);
@@ -3129,12 +3134,13 @@ const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f),
 // two): proportional, so a small troop isn't bled dry by the same blows that a full one shrugs off.
 const hzCap = () => Math.max(1, Math.ceil(squadCount() * 0.02));
 const blowCap = () => Math.max(2, Math.ceil(squadCount() * 0.05));
-function killAlliesInRect(x, z, hw, hd, color) {
-  let n = 0; const cap = hzCap();
+function killAlliesInRect(x, z, hw, hd, color, cap = hzCap()) {
+  let n = 0;
   for (const a of allies) if (a.alive && a.role !== 'caged' && Math.abs(a.x - x) < hw && Math.abs(a.z - z) < hd) {
     a.alive = false; if (++n % 3 === 0) debris(a.x, 0.6, a.z, color, 1, 4, 0.18);
     if (n >= cap) break;
   }
+  return n;
 }
 function addHazard(h, ...meshes) {
   h.grp = new THREE.Group(); h.grp.add(...meshes); h.grp.position.set(h.x, 0, h.z); h.t = 0; h.tick = 0; scene.add(h.grp); M.hz.push(h); return h;
@@ -3194,6 +3200,24 @@ function spawnHazard(id, k) {
     }
   }
 }
+// A boss pattern on the march: zones (discs or stripes) marked on the road for T seconds, then everyone inside dies,
+// no cap. Each zone gets the theme's impact effect; a zone with `pull` drags the troop toward it while it is marked.
+function markPattern(zones, T, color, fx) {
+  const meshes = [];
+  for (const q of zones) {
+    if (q.kind === 'disc') {
+      const ring = new THREE.Mesh(hzRing, hzMat(color, 0.95)), fill = new THREE.Mesh(hzDisc, hzMat(0x1a1830, 0.35, false));
+      ring.position.set(q.x, 0.07, q.z); fill.position.set(q.x, 0.05, q.z); ring.scale.setScalar(q.r * 1.6); fill.scale.setScalar(q.r);
+      q.mark = ring; meshes.push(fill, ring);
+    } else {
+      // a stripe reads like the discs: dark fill with a bright border of the theme's color (an outer plane peeking out)
+      const edge = new THREE.Mesh(hzPlane, hzMat(color, 0.95)), fill = new THREE.Mesh(hzPlane, hzMat(0x1a1830, 0.45, false));
+      edge.position.set(q.x, 0.05, q.z); edge.scale.set(q.hw * 2 + 0.6, 1, q.hd * 2 + 0.6); fill.position.set(q.x, 0.06, q.z); fill.scale.set(q.hw * 2, 1, q.hd * 2);
+      q.mark = edge; meshes.push(edge, fill);
+    }
+  }
+  addHazard({ type: 'pattern', x: 0, z: 0, T, zones, colorC: new THREE.Color(color), fx }, ...meshes);
+}
 // Boss blows on the march are telegraphed like the road hazards: a ring marks the spot and closes in, then the blow
 // lands there, so the troop can step aside or squeeze out of it.
 function markBlast(x, z, r, T, color, blast) {
@@ -3212,6 +3236,22 @@ function iceSpikes(x, z, r) {
 }
 // Per-frame behavior of each hazard; returns true once it is spent.
 const HZ_UPDATE = {
+  pattern(h, dt, active) {
+    const u = clamp(h.t / h.T, 0, 1), pulse = 0.5 + 0.5 * Math.abs(Math.sin(gt * (8 + u * 16)));
+    for (const q of h.zones) {
+      if (q.kind === 'disc') { q.mark.scale.setScalar(q.r * (1.6 - 0.6 * u)); q.mark.material.opacity = pulse; }
+      else q.mark.material.opacity = 0.45 + 0.55 * pulse;
+      if (q.pull && active) { M.drift += Math.sign(q.x - M.cx) * 3; M.grip = Math.min(M.grip, 0.6); } // the implosion drags the troop in
+    }
+    if (h.t < h.T) return false;
+    let n = 0;
+    for (const q of h.zones) {
+      if (active) n += q.kind === 'disc' ? killAlliesNear(q.x, q.z + h.z, q.r, h.colorC, Infinity) : killAlliesInRect(q.x, q.z + h.z, q.hw, q.hd, h.colorC, Infinity);
+      h.fx(q);
+    }
+    if (active) { if (n) { floatText('-' + n, M.cx, 3.2, SQUAD_Z, 'red'); state.shake = Math.max(state.shake, 0.3); } else floatText('DESVIOU!', M.cx, 3.2, SQUAD_Z, 'cyan'); }
+    return true;
+  },
   mark(h) {
     const u = clamp(h.t / h.T, 0, 1); h.ring.scale.setScalar(h.r * (1.6 - 0.6 * u)); h.ring.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(gt * (8 + u * 16)));
     if (h.t < h.T) return false;
@@ -3389,7 +3429,7 @@ function updateMarchEnemies(dt, dz) {
         b.rageT += dt; const f = Math.min(3, 1.5 + Math.floor(b.rageT / 20) * 0.5);
         if (f !== b.rageF) { b.rageF = f; floatText(`FÚRIA ×${f.toFixed(1).replace('.', ',')}`, b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.5); Sfx.play('boss'); }
       }
-      b.x += clamp(M.cx - b.x, -1, 1) * 1.6 * dt;
+      b.x += clamp(M.cx - b.x, -1, 1) * 2.6 * dt; // keeps up with a troop dancing between the patterns' gaps
       if (!b.arrived && SQUAD_Z - b.z <= shotRange() + b.r) { // in range: attack at once, and its relic lands on the road
         b.arrived = true; b.abT = 0.8; b.sumT = 2.5;
         if (M.relicStage !== M.stage) { M.relicStage = M.stage; spawnArenaRelic(); }
@@ -3412,7 +3452,8 @@ function updateMarchEnemies(dt, dz) {
     if (b.label) { drawLabel(b.label, Math.max(0, Math.ceil(b.hp))); b.label.sprite.position.set(b.x, b.scale * 1.8 + 0.6, b.z); }
     if (active && b.z > SQUAD_Z - b.r - 2) { // stomping into the troop
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < (b.r + 0.5) ** 2) {
-        a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); if (!isBoss) { b.hp -= 1; b.flash = 1; if (b.hp <= 0) { killBig(b); break; } }
+        // a brute that reaches the troop tramples it, but every soldier it crushes costs it 5% of its health: twenty at most
+        a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); if (!isBoss) { b.hp -= Math.max(1, b.maxHp * 0.05); b.flash = 1; if (b.hp <= 0) { killBig(b); break; } }
       }
     }
     if (b.z > MARCH_BEHIND) { b.alive = false; removeBig(b); }
@@ -4040,6 +4081,7 @@ function vortex(b, dt) {
 function bossPower(b, dt) {
   const t = b.theme; b.abT -= dt; b.sumT -= dt;
   if (b.sumT <= 0) { b.sumT = t.id === 'lava' ? 4 : 8.5; summonMinions(b); }
+  if (state.mode === 'march') { marchBossPower(b, dt); bossTail(b, dt); return; } // the march has its own pattern blows
   const ready = b.abT <= 0;
   switch (t.id) {
     case 'ice': if (ready) { b.abT = 4.2; frostNova(b); } break;
@@ -4061,9 +4103,87 @@ function bossPower(b, dt) {
       if (ready) { b.abT = 5.5; b.z = Math.min(b.z + 3, DEFENSE_Z - 12); sparks(b.x, 3, b.z, 0xc86bff, 40, 9, 0.8, 0.5); ring(b.x, b.z, 0xc86bff, 8, 0.5); Sfx.play('warp'); }
       break;
   }
+  bossTail(b, dt);
+}
+function bossTail(b, dt) {
   b.shield = Math.max(0, (b.shield || 0) - dt);
   if (b.bubble) { b.bubble.visible = b.shield > 0; b.bubble.material.opacity = 0.22 + 0.08 * Math.sin(gt * 8); }
   bossAura(b);
+}
+// ---- march boss patterns: every blow is a set of zones with a safe gap, marked on the road; at impact everyone inside
+// dies, no cap. Reading the pattern and moving (or squeezing) into the gap costs nothing, standing still costs everything
+// inside. Blows alternate between one the whole troop can sidestep and one only the FILA column fits through. Each lap
+// of the eight worlds shortens the warning, narrows the gaps and quickens the cadence. ----
+const marchCycle = () => Math.floor(M.stage / BIOMES.length);
+const PAT = {
+  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff },
+  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4 },
+};
+// Zone builders, all around the troop (M.cx, SQUAD_Z). The gap lands away from the troop most of the time, so it has to move.
+const patSide = () => { // one side of the road burns; the other side (11.5 m) always fits the whole troop (10.2 m at full width)
+  const w = 6.5, side = Math.random() < 0.7 ? (M.cx >= 0 ? 1 : -1) : (Math.random() < 0.5 ? 1 : -1);
+  return [{ kind: 'rect', x: side * (LANE_HALF - w / 2), z: SQUAD_Z, hw: w / 2, hd: 7 }];
+};
+const patGap = (r, pull = false) => { // discs across the road with one gap the column fits through
+  const g = Math.max(3.6, 5.5 - 0.6 * marchCycle());
+  let gx = rand(-5.5, 5.5); if (Math.random() < 0.7 && Math.abs(gx - M.cx) < 3) gx = clamp(M.cx + (Math.random() < 0.5 ? -4 : 4), -5.5, 5.5);
+  const zones = [];
+  for (let x = gx - g / 2 - r; x > -LANE_HALF - r * 0.5; x -= r * 1.9) zones.push({ kind: 'disc', x, z: SQUAD_Z + rand(-1, 1), r, pull });
+  for (let x = gx + g / 2 + r; x < LANE_HALF + r * 0.5; x += r * 1.9) zones.push({ kind: 'disc', x, z: SQUAD_Z + rand(-1, 1), r, pull });
+  return zones;
+};
+const patStripes = (k) => { // the road in k stripes, one of them safe (the column fits, the full troop doesn't)
+  const w = (LANE_HALF * 2) / k, cur = clamp(Math.floor((M.cx + LANE_HALF) / w), 0, k - 1);
+  let safe = Math.floor(Math.random() * k); if (Math.random() < 0.7 && safe === cur) safe = (cur + 1 + Math.floor(Math.random() * (k - 1))) % k;
+  const zones = [];
+  for (let i = 0; i < k; i++) if (i !== safe) zones.push({ kind: 'rect', x: -LANE_HALF + w * (i + 0.5), z: SQUAD_Z, hw: w / 2 - 0.2 + 0.15 * marchCycle(), hd: 7 });
+  return zones;
+};
+const patRain = (n, r) => { // scattered discs that leave one corridor
+  const g = Math.max(3.8, 5.2 - 0.5 * marchCycle());
+  let gx = rand(-6, 6); if (Math.random() < 0.7 && Math.abs(gx - M.cx) < 3) gx = clamp(M.cx + (Math.random() < 0.5 ? -4 : 4), -6, 6);
+  const zones = [];
+  for (let i = 0; i < n * 5 && zones.length < n; i++) {
+    const x = rand(-LANE_HALF + 1, LANE_HALF - 1); if (Math.abs(x - gx) < g / 2 + r) continue;
+    zones.push({ kind: 'disc', x, z: SQUAD_Z + rand(-6, 6), r });
+  }
+  return zones;
+};
+const PATTERNS = { // [sidestep pattern, FILA pattern]
+  ice: [patSide, () => patGap(3.4)],
+  fire: [patSide, () => patRain(6, 2.4)],
+  lava: [patSide, () => patStripes(3)],
+  storm: [patSide, () => patStripes(4)],
+  water: [patSide, () => patGap(3.0)],
+  poison: [patSide, () => patGap(2.8)],
+  zombie: [patSide, () => patStripes(3)],
+  void: [patSide, () => patGap(4.2, true)],
+};
+const zoneSpan = (q) => (q.kind === 'disc' ? q.r : q.hw);
+const PAT_FX = { // the theme's impact on one zone
+  ice: (q) => { if (q.kind === 'disc') iceSpikes(q.x, q.z, q.r); else for (let i = -1; i <= 1; i++) iceSpikes(q.x + i * q.hw * 0.6, q.z + rand(-2, 2), Math.min(q.hw, 3)); ring(q.x, q.z, 0xbff4ff, zoneSpan(q) * 2, 0.6); sparks(q.x, 1, q.z, 0xd8f6ff, 50, 12, 0.7, 0.6, 1, 0.4); Sfx.play('freeze'); },
+  fire: (q) => { sparks(q.x, 0.4, q.z, 0xff7a1a, 50, 9, 0.9, 0.6, 4, 0.3); smoke(q.x, 0.4, q.z, 4, 1.4, 0x4a3a3a, 1.1); ring(q.x, q.z, 0xff7a1a, zoneSpan(q) * 2, 0.45); Sfx.play('boom'); },
+  lava: (q) => { for (let i = 0; i < 3; i++) sparks(q.x + rand(-zoneSpan(q), zoneSpan(q)), 0.3, q.z + rand(-3, 3), 0xff7a1a, 30, 7, 0.9, 0.9, 12, 0.3); smoke(q.x, 0.5, q.z, 4, 1.6, 0x5a3a3a, 1.3); Sfx.play('boom'); },
+  storm: (q) => { if (q.kind === 'disc') strike(q.x, 0, q.z); else for (let i = -1; i <= 1; i++) strike(q.x + i * q.hw * 0.6, 0, q.z + rand(-3, 3)); },
+  water: (q) => { ring(q.x, q.z, 0x8ff4ff, zoneSpan(q) * 2, 0.5); sparks(q.x, 0.4, q.z, 0xbfeaff, 40, 8, 0.7, 0.6, 4, 0.3); Sfx.play('bubble'); },
+  poison: (q) => { if (toxic.length >= 6) toxic.shift(); toxic.push({ x: q.x, z: q.z, r: Math.min(zoneSpan(q) * 0.8, 3), life: 3 }); ring(q.x, q.z, 0x9cff4a, 5, 0.6); Sfx.play('gas'); },
+  zombie: (q) => { const n = 3 + Math.floor(state.wave / 10); for (let i = 0; i < n; i++) spawnEnemy('grunt', clamp(q.x + rand(-zoneSpan(q), zoneSpan(q)), -LANE_HALF + 0.5, LANE_HALF - 0.5), q.z + rand(-2, 2)); debris(q.x, 0.4, q.z, _hzC.zombie, 12, 6, 0.25); Sfx.play('summon'); },
+  void: (q) => { sparks(q.x, 1, q.z, 0xc86bff, 60, 10, 0.8, 0.5); ring(q.x, q.z, 0xc86bff, zoneSpan(q) * 2, 0.6); state.shake = Math.max(state.shake, 0.4); Sfx.play('warp'); },
+};
+function marchBossPower(b, dt) {
+  const t = b.theme.id, c = marchCycle();
+  if (t === 'water') { b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.004 * dt); if ((b.shT = (b.shT ?? 5) - dt) <= 0) { b.shT = 6.5; b.shield = 2.6; Sfx.play('bubble'); } }
+  if (t === 'zombie') b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.003 * dt);
+  if (t === 'void') vortex(b, dt);
+  if (b.abT > 0) return;
+  b.patN = (b.patN || 0) + 1;
+  b.abT = PAT.every[t] * Math.max(0.7, 1 - 0.1 * c);
+  const warn = M.stage < 2 ? 1.6 : Math.max(0.9, 1.4 - 0.15 * c); // the first two worlds teach the reading with a longer warning
+  // every other blow needs the FILA column, but only when FILA will be back by the impact: using it to focus fire means
+  // the next blows are the ones the whole troop sidesteps. The player never faces a gap with no way through.
+  const fila = b.patN % 2 === 0 && M.sqT <= 0 && M.sqCd <= warn * 0.5;
+  markPattern(PATTERNS[t][fila ? 1 : 0](), warn, PAT.color[t], PAT_FX[t]);
+  Sfx.play('warn');
 }
 const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff };
 function bossAura(b) {
@@ -4342,7 +4462,10 @@ const marchBot = () => {
   const worth = (g) => ({ mul: 3, up: 2, down: -2, div: -3 })[g.kind] ?? 0;
   let best = null;
   for (const g of gates) if (!g.used && !g.dying && ahead(g) && (!best || g.z > best.z + 3 || (Math.abs(g.z - best.z) <= 3 && worth(g) > worth(best)))) best = g;
-  let x = best && worth(best) > 0 ? best.x : best ? -Math.sign(best.x || 1) * 5 : Math.sin(gt * 0.5) * 4;
+  // a bad gate alone: go around it; a bad pair: slip past both along the lane's edge with FILA
+  const mate = best && gates.find((g) => g !== best && !g.used && !g.dying && Math.abs(g.z - best.z) <= 3), badPair = best && worth(best) <= 0 && mate;
+  let x = best && worth(best) > 0 ? best.x : badPair ? Math.sign(best.x || 1) * 7 : best ? -Math.sign(best.x || 1) * 5 : Math.sin(gt * 0.5) * 4;
+  if (badPair && best.z > SQUAD_Z - 12) squeeze();
   const prize = M.walls.find((o) => o.type !== 'wall' && !o.dead && ahead(o)); // line up with a cage or relic to shoot it open
   if (prize && (!best || best.z < SQUAD_Z - 28)) x = prize.x;
   for (const o of M.walls) if (o.type === 'wall' && ahead(o) && Math.abs(x - o.x) < o.half + M.R) x = o.x + Math.sign(-o.x || 1) * (o.half + M.R + 0.5);
@@ -4362,7 +4485,19 @@ const marchBot = () => {
     if (Math.abs(x - lx) < 2.4 + M.R * 0.5) x = lx + (x >= lx ? 1 : -1) * (2.9 + M.R * 0.5);
   }
   if (M.walls.some((o) => o.type === 'wall' && o.z > SQUAD_Z - 10 && o.z < SQUAD_Z && Math.abs(x - o.x) < o.half + M.R)) squeeze(); // slip through crate walls
-  if (M.bossLive) squeeze(); // focus fire on the boss
+  // boss patterns: the nearest x where the whole troop is clear of every marked zone, else where the column is, with FILA
+  const pats = M.hz.filter((h) => h.type === 'pattern' && h.t >= (window.botDelay || 0));
+  if (pats.length) {
+    const col = Math.max(1.4, M.R * 0.33);
+    const clear = (px, hw) => !pats.some((h) => h.zones.some((q) => Math.abs(px - q.x) < (q.kind === 'disc' ? q.r : q.hw) + hw));
+    let full = null, narrow = null;
+    for (let px = -7.5; px <= 7.5; px += 0.25) {
+      if (Math.abs(px) <= LANE_HALF - M.R - 0.4 && clear(px, M.R) && (full === null || Math.abs(px - M.cx) < Math.abs(full - M.cx))) full = px;
+      if (Math.abs(px) <= LANE_HALF - col - 0.4 && clear(px, col) && (narrow === null || Math.abs(px - M.cx) < Math.abs(narrow - M.cx))) narrow = px;
+    }
+    if (full !== null) x = full; else if (narrow !== null) { x = narrow; squeeze(); }
+    if (window.botStats) { window.botStats.pat++; if (full === null && narrow === null) window.botStats.noSafe++; }
+  }
   if (state.ult >= ULT_MAX && (M.bossLive || enemies.length > 60)) useUltimate(); // saved for the boss or a thick horde
   state.targetX = laneClamp(x);
 };

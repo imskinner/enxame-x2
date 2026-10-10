@@ -63,7 +63,8 @@ end $$;
 -- Defesa: o teto por onda espelha buildWave() do jogo (inimigos comuns + 2 hordas gigantes + brutamontes + chefão +
 -- bônus da onda + caixas); pontuação aceita até 2x esse teto. Marcha: p_wave são os metros andados e a estrada nunca
 -- passa de 16 m/s, então distância, abates e pontos são limitados pelo tempo da partida; os chefões (um a cada 1000 m,
--- ~140 m antes da marca) valem 900 × mundo e a tropa cheia converte soldados em pontos, daí os 12 pontos por metro.
+-- ~140 m antes da marca) valem 900 × mundo, a tropa cheia converte soldados em pontos e o combo multiplica metros e
+-- abates por até 3, daí os 12 pontos por metro.
 create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int)
 returns table (accepted boolean, week_rank int, all_rank int, best int)
 language plpgsql security definer set search_path = ''

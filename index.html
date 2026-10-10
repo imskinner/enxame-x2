@@ -58,6 +58,7 @@ body {
 .hp .bar { width: clamp(64px, 16vw, 150px); height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .18); overflow: hidden; }
 .hp .bar i { display: block; height: 100%; width: 100%; background: var(--ok); border-radius: 6px; transition: width .2s; }
 .chip.rapid { background: #0f8ea8; }
+.chip.combo { background: #b9770e; }
 .btn-icon {
   pointer-events: auto; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: var(--panel); color: var(--on-dark); display: grid; place-items: center; cursor: pointer;
@@ -238,6 +239,7 @@ body {
       <div class="chip"><span class="k" id="shotsK">TIROS</span><span class="v" id="shots">1</span></div>
       <div class="chip"><span class="k">TROPA</span><span class="v" id="troops">0</span></div>
       <div class="chip rapid" id="rapidChip" hidden><span class="k" id="rapidK">RAJADA</span><span class="v" id="rapidT">0</span></div>
+      <div class="chip combo" id="comboChip" hidden><span class="k">COMBO</span><span class="v" id="comboV">×1,0</span></div>
     </div>
     <div class="group">
       <div class="ab">
@@ -1815,7 +1817,9 @@ function removeBig(b) {
   if (b.label) { scene.remove(b.label.sprite); b.label.tex.dispose(); b.label.sprite.material.dispose(); }
 }
 function killEnemy(e, fromUlt = false) {
-  e.alive = false; state.score += e.score; state.kills++;
+  const march = state.mode === 'march';
+  e.alive = false; state.score += march ? Math.round(e.score * M.combo) : e.score; state.kills++;
+  if (march && !fromUlt) M.comboK++; // the ultimate's kills don't build the combo
   debris(e.x, 0.7, e.z, e.color, fromUlt ? 2 : 4, 5, 0.2);
   sparks(e.x, 0.8, e.z, e.color, fromUlt ? 3 : 6, 5, 0.5, 0.4, 2);
   Sfx.play('pop');
@@ -2030,16 +2034,18 @@ const ultWall = new THREE.Group();
   floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0.07, 1.8); ultWall.add(floor);
   ultWall.visible = false; scene.add(ultWall);
 }
-// Later waves have far more kills, so each kill charges less.
-const ultGainScale = () => 4 / (3 + state.wave);
+// Later waves have far more kills, so each kill charges less. On the march the charge follows the world instead, so the
+// ultimate comes about once per world: spend it on the rush or save it for the boss, who refunds half when it falls.
+const ultGainScale = () => (state.mode === 'march' ? 0.5 / (1 + 0.3 * M.stage) : 4 / (3 + state.wave));
 function addUlt(v) {
   if (state.phase !== 'playing' && state.phase !== 'break') return;
   const was = state.ult >= ULT_MAX;
   state.ult = Math.min(ULT_MAX, state.ult + v);
   if (state.ultFx) state.ult = Math.min(state.ult, ULT_MAX - 1); // no refill while one is still sweeping
   if (!was && state.ult >= ULT_MAX) {
-    Sfx.play('ready'); floatText('ULTIMATE PRONTO!', player.position.x, 3.2, PLAYER_Z, 'cyan');
-    ring(player.position.x, PLAYER_Z, 0x7ff0ff, 6, 0.6);
+    const march = state.mode === 'march', px = march ? M.cx : player.position.x, pz = march ? SQUAD_Z : PLAYER_Z;
+    Sfx.play('ready'); floatText('ULTIMATE PRONTO!', px, 3.2, pz, 'cyan');
+    ring(px, pz, 0x7ff0ff, 6, 0.6);
   }
 }
 function useUltimate() {
@@ -2052,20 +2058,20 @@ function useUltimate() {
 function updateUltimate(dt, realDt) {
   const fx = state.ultFx; if (!fx) return;
   fx.t += realDt;
-  const px = player.position.x;
+  const march = state.mode === 'march', px = march ? M.cx : player.position.x, pz = march ? SQUAD_Z : PLAYER_Z; // the charge gathers at the cannon, or at the troop
   if (!fx.fired) {
     const c = toColor(0x7ff0ff, 0.3).clone();
     for (let k = 0; k < 8; k++) {
       const a = Math.random() * Math.PI * 2, r = rand(2.5, 5);
-      emit(sparkSys, px + Math.cos(a) * r, rand(0.5, 3.5), PLAYER_Z + Math.sin(a) * r, -Math.cos(a) * r * 2.4, rand(-1, 1), -Math.sin(a) * r * 2.4, c, rand(0.4, 0.8), 0.4, -0.5, 0, 0);
+      emit(sparkSys, px + Math.cos(a) * r, rand(0.5, 3.5), pz + Math.sin(a) * r, -Math.cos(a) * r * 2.4, rand(-1, 1), -Math.sin(a) * r * 2.4, c, rand(0.4, 0.8), 0.4, -0.5, 0, 0);
     }
     recoil = Math.max(recoil, 0.4 * Math.random());
     if (fx.t >= 0.6) {
       fx.fired = true; ultWall.visible = true; ultWall.position.set(0, 0, fx.z);
       state.flash = 1; state.shake = Math.max(state.shake, 1.1); recoil = 1; Sfx.play('ult');
-      ring(px, PLAYER_Z - 2, 0x7ff0ff, 16, 0.8); ring(0, DEFENSE_Z, 0xffffff, 24, 1.0);
-      sparks(px, 1.5, PLAYER_Z - 2.5, 0xbff8ff, 140, 18, 0.9, 0.8, 4, 0.5);
-      smoke(px, 1, PLAYER_Z - 2, 8, 1.6, 0xe8fbff, 0.9);
+      ring(px, pz - 2, 0x7ff0ff, 16, 0.8); ring(0, DEFENSE_Z, 0xffffff, 24, 1.0);
+      sparks(px, 1.5, pz - 2.5, 0xbff8ff, 140, 18, 0.9, 0.8, 4, 0.5);
+      smoke(px, 1, pz - 2, 8, 1.6, 0xe8fbff, 0.9);
     }
     return;
   }
@@ -2091,7 +2097,7 @@ function updateUltimate(dt, realDt) {
 // ================= UI =================
 const ui = {
   hud: $('hud'), wave: $('waveNum'), score: $('score'), hpFill: $('hpFill'), hpText: $('hpText'), shots: $('shots'),
-  troops: $('troops'), rapidChip: $('rapidChip'), rapidK: $('rapidK'), rapidT: $('rapidT'), bossBar: $('bossBar'), bossFill: $('bossFill'),
+  troops: $('troops'), rapidChip: $('rapidChip'), rapidK: $('rapidK'), rapidT: $('rapidT'), comboChip: $('comboChip'), comboV: $('comboV'), bossBar: $('bossBar'), bossFill: $('bossFill'),
   banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'), floaters: $('floaters'), hurt: $('hurt'),
   menu: $('menu'), pause: $('pauseScreen'), over: $('overScreen'), icoSound: $('icoSound'),
   ult: $('btnUlt'), ultRing: $('ultRing'), ultPct: $('ultPct'), fila: $('btnFila'), filaRing: $('filaRing'), flash: $('flash'),
@@ -2141,6 +2147,9 @@ function updateHud() {
   const buff = march && M.triple > state.rapid ? 'triple' : 'rapid', buffT = buff === 'triple' ? M.triple : state.rapid, rapidOn = buffT > 0;
   if (ui.rapidChip.hidden === rapidOn) ui.rapidChip.hidden = !rapidOn;
   if (rapidOn) { put('rapidK', ui.rapidK, buff === 'triple' ? 'TRIPLO' : 'RAJADA'); put('rapid', ui.rapidT, buffT.toFixed(1) + 's'); }
+  const comboOn = march && M.combo >= 1.1;
+  if (ui.comboChip.hidden === comboOn) ui.comboChip.hidden = !comboOn;
+  if (comboOn) put('combo', ui.comboV, '×' + M.combo.toFixed(1).replace('.', ','));
   const boss = state.phase !== 'over' && bigs.find((b) => b.kind === 'boss' && b.alive);
   const upcoming = state.bossDown && state.wave % 5 === 0 ? state.wave + 1 : state.wave;
   const bio = biomeOf(upcoming), bossWave = Math.ceil(Math.max(1, upcoming) / 5) * 5;
@@ -2388,7 +2397,7 @@ const STATS = {
 // The power each boss leaves behind, keyed by biome id. The troop holds two at most.
 const ELEMENTS = {
   ice: { name: 'GELO', hint: 'Tiros congelam: quem congela se quebra ao tocar a tropa', tint: 0x8fd8ff, shot: 0xd8f6ff },
-  fire: { name: 'FOGO', hint: 'Tiros incendeiam: o alvo continua queimando', tint: 0xff7a3a, shot: 0xffa53a },
+  fire: { name: 'FOGO', hint: 'Tiros incendeiam: chefões perdem 1,5% de vida por segundo e caixas queimam rápido', tint: 0xff7a3a, shot: 0xffa53a },
   lava: { name: 'LAVA', hint: 'Tiros explodem e atingem quem está em volta', tint: 0xd8502a, shot: 0xff5a1f },
   storm: { name: 'TEMPESTADE', hint: 'Cada acerto solta raios em mais dois inimigos', tint: 0xe8d84a, shot: 0xfff07a },
   water: { name: 'ÁGUA', hint: 'Tiros atravessam o primeiro alvo', tint: 0x3aa8ff, shot: 0x8ff4ff },
@@ -2401,6 +2410,7 @@ const M = {
   speed: 0, dist: 0, scroll: 0, nextSeg: 0, bossAt: BOSS_EVERY, volley: 0, walls: [], bolts: [], portals: [], pools: [],
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
   hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, relicStage: -1,
+  combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
 };
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
 const shotRange = () => clamp(WEAPON.range + M.stat.range, 32, 70);
@@ -2693,8 +2703,8 @@ function breakObstacle(o) {
 }
 
 // ---- gates: teal ones multiply or halve the troop, gold ones upgrade a weapon stat and count up when shot ----
-function marchGate(kind, n, x, w, stat) {
-  const def = { kind, value: Math.abs(n), x, z: MARCH_FAR, width: w, amp: 0, speed: 0 };
+function marchGate(kind, n, x, w, stat, amp = 0) {
+  const def = { kind, value: Math.abs(n), x, z: MARCH_FAR, width: w, amp, speed: amp ? rand(0.5, 0.8) : 0 };
   if (kind === 'stat') Object.assign(def, { kind: n >= 0 ? 'up' : 'down', unit: STATS[stat].unit, sub: STATS[stat].name });
   const g = buildGate(def, gates.length % 30);
   g.n = n; g.shootable = kind === 'stat'; g.stat = stat; g.acc = 0;
@@ -2816,7 +2826,9 @@ function bossBeaten(b) {
   const id = b.theme.id, el = ELEMENTS[id];
   // dropped before it got within 20 m of the troop: a bonus on top of the boss's own points (600 per world)
   if (SQUAD_Z - b.z > 20) { const bonus = 300 * (M.stage + 1); state.score += bonus; floatText(`+${bonus} DE LONGE`, b.x, b.scale * 1.5 + 1.6, b.z, 'gold'); }
-  Sfx.play('victory'); showBanner('VITÓRIA!', `Atravesse o portal: poder de ${el.name}`, 3.2, 'win');
+  const pts = state.score - M.worldScore, kills = state.kills - M.worldKills;
+  Sfx.play('victory'); showBanner('VITÓRIA!', `Mundo ${M.stage + 1}: ${pts.toLocaleString('pt-BR')} pts, ${kills} abates · portal: ${el.name}`, 3.6, 'win');
+  addUlt(ULT_MAX * 0.5); floatText('ULTIMATE +50%', M.cx, 3.6, SQUAD_Z, 'cyan');
   amb.confetti = 3.2; state.flash = Math.max(state.flash, 0.5);
   ring(b.x, b.z, 0xffe27a, 26, 1.4); ring(b.x, b.z, 0xffffff, 16, 0.9);
   sparks(b.x, 3, b.z, 0xffe27a, 120, 18, 1, 1.2, 10, 0.5);
@@ -2831,7 +2843,7 @@ function enterPortal(p) {
   else M.elements[p.slot] = id;
   for (const q of M.portals) removePortal(q);
   M.portals.length = 0; M.portalSel = null; clearWorldHazards();
-  M.stage++; M.stageStart = M.dist; M.bossAt = M.dist + BOSS_EVERY; M.nextSeg = M.dist + 14;
+  M.stage++; M.stageStart = M.dist; M.bossAt = M.dist + BOSS_EVERY; M.nextSeg = M.dist + 14; M.worldScore = state.score; M.worldKills = state.kills;
   state.bossDown = false; state.wave = M.stage * 5 + 1; snapLook();
   state.flash = 1; state.shake = Math.max(state.shake, 0.4); Sfx.play('warp');
   showBanner(el.name + '!', el.hint, 3.4, 'win');
@@ -2859,21 +2871,23 @@ function marchSegment() {
       { w: M.segs <= 3 ? 30 : 16, v: ['mul', 2] }, { w: lvl > 3 ? 6 : 0, v: ['mul', 3] },
     ]).v;
   };
-  const badGate = () => {
+  const badGate = (statOnly = false) => {
     const s = stat();
     return weighted([
       { w: 30, v: ['stat', -(s === 'range' ? randInt(2, 5) : randInt(5, 10 + Math.floor(lvl / 2))), s] },
-      { w: lvl > 1 ? 8 : 0, v: ['div', 2] },
+      { w: lvl > 1 && !statOnly ? 8 : 0, v: ['div', 2] },
     ]).v;
   };
-  const make = ([k, n, s], x, w) => { const g = marchGate(k, n, x, w, s); if (k !== 'stat') g.value = n; return g; };
+  const make = ([k, n, s], x, w, amp = 0) => { const g = marchGate(k, n, x, w, s, amp); if (k !== 'stat') g.value = n; return g; };
   if (kind === 'gates2') {
-    const w = rand(4.6, 5.6), shift = rand(-1.2, 1.2), a = goodGate(), b = Math.random() < (M.segs <= 3 ? 0.3 : 0.55) ? badGate() : goodGate();
+    // from the second world one pair in five is bad against bad (one of them always a gold gate): shoot it up or take the lesser loss
+    const bothBad = M.stage >= 1 && M.segs > 3 && Math.random() < 0.2;
+    const w = rand(4.6, 5.6), shift = rand(-1.2, 1.2), a = bothBad ? badGate() : goodGate(), b = bothBad ? badGate(true) : Math.random() < (M.segs <= 3 ? 0.3 : 0.55) ? badGate() : goodGate();
     const [l, r] = Math.random() < 0.5 ? [a, b] : [b, a];
     make(l, shift - w / 2 - 0.4, w); make(r, shift + w / 2 + 0.4, w);
   } else if (kind === 'gate1') {
-    const side = Math.random() < 0.5 ? -1 : 1; // off-center, so even the widest troop can go around it
-    make(Math.random() < 0.6 ? badGate() : goodGate(), side * rand(3.5, 5), rand(5, 6.5));
+    const side = Math.random() < 0.5 ? -1 : 1; // off-center, so even the widest troop can go around it; from the third world it sways
+    make(Math.random() < 0.6 ? badGate() : goodGate(), side * rand(3.5, 5), rand(5, 6.5), M.stage >= 2 ? rand(1.5, 2.5) : 0);
   } else if (kind === 'enemies') {
     const n = Math.round(rand(4, 7) * scale * (rush ? 1.2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
     for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
@@ -2905,7 +2919,7 @@ function startMarch() {
   Object.assign(M, {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
-    sqMax: SQUEEZE_T, relicStage: -1,
+    sqMax: SQUEEZE_T, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
   });
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
   for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
@@ -2934,6 +2948,14 @@ function simulateMarch(dt, realDt = dt) {
     if (keys.has('d') || keys.has('arrowright')) state.targetX = laneClamp(state.targetX + 18 * dt);
   }
   const n = squadCount(), R = (M.R = 0.55 * Math.sqrt(Math.max(1, n)));
+  // combo: kills without losing a soldier push the multiplier on meters and kills up to ×3; every soldier lost knocks it back
+  if (active) {
+    const lost = Math.max(0, (M.lastN ?? n) - n); M.lastN = n;
+    if (lost) M.comboK = Math.max(0, M.comboK - lost * 10);
+    const combo = Math.min(3, 1 + M.comboK / 50), tier = Math.floor(combo);
+    if (tier >= 2 && tier > Math.floor(M.combo)) { floatText(`COMBO ×${tier}`, M.cx, 3.8, SQUAD_Z, 'cyan'); Sfx.play('ready'); }
+    M.combo = combo;
+  }
   // squeeze: a column about a third as wide (never under 1.4 m half-width) and deeper to hold everyone, or thinner
   // still to fit the crate-wall gap just ahead
   if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = SQUEEZE_CD;
@@ -2960,7 +2982,7 @@ function simulateMarch(dt, realDt = dt) {
   const target = active ? (arena ? 0 : Math.min(15, 8 + M.dist / 350)) : 0;
   M.speed += (target - M.speed) * Math.min(1, dt * (arena ? 3 : 1.2));
   const dz = M.speed * dt;
-  if (dz > 0) { M.dist += dz; scrollMarchWorld(dz); if (active) state.score += Math.floor(M.dist) - Math.floor(M.dist - dz); }
+  if (dz > 0) { M.dist += dz; scrollMarchWorld(dz); if (active) { M.scoreAcc += dz * M.combo; const add = Math.floor(M.scoreAcc); M.scoreAcc -= add; state.score += add; } }
   // five waves of look per stage; the boss closes the fifth and the world holds there until the vortex
   const wave = 1 + M.stage * 5 + Math.floor(clamp(M.dist - M.stageStart, 0, BOSS_EVERY - 1) / 200);
   if (wave !== state.wave) { state.wave = wave; if (wave % 5 !== 0) state.bossDown = false; }
@@ -3270,11 +3292,14 @@ function hurt(t, dmg) {
   if (!t.alive) return;
   t.hp -= dmg; t.flash = 1;
   if (hasEl('ice')) { if (t.mesh) t.chill = 0.8; else if (Math.random() < 0.35) t.frozen = 2.5; }
-  if (hasEl('fire')) { t.burnDps = t.burn > 0 ? Math.max(t.burnDps, dmg * 0.6) : dmg * 0.6; t.burn = 2; }
+  if (hasEl('fire')) { // bigs burn for 1.5% of their health a second (through shields and regeneration), the horde just a little
+    const dps = t.mesh ? t.maxHp * 0.015 : dmg * 0.6;
+    t.burnDps = t.burn > 0 ? Math.max(t.burnDps, dps) : dps; t.burn = t.mesh ? 3 : 2;
+  }
   if (t.hp <= 0) t.mesh ? killBig(t) : killEnemy(t);
 }
 function updateShots(dt) {
-  const bolts = M.bolts, lava = hasEl('lava'), storm = hasEl('storm');
+  const bolts = M.bolts, lava = hasEl('lava'), storm = hasEl('storm'), fire = hasEl('fire');
   for (let i = 0; i < bolts.length; i++) {
     const b = bolts[i], z0 = b.z; b.z -= b.v * dt; b.life -= dt;
     if (b.home) { if (b.home.alive) b.vx = clamp((b.home.x - b.x) * 5, -14, 14); else b.home = null; }
@@ -3290,7 +3315,7 @@ function updateShots(dt) {
       b.life = 0; hit.acc += 0.07 / statMul('rate'); hit.pulse = Math.max(hit.pulse, 0.5);
       const inc = Math.floor(hit.acc), cap = STATS[hit.stat].cap;
       if (inc) { hit.acc -= inc; if (hit.n < cap) setGateNumber(hit, Math.min(cap, hit.n + inc)); }
-    } else if (hit.grp) { b.life = 0; hit.hp -= b.dmg; hit.flash = 1; if (hit.hp <= 0 && !hit.dead) breakObstacle(hit); }
+    } else if (hit.grp) { b.life = 0; hit.hp -= b.dmg * (fire ? 1.5 : 1); hit.flash = 1; if (hit.hp <= 0 && !hit.dead) breakObstacle(hit); } // crates and chains burn fast
     else {
       if (!(hit.shield > 0)) hurt(hit, b.dmg);
       if (lava) { // splash

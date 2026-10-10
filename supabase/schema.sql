@@ -42,6 +42,82 @@ create index if not exists runs_valid_finished on public.runs (finished_at, scor
 alter table public.runs enable row level security;
 revoke all on public.runs from anon, authenticated;
 
+-- ================= Economia: carteira e Quartel =================
+-- Moedas vêm só do servidor: finish_run paga a run (moedas da pista validadas + bônus da pontuação, em dobro nas três
+-- primeiras runs do dia, teto diário depois). O Quartel gasta moedas em melhorias permanentes com preço crescente e
+-- reembolso total. Diamantes ficam reservados para a loja (docs/economia.md).
+create table if not exists public.wallets (
+  user_id uuid primary key references auth.users on delete cascade,
+  coins int not null default 0 check (coins >= 0),
+  gems int not null default 0 check (gems >= 0),
+  earned_today int not null default 0,
+  runs_today int not null default 0,
+  day date not null default current_date,
+  updated_at timestamptz not null default now()
+);
+alter table public.wallets enable row level security;
+drop policy if exists "lê a própria carteira" on public.wallets;
+create policy "lê a própria carteira" on public.wallets for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.wallets from anon, authenticated;
+
+create table if not exists public.quartel (
+  user_id uuid not null references auth.users on delete cascade,
+  upgrade text not null check (upgrade in ('recrutas', 'alojamento', 'arsenal', 'disciplina', 'cornetas', 'bateria', 'alquimia')),
+  level int not null default 0 check (level >= 0),
+  spent int not null default 0,
+  primary key (user_id, upgrade)
+);
+alter table public.quartel enable row level security;
+drop policy if exists "lê o próprio quartel" on public.quartel;
+create policy "lê o próprio quartel" on public.quartel for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.quartel from anon, authenticated;
+
+create or replace function public.quartel_max(p_upgrade text) returns int language sql immutable as $$
+  select case p_upgrade when 'recrutas' then 10 when 'alojamento' then 6 when 'arsenal' then 6 when 'disciplina' then 4
+                        when 'cornetas' then 4 when 'bateria' then 4 when 'alquimia' then 1 else 0 end;
+$$;
+create or replace function public.quartel_price(p_upgrade text, p_level int) returns int language sql immutable as $$
+  select round((case p_upgrade when 'recrutas' then 200 when 'alojamento' then 400 when 'arsenal' then 500 when 'disciplina' then 300
+                               when 'cornetas' then 300 when 'bateria' then 300 when 'alquimia' then 3000 else 0 end) * power(1.15, p_level))::int;
+$$;
+drop function if exists public.get_wallet();
+create or replace function public.get_wallet() returns table (coins int, gems int, upgrades json)
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce(w.coins, 0), coalesce(w.gems, 0),
+         coalesce((select json_object_agg(q.upgrade, q.level) from public.quartel q where q.user_id = auth.uid()), '{}'::json)
+  from (select 1) x left join public.wallets w on w.user_id = auth.uid();
+$$;
+create or replace function public.buy_quartel(p_upgrade text) returns table (coins int, level int)
+language plpgsql security definer set search_path = ''
+as $$
+declare lvl int; price int; have int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if public.quartel_max(p_upgrade) = 0 then raise exception 'unknown_upgrade'; end if;
+  insert into public.wallets (user_id) values (auth.uid()) on conflict do nothing;
+  insert into public.quartel (user_id, upgrade) values (auth.uid(), p_upgrade) on conflict do nothing;
+  select q.level into lvl from public.quartel q where q.user_id = auth.uid() and q.upgrade = p_upgrade for update;
+  if lvl >= public.quartel_max(p_upgrade) then raise exception 'maxed'; end if;
+  price := public.quartel_price(p_upgrade, lvl);
+  select w.coins into have from public.wallets w where w.user_id = auth.uid() for update;
+  if have < price then raise exception 'not_enough_coins'; end if;
+  update public.wallets set coins = public.wallets.coins - price, updated_at = now() where user_id = auth.uid();
+  update public.quartel set level = public.quartel.level + 1, spent = public.quartel.spent + price where user_id = auth.uid() and upgrade = p_upgrade;
+  return query select w.coins, lvl + 1 from public.wallets w where w.user_id = auth.uid();
+end $$;
+create or replace function public.refund_quartel() returns int
+language plpgsql security definer set search_path = ''
+as $$
+declare back int; total int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select coalesce(sum(spent), 0) into back from public.quartel where user_id = auth.uid();
+  delete from public.quartel where user_id = auth.uid();
+  update public.wallets set coins = coins + back, updated_at = now() where user_id = auth.uid() returning coins into total;
+  return coalesce(total, 0);
+end $$;
+
 -- ================= Funções =================
 drop function if exists public.start_run();
 create or replace function public.start_run(p_mode text default 'defense')
@@ -67,8 +143,9 @@ end $$;
 -- ~140 m antes da marca) valem 900 × mundo, a tropa cheia converte soldados em pontos e o combo multiplica metros e
 -- abates por até 3, daí os 12 pontos por metro.
 drop function if exists public.finish_run(uuid, int, int, int, int);
-create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int, p_contracts text default null)
-returns table (accepted boolean, week_rank int, all_rank int, best int)
+drop function if exists public.finish_run(uuid, int, int, int, int, text);
+create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int, p_contracts text default null, p_coins int default 0)
+returns table (accepted boolean, week_rank int, all_rank int, best int, coins_won int, coins_total int)
 language plpgsql security definer set search_path = ''
 as $$
 declare
@@ -76,9 +153,12 @@ declare
   secs numeric;
   max_score numeric;
   max_kills numeric;
-  bosses numeric;
+  bosses numeric := 0;
   ncon int;
   ok boolean;
+  wal public.wallets;
+  won int := 0;
+  total int := 0;
   week_start timestamptz := date_trunc('week', now());
 begin
   select * into r from public.runs
@@ -106,6 +186,20 @@ begin
       and p_kills between 0 and max_kills * 1.5
       and p_peak between 0 and 100000
       and secs >= (p_wave - 1) * 6;
+    bosses := floor(p_wave / 5.0);
+  end if;
+
+  -- A valid run pays coins: the road's (capped by what the run could have dropped) plus the score's bonus, doubled on
+  -- the day's first three runs, then limited to 5000 a day.
+  if ok then
+    select * into wal from public.wallets where user_id = auth.uid() for update;
+    if not found then insert into public.wallets (user_id) values (auth.uid()) returning * into wal; end if;
+    if wal.day <> current_date then wal.runs_today := 0; wal.earned_today := 0; end if;
+    won := greatest(20, p_score / 200) + least(greatest(coalesce(p_coins, 0), 0), p_kills + 150 * bosses::int + 50);
+    if wal.runs_today < 3 then won := won * 2; else won := least(won, greatest(0, 5000 - wal.earned_today)); end if;
+    update public.wallets
+      set coins = coins + won, earned_today = wal.earned_today + won, runs_today = wal.runs_today + 1, day = current_date, updated_at = now()
+      where user_id = auth.uid() returning coins into total;
   end if;
 
   update public.runs
@@ -113,7 +207,7 @@ begin
     where id = p_run;
 
   if not ok then
-    return query select false, null::int, null::int, null::int;
+    return query select false, null::int, null::int, null::int, 0, (select w.coins from public.wallets w where w.user_id = auth.uid());
     return;
   end if;
 
@@ -135,13 +229,14 @@ begin
     select true,
            (select count(*)::int + 1 from others o where o.week_best > m.week_best),
            (select count(*)::int + 1 from others o where o.all_best > m.all_best),
-           m.all_best
+           m.all_best, won, total
     from mine m;
 end $$;
 
 -- p_period: 'week' (semana atual, UTC, começando na segunda) ou 'all'. p_mode: 'defense' ou 'march'.
 -- Devolve o top N e, se o jogador estiver fora dele, a linha dele no fim.
 drop function if exists public.get_leaderboard(text, int);
+drop function if exists public.get_leaderboard(text, int, text); -- the return type changed (contracts), and that needs a drop first
 create or replace function public.get_leaderboard(p_period text default 'week', p_limit int default 50, p_mode text default 'defense')
 returns table (pos int, nickname text, score int, wave int, is_me boolean, contracts text)
 language sql stable security definer set search_path = ''
@@ -163,8 +258,14 @@ as $$
 $$;
 
 revoke execute on function public.start_run(text) from public, anon, authenticated;
-revoke execute on function public.finish_run(uuid, int, int, int, int, text) from public, anon, authenticated;
+revoke execute on function public.finish_run(uuid, int, int, int, int, text, int) from public, anon, authenticated;
 revoke execute on function public.get_leaderboard(text, int, text) from public, anon, authenticated;
+revoke execute on function public.get_wallet() from public, anon, authenticated;
+revoke execute on function public.buy_quartel(text) from public, anon, authenticated;
+revoke execute on function public.refund_quartel() from public, anon, authenticated;
 grant execute on function public.start_run(text) to authenticated;
-grant execute on function public.finish_run(uuid, int, int, int, int, text) to authenticated;
+grant execute on function public.finish_run(uuid, int, int, int, int, text, int) to authenticated;
 grant execute on function public.get_leaderboard(text, int, text) to anon, authenticated;
+grant execute on function public.get_wallet() to authenticated;
+grant execute on function public.buy_quartel(text) to authenticated;
+grant execute on function public.refund_quartel() to authenticated;

@@ -62,6 +62,7 @@ body {
 .chip.rapid { background: #0f8ea8; }
 .chip.combo { background: #b9770e; }
 .chip.contracts { background: #5a3c9a; }
+.chip.coins .v { color: var(--gold); }
 .board .nick small.con { margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: #5a3c9a; color: #fff; }
 .contracts { display: grid; gap: 8px; margin: 0 0 14px; }
 .contracts button { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; text-align: left; border: 2px solid rgba(27, 22, 64, .15); border-radius: 12px; padding: 10px 12px; background: var(--paper); font: 800 14px var(--font-body); color: var(--ink); cursor: pointer; letter-spacing: .04em; }
@@ -241,6 +242,7 @@ body {
     <div class="stack-left">
       <div class="chip"><span class="k" id="waveK">ONDA</span><span class="v" id="waveNum">1</span></div>
       <div class="chip next" id="nextBoss"><i id="nextDot"></i><span id="nextText">Gelo · onda 5</span></div>
+      <div class="chip coins" id="coinsChip" hidden><span class="k">MOEDAS</span><span class="v" id="coinsV">0</span></div>
     </div>
     <div class="score" id="score">0</div>
     <div class="chip hp" id="hpChip"><span class="k">MURO</span><div class="bar"><i id="hpFill"></i></div><span class="v" id="hpText">30</span></div>
@@ -291,6 +293,7 @@ body {
     </div>
     <div class="row2">
       <button class="btn alt" id="btnContracts" type="button">CONTRATOS <span id="contractsTag"></span></button>
+      <button class="btn alt" id="btnQuartel" type="button" data-online hidden>QUARTEL</button>
     </div>
     <p class="best" id="bestMenu">RECORDE 0</p>
     <p class="account" id="accountLine" data-online hidden></p>
@@ -316,6 +319,20 @@ body {
     </ul>
     <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Fila (Marcha): <kbd>S</kbd>, <kbd>↑</kbd> ou clique. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
+<div class="screen sub" id="quartelScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">QUARTEL</h2>
+    <p class="note">Melhorias permanentes da marcha, pagas com as moedas das suas partidas. O preço sobe 15% por nível; o reembolso devolve tudo.</p>
+    <p class="label" id="quartelCoins">MOEDAS: 0</p>
+    <div class="contracts" id="quartelList"></div>
+    <p class="msg" id="quartelMsg"></p>
+    <div class="stack">
+      <button class="btn alt" id="btnRefund" type="button">REEMBOLSAR TUDO</button>
+      <button class="btn alt" type="button" data-back>VOLTAR</button>
+    </div>
   </div>
 </div>
 
@@ -395,6 +412,7 @@ body {
     <p class="note center" id="overContracts" hidden></p>
     <div class="overOnline" id="overOnline" hidden>
       <p class="rankline" id="overRank"></p>
+      <p class="rankline" id="overCoins" hidden></p>
       <form class="field" id="overNickForm" hidden>
         <input id="overNick" maxlength="16" autocomplete="nickname" placeholder="Apelido para o ranking" aria-label="Apelido no ranking" required>
         <button class="btn sm" type="submit">SALVAR</button>
@@ -2128,7 +2146,7 @@ const ui = {
   banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'), floaters: $('floaters'), hurt: $('hurt'),
   menu: $('menu'), pause: $('pauseScreen'), over: $('overScreen'), icoSound: $('icoSound'),
   ult: $('btnUlt'), ultRing: $('ultRing'), ultPct: $('ultPct'), fila: $('btnFila'), filaRing: $('filaRing'), flash: $('flash'),
-  nextText: $('nextText'), nextDot: $('nextDot'), bossName: $('bossName'),
+  nextText: $('nextText'), nextDot: $('nextDot'), bossName: $('bossName'), coinsChip: $('coinsChip'), coinsV: $('coinsV'), overCoins: $('overCoins'),
 };
 const floaters = [], floaterPool = [];
 function floatText(text, x, y, z, cls = '') {
@@ -2195,6 +2213,8 @@ function updateHud() {
   if (ui.ult.classList.contains('ready') !== ready) { ui.ult.classList.toggle('ready', ready); ui.ult.disabled = !ready; }
   const filaOn = march && !con('nofila');
   if (ui.fila.hidden === filaOn) ui.fila.hidden = !filaOn;
+  if (ui.coinsChip.hidden === march) ui.coinsChip.hidden = !march;
+  if (march) put('coins', ui.coinsV, String(M.coins));
   const conOn = march && M.cMul > 1;
   if (ui.contractsChip.hidden === conOn) ui.contractsChip.hidden = !conOn;
   if (conOn) put('con', ui.contractsV, '×' + fmtMul(M.cMul));
@@ -2213,7 +2233,7 @@ function updateHud() {
 const SUPABASE_URL = 'https://vnurhkrksmmogobtnvum.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_gI_qLahrIGuYGSVbNs2KWA_oN5TfQ1Y'; // public by design: RLS and the functions in supabase/schema.sql guard the data
 const NICK_RE = /^[A-Za-z0-9_ À-ÖØ-öø-ÿ]{3,16}$/;
-const online = { sb: null, user: null, nickname: null, run: null, period: 'week', boardMode: 'defense' };
+const online = { sb: null, user: null, nickname: null, run: null, period: 'week', boardMode: 'defense', wallet: null };
 const isAnon = () => !!online.user?.is_anonymous;
 const authRedirect = () => location.origin + location.pathname;
 const fmt = (n) => n.toLocaleString('pt-BR');
@@ -2228,8 +2248,16 @@ async function setUser(user) {
       const { data } = await online.sb.from('profiles').select('nickname').eq('id', user.id).maybeSingle();
       if (online.user?.id === user.id) online.nickname = data?.nickname ?? null;
     }
+    if (user) await loadWallet(); else online.wallet = null;
   }
   renderAccount();
+}
+// The wallet (coins, gems and the Quartel's levels) lives on the server; the client only reads it.
+async function loadWallet() {
+  if (!online.sb || !online.user) { online.wallet = null; return; }
+  const { data, error } = await online.sb.rpc('get_wallet');
+  const w = data?.[0];
+  online.wallet = error || !w ? null : { coins: w.coins, gems: w.gems, upgrades: w.upgrades || {} };
 }
 async function ensureSession() {
   if (online.user) return online.user;
@@ -2306,7 +2334,7 @@ async function onlineRunFinish() {
   if (!pending) return;
   line.textContent = 'Enviando pontuação…';
   // The march reports meters marched in the wave slot (the server validates them against the run time).
-  const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak };
+  const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak, p_coins: state.mode === 'march' ? M.coins : 0 };
   if (state.mode === 'march' && M.contracts.size) stats.p_contracts = [...M.contracts].join(','); // only sent when used: the old finish_run still takes a plain run
   const runId = await pending;
   const { data, error } = runId ? await online.sb.rpc('finish_run', { p_run: runId, ...stats }) : { error: true };
@@ -2314,6 +2342,10 @@ async function onlineRunFinish() {
   if (error || !r) { line.textContent = 'Ranking indisponível agora'; return; }
   if (!r.accepted) { line.textContent = 'Partida fora do ranking'; return; }
   line.textContent = r.week_rank != null ? `#${fmt(r.week_rank)} na semana · #${fmt(r.all_rank)} geral` : `#${fmt(r.all_rank)} no ranking geral`;
+  if (r.coins_won != null) { // the server pays the run's coins: the road's plus the score's bonus, doubled on the day's first three runs
+    const oc = $('overCoins'); oc.hidden = false; oc.textContent = `+${fmt(r.coins_won)} moedas · ${fmt(r.coins_total)} no cofre`;
+    online.wallet = { ...(online.wallet || { gems: 0, upgrades: {} }), coins: r.coins_total };
+  }
   if (!online.nickname) {
     form.hidden = false;
     setMsg(msg, 'Escolha um apelido para aparecer no ranking.');
@@ -2360,8 +2392,48 @@ function openScreen(id) {
   if (id === 'rankScreen') loadBoard(online.period, from === ui.over ? state.mode : online.boardMode);
   if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
   if (id === 'contractsScreen') renderContracts();
+  if (id === 'quartelScreen') { renderQuartel(); ensureSession().then(loadWallet).then(renderQuartel).catch(() => {}); }
   el.querySelector('[data-back]').focus();
 }
+// ---- the Quartel: permanent march upgrades bought with coins (the design in docs/economia.md) ----
+const QUARTEL = {
+  recrutas: { name: 'RECRUTAS', max: 10, base: 200, effect: (l) => `+${2 * l} soldados no início` },
+  alojamento: { name: 'ALOJAMENTO', max: 6, base: 400, effect: (l) => `+${10 * l} no teto da tropa` },
+  arsenal: { name: 'ARSENAL', max: 6, base: 500, effect: (l) => `+${10 * l}% no teto de cadência e dano` },
+  disciplina: { name: 'DISCIPLINA', max: 4, base: 300, effect: (l) => `FILA dura +${(0.3 * l).toFixed(1).replace('.', ',')} s` },
+  cornetas: { name: 'CORNETAS', max: 4, base: 300, effect: (l) => `FILA recarrega ${(0.5 * l).toFixed(1).replace('.', ',')} s antes` },
+  bateria: { name: 'BATERIA', max: 4, base: 300, effect: (l) => `ultimate começa com ${10 * l}%` },
+  alquimia: { name: 'ALQUIMIA', max: 1, base: 3000, effect: (l) => (l ? 'a tropa guarda três elementos' : 'terceiro slot de elemento') },
+};
+const quartelPrice = (id, lvl) => Math.round(QUARTEL[id].base * Math.pow(1.15, lvl));
+const qLevel = (id) => online.wallet?.upgrades?.[id] || 0;
+const RPC_ERR = { not_enough_coins: 'Moedas insuficientes', maxed: 'Já está no máximo', not_authenticated: 'Entre para usar o Quartel' };
+function renderQuartel() {
+  const list = $('quartelList'), w = online.wallet; list.textContent = '';
+  $('quartelCoins').textContent = w ? `MOEDAS: ${fmt(w.coins)}` : 'MOEDAS: …';
+  for (const [id, u] of Object.entries(QUARTEL)) {
+    const lvl = qLevel(id), maxed = lvl >= u.max, price = maxed ? 0 : quartelPrice(id, lvl);
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(lvl > 0)); b.disabled = !w || maxed || w.coins < price;
+    const name = document.createElement('span'), cost = document.createElement('b'), hint = document.createElement('small');
+    name.textContent = `${u.name} ${lvl}/${u.max}`; cost.textContent = maxed ? 'MÁX' : fmt(price); hint.textContent = lvl ? `${u.effect(lvl)} · próximo: ${u.effect(lvl + 1)}` : u.effect(1);
+    b.append(name, cost, hint);
+    b.addEventListener('click', async () => {
+      setMsg($('quartelMsg'), 'Comprando…');
+      const { data, error } = await online.sb.rpc('buy_quartel', { p_upgrade: id });
+      if (error || !data?.[0]) { setMsg($('quartelMsg'), RPC_ERR[error?.message] || 'Não deu para comprar agora', 'err'); return; }
+      online.wallet.coins = data[0].coins; online.wallet.upgrades[id] = data[0].level; Sfx.play('pickup');
+      setMsg($('quartelMsg'), `${u.name} nível ${data[0].level}`, 'ok'); renderQuartel();
+    });
+    list.append(b);
+  }
+  $('btnRefund').disabled = !w || !Object.values(w.upgrades).some((l) => l > 0);
+}
+$('btnRefund').addEventListener('click', async () => {
+  if (!online.wallet || !confirm('Reembolsar todas as melhorias do Quartel?')) return;
+  const { data, error } = await online.sb.rpc('refund_quartel');
+  if (error) { setMsg($('quartelMsg'), 'Não deu para reembolsar agora', 'err'); return; }
+  online.wallet.coins = data; online.wallet.upgrades = {}; setMsg($('quartelMsg'), 'Moedas de volta no cofre', 'ok'); renderQuartel();
+});
 function renderContracts() {
   const list = $('contractList'); list.textContent = '';
   for (const [id, c] of Object.entries(CONTRACTS)) {
@@ -2388,6 +2460,7 @@ function closeScreen(el) {
 for (const b of document.querySelectorAll('[data-back]')) b.addEventListener('click', () => closeScreen(b.closest('.screen')));
 $('btnHow').addEventListener('click', () => openScreen('howScreen'));
 $('btnContracts').addEventListener('click', () => openScreen('contractsScreen'));
+$('btnQuartel').addEventListener('click', () => openScreen('quartelScreen'));
 $('btnRank').addEventListener('click', () => openScreen('rankScreen'));
 $('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
 for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
@@ -2480,6 +2553,7 @@ const M = {
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
   hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1,
   combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0, contracts: new Set(), cMul: 1,
+  coins: 0, q: { start: 10, cap: 0, statMax: 0, fila: 0, cd: 0, ult: 0, elMax: 2 },
 };
 const con = (id) => M.contracts.has(id);
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
@@ -2488,7 +2562,8 @@ const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
 const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul') n++; return n; };
-const squadCap = () => Math.round(Math.min(SQUAD_MAX, SQUAD_BASE + 25 * M.stage) * (con('lean') ? 0.5 : 1)); // the cap climbs 25 a world, so every world has room to grow into
+const squadCap = () => Math.round(Math.min(SQUAD_MAX + M.q.cap, SQUAD_BASE + M.q.cap + 25 * M.stage) * (con('lean') ? 0.5 : 1)); // the cap climbs 25 a world, so every world has room to grow into
+const statMax = (stat) => STATS[stat].max + (stat === 'range' ? M.q.statMax / 5 : M.q.statMax); // the Arsenal raises the ceilings
 
 // ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
 const marchWorld = new THREE.Group(); marchWorld.visible = false; scene.add(marchWorld);
@@ -2642,6 +2717,40 @@ function scrollMarchWorld(dz) {
   placeMarchDecor();
 }
 
+// ---- coins: the horde drops them, the troop picks them up by walking over (a small magnet helps). They are the run's
+// economy; the server pays them out at the end of the run with the score's own bonus (docs/economia.md). ----
+const COIN_MAX = 240;
+const coinMat = new THREE.MeshLambertMaterial({ color: 0xffc629, emissive: 0x8a6400, emissiveIntensity: 0.35, flatShading: true });
+const coinMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 10), coinMat, COIN_MAX);
+coinMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); coinMesh.count = 0; coinMesh.frustumCulled = false; coinMesh.castShadow = true; scene.add(coinMesh);
+const coins = [], coinPool = [];
+function dropCoin(x, z, value = 1) {
+  if (coins.length >= COIN_MAX) return;
+  const c = coinPool.pop() || {};
+  c.x = x + rand(-0.7, 0.7); c.z = z + rand(-0.7, 0.7); c.y = 0.6; c.vy = rand(3, 6); c.value = value; c.t = Math.random() * 6; coins.push(c);
+}
+let coinSfxT = 0;
+function updateCoins(dt, dz, active) {
+  const R = M.R, cx = M.cx; let n = 0, got = 0;
+  coinSfxT -= dt;
+  for (let i = coins.length - 1; i >= 0; i--) {
+    const c = coins[i]; c.z += dz; c.t += dt;
+    if (c.vy !== 0 || c.y > 0.6) { c.vy -= GRAVITY * dt; c.y += c.vy * dt; if (c.y <= 0.6) { c.y = 0.6; c.vy = 0; } }
+    const dx = cx - c.x, dzz = SQUAD_Z - c.z, d = Math.hypot(dx, dzz);
+    if (active && d < R + 4) { const k = Math.min(1, dt * 6); c.x += dx * k; c.z += dzz * k; } // the magnet
+    if (active && d < R * 0.9 + 0.6) {
+      M.coins += c.value; got += c.value;
+      if (c.value > 1 || Math.random() < 0.3) sparks(c.x, 0.7, c.z, 0xffc629, c.value > 1 ? 8 : 3, 3, 0.4, 0.3, 2);
+      coinPool.push(c); coins.splice(i, 1); continue;
+    }
+    if (c.z > MARCH_BEHIND) { coinPool.push(c); coins.splice(i, 1); continue; }
+    _dm.compose(_dv.set(c.x, c.y, c.z), _dq.setFromEuler(_de.set(Math.PI / 2 + Math.sin(c.t * 3) * 0.3, c.t * 4, 0)), _ds.setScalar(c.value > 1 ? 1.8 : 1));
+    coinMesh.setMatrixAt(n++, _dm);
+  }
+  coinMesh.count = n; coinMesh.instanceMatrix.needsUpdate = true;
+  if (got && coinSfxT <= 0) { coinSfxT = 0.12; Sfx.play('pickup'); }
+}
+
 // ---- bolts (the troop's shots) ----
 const BOLT_MAX = 600;
 const boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.2, 2.2) });
@@ -2757,6 +2866,7 @@ function removeObstacle(o) {
 }
 function breakObstacle(o) {
   o.dead = true; state.score += Math.round((o.type === 'wall' ? 25 : 40) * M.cMul);
+  for (let i = 0, n = o.type === 'wall' ? 2 : o.type === 'cage' ? 8 : 5; i < n; i++) dropCoin(o.x, o.z);
   if (o.type === 'relic') {
     const r = RELICS[o.buff], c = new THREE.Color(PICKUPS[o.buff].color);
     debris(o.x, 1.3, o.z, new THREE.Color(0x55556e), 16, 8, 0.2); sparks(o.x, 1.3, o.z, c, 50, 9, 0.8, 0.6, 2, 0.4);
@@ -2803,7 +2913,7 @@ function passGate(g) {
 // A stat tops out at STATS.max; returns how much was actually applied (nothing once it's maxed).
 function addStat(stat, v) {
   const was = M.stat[stat];
-  M.stat[stat] = Math.min(STATS[stat].max, was + v);
+  M.stat[stat] = Math.min(statMax(stat), was + v);
   return M.stat[stat] - was;
 }
 function upgrade(stat, v) {
@@ -2813,7 +2923,7 @@ function upgrade(stat, v) {
 }
 function squeeze() {
   if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0 || con('nofila')) return;
-  M.sqT = M.sqMax = M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
+  M.sqT = M.sqMax = (M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T) + M.q.fila; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
 }
 function addSoldiers(k, x = null, text = null) {
   k = Math.min(k, squadCap() - squadCount());
@@ -2846,6 +2956,7 @@ function loseSoldiers(k) {
 // Kills on the march only charge the ultimate (in killEnemy); soldiers come from cages and multiplier gates. The poison
 // and zombie elements add their own aftermath.
 function marchKill(e) {
+  if (e.mesh) for (let i = 0; i < 5; i++) dropCoin(e.x, e.z); else if (Math.random() < 0.3) dropCoin(e.x, e.z); // the horde drops coins
   if (hasEl('poison') && M.pools.length < 14) M.pools.push({ x: e.x, z: e.z, r: 1.6, life: 2.6 });
   if (hasEl('zombie') && Math.random() < 0.3 && allies.filter((a) => a.alive && a.role === 'ghoul').length < 12) {
     const a = spawnAlly(e.x, e.z, 0, 0, 0, 0); if (!a) return;
@@ -2907,8 +3018,13 @@ function bossBeaten(b) {
   // The element (with both slots full: which element to give up), next to a portal of reinforcements that fills the
   // troop to its cap instead: a lifeline for a troop the boss has worn down, at the price of the power.
   const ref = !con('noref'); // the reinforcements portal is what the SEM REFORÇOS contract gives up
-  if (M.elements.length < 2 || hasEl(id)) { spawnPortal(ref ? -3.4 : 0, ref ? 4.2 : 6.5, id, null, el.name); if (ref) spawnPortal(4.6, 3.4, null, null, 'REFORÇOS'); }
-  else { M.elements.forEach((old, i) => spawnPortal(ref ? (i ? 0 : -6) : (i ? 4.5 : -4.5), ref ? 2.8 : 3.6, id, i, 'SAI ' + ELEMENTS[old].name)); if (ref) spawnPortal(6, 2.8, null, null, 'REFORÇOS'); }
+  for (let i = 0; i < 20; i++) dropCoin(b.x + rand(-3, 3), b.z + rand(-2, 2), 5); // and the boss's hoard spills on the road
+  if (M.elements.length < M.q.elMax || hasEl(id)) { spawnPortal(ref ? -3.4 : 0, ref ? 4.2 : 6.5, id, null, el.name); if (ref) spawnPortal(4.6, 3.4, null, null, 'REFORÇOS'); }
+  else { // every held element offers its slot, side by side (two or three, Alquimia), plus the reinforcements
+    const k = M.elements.length + (ref ? 1 : 0), w = (LANE_HALF * 2) / k, rx = Math.min(3.6, w / 2 - 0.3);
+    M.elements.forEach((old, i) => spawnPortal(-LANE_HALF + w * (i + 0.5), rx, id, i, 'SAI ' + ELEMENTS[old].name));
+    if (ref) spawnPortal(LANE_HALF - w / 2, rx, null, null, 'REFORÇOS');
+  }
 }
 function enterPortal(p) {
   const id = p.element, el = id ? ELEMENTS[id] : null; // no element: the reinforcements portal
@@ -2999,15 +3115,18 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
-    contracts: new Set(contractsPick), cMul: contractMul(contractsPick),
+    contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0,
+    // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
+    q: { start: 10 + 2 * qLevel('recrutas'), cap: 10 * qLevel('alojamento'), statMax: 10 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
   });
+  for (const c of coins) coinPool.push(c); coins.length = 0; coinMesh.count = 0;
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
   for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
   for (const g of gates) disposeGate(g); gates = [];
   state.wave = 1; state.bossDown = false; state.phase = 'playing';
   if (!M.canals) { buildCanals(); M.canals = true; }
   if (!M.built || (PROP && !M.decorWithProps) || (!M.decorWithModels && flora.meshes.oak1_bark.geometry.type !== 'CylinderGeometry')) { buildMarchDecor(); M.built = true; }
-  addSoldiers(10, 0);
+  addSoldiers(M.q.start, 0); state.ult = M.q.ult;
   for (const a of allies) { a.x = rand(-1, 1); a.z = SQUAD_Z + rand(-1, 1); }
   // the first segments are already on the road, so the run opens with a choice instead of 20 s of empty road
   for (const z of [-118, -92, -66, -40]) {
@@ -3040,7 +3159,7 @@ function simulateMarch(dt, realDt = dt) {
   }
   // squeeze: a column about a third as wide (never under 1.4 m half-width) and deeper to hold everyone, or thinner
   // still to fit the crate-wall gap just ahead
-  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = M.sqCdMax = M.bossLive ? SQUEEZE_CD_BOSS : SQUEEZE_CD;
+  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = M.sqCdMax = Math.max(1.5, (M.bossLive ? SQUEEZE_CD_BOSS : SQUEEZE_CD) - M.q.cd);
   else if (M.sqCd > 0) M.sqCd = Math.max(0, M.sqCd - dt);
   M.sq += ((M.sqT > 0 ? 1 : 0) - M.sq) * Math.min(1, dt * 7);
   let sqHalf = Math.max(1.4, R * 0.33);
@@ -3137,6 +3256,7 @@ function simulateMarch(dt, realDt = dt) {
   M.walls = M.walls.filter((o) => !o.dead);
   updatePortals(dt, dz, active);
   updatePools(dt, dz);
+  updateCoins(dt, dz, active);
   updateWorldHazards(dt, dz, active, !!boss || M.portals.length > 0);
   updateMarchEnemies(dt, dz);
   updateUltimate(dt, realDt);
@@ -3542,6 +3662,7 @@ function clearWorld() {
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0;
   for (const b of M.bolts) boltPool.push(b); M.bolts.length = 0;
   for (const p of M.portals) removePortal(p); M.portals.length = 0; M.pools.length = 0; clearWorldHazards();
+  for (const c of coins) coinPool.push(c); coins.length = 0; coinMesh.count = 0;
 }
 // Shows the arena of a mode: the defense wall and fort, or the endless march road. Also relabels the HUD.
 function setModeScene(mode) {

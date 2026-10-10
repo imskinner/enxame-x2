@@ -56,8 +56,8 @@ create table if not exists public.wallets (
   updated_at timestamptz not null default now()
 );
 alter table public.wallets enable row level security;
-drop policy if exists "lê a própria carteira" on public.wallets;
-create policy "lê a própria carteira" on public.wallets for select to authenticated using (user_id = auth.uid());
+drop policy if exists "le a propria carteira" on public.wallets;
+create policy "le a propria carteira" on public.wallets for select to authenticated using (user_id = auth.uid());
 revoke insert, update, delete on public.wallets from anon, authenticated;
 
 create table if not exists public.quartel (
@@ -68,8 +68,8 @@ create table if not exists public.quartel (
   primary key (user_id, upgrade)
 );
 alter table public.quartel enable row level security;
-drop policy if exists "lê o próprio quartel" on public.quartel;
-create policy "lê o próprio quartel" on public.quartel for select to authenticated using (user_id = auth.uid());
+drop policy if exists "le o proprio quartel" on public.quartel;
+create policy "le o proprio quartel" on public.quartel for select to authenticated using (user_id = auth.uid());
 revoke insert, update, delete on public.quartel from anon, authenticated;
 
 create or replace function public.quartel_max(p_upgrade text) returns int language sql immutable as $$
@@ -81,11 +81,13 @@ create or replace function public.quartel_price(p_upgrade text, p_level int) ret
                                when 'cornetas' then 300 when 'bateria' then 300 when 'alquimia' then 3000 else 0 end) * power(1.15, p_level))::int;
 $$;
 drop function if exists public.get_wallet();
-create or replace function public.get_wallet() returns table (coins int, gems int, upgrades json)
+create or replace function public.get_wallet() returns table (coins int, gems int, upgrades json, heroes json, achievements text[])
 language sql stable security definer set search_path = ''
 as $$
   select coalesce(w.coins, 0), coalesce(w.gems, 0),
-         coalesce((select json_object_agg(q.upgrade, q.level) from public.quartel q where q.user_id = auth.uid()), '{}'::json)
+         coalesce((select json_object_agg(q.upgrade, q.level) from public.quartel q where q.user_id = auth.uid()), '{}'::json),
+         coalesce((select json_object_agg(h.hero, h.level) from public.heroes h where h.user_id = auth.uid()), '{}'::json),
+         coalesce((select array_agg(a.key) from public.achievements a where a.user_id = auth.uid()), '{}'::text[])
   from (select 1) x left join public.wallets w on w.user_id = auth.uid();
 $$;
 create or replace function public.buy_quartel(p_upgrade text) returns table (coins int, level int)
@@ -118,6 +120,94 @@ begin
   return coalesce(total, 0);
 end $$;
 
+-- Heróis: desbloqueio com moedas ou diamantes, níveis só com moedas. Conquistas: julgadas pelo finish_run, pagam
+-- diamantes uma vez cada.
+create table if not exists public.heroes (
+  user_id uuid not null references auth.users on delete cascade,
+  hero text not null check (hero in ('muralha', 'arqueira', 'ladrao')),
+  level int not null default 1 check (level between 1 and 5),
+  primary key (user_id, hero)
+);
+alter table public.heroes enable row level security;
+drop policy if exists "le os proprios herois" on public.heroes;
+create policy "le os proprios herois" on public.heroes for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.heroes from anon, authenticated;
+
+create table if not exists public.achievements (
+  user_id uuid not null references auth.users on delete cascade,
+  key text not null,
+  at timestamptz not null default now(),
+  primary key (user_id, key)
+);
+alter table public.achievements enable row level security;
+drop policy if exists "le as proprias conquistas" on public.achievements;
+create policy "le as proprias conquistas" on public.achievements for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.achievements from anon, authenticated;
+
+create or replace function public.hero_price(p_hero text, p_with text) returns int language sql immutable as $$
+  select case when p_with = 'gems' then (case p_hero when 'muralha' then 60 when 'arqueira' then 80 when 'ladrao' then 50 else 0 end)
+              else (case p_hero when 'muralha' then 2500 when 'arqueira' then 3000 when 'ladrao' then 2000 else 0 end) end;
+$$;
+create or replace function public.hero_level_price(p_level int) returns int language sql immutable as $$
+  select round(400 * power(1.3, p_level - 2))::int; -- the price of reaching p_level (2 to 5)
+$$;
+create or replace function public.achievement_gems(p_key text) returns int language sql immutable as $$
+  select case p_key when 'first_march' then 5 when 'boss1' then 10 when 'km2' then 10 when 'km5' then 20 when 'km8' then 30 when 'km12' then 40
+                    when 'score100k' then 15 when 'score500k' then 30 when 'kills1k' then 10 when 'contracts3' then 25
+                    when 'defense10' then 10 when 'defense20' then 20 else 0 end;
+$$;
+create or replace function public.buy_hero(p_hero text, p_with text) returns table (coins int, gems int)
+language plpgsql security definer set search_path = ''
+as $$
+declare price int; have_c int; have_g int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if public.hero_price(p_hero, 'coins') = 0 then raise exception 'unknown_hero'; end if;
+  if exists (select 1 from public.heroes h where h.user_id = auth.uid() and h.hero = p_hero) then raise exception 'owned'; end if;
+  insert into public.wallets (user_id) values (auth.uid()) on conflict do nothing;
+  select w.coins, w.gems into have_c, have_g from public.wallets w where w.user_id = auth.uid() for update;
+  if p_with = 'gems' then
+    price := public.hero_price(p_hero, 'gems');
+    if have_g < price then raise exception 'not_enough_gems'; end if;
+    update public.wallets set gems = public.wallets.gems - price, updated_at = now() where user_id = auth.uid();
+  else
+    price := public.hero_price(p_hero, 'coins');
+    if have_c < price then raise exception 'not_enough_coins'; end if;
+    update public.wallets set coins = public.wallets.coins - price, updated_at = now() where user_id = auth.uid();
+  end if;
+  insert into public.heroes (user_id, hero) values (auth.uid(), p_hero);
+  return query select w.coins, w.gems from public.wallets w where w.user_id = auth.uid();
+end $$;
+create or replace function public.level_hero(p_hero text) returns table (coins int, level int)
+language plpgsql security definer set search_path = ''
+as $$
+declare lvl int; price int; have int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select h.level into lvl from public.heroes h where h.user_id = auth.uid() and h.hero = p_hero for update;
+  if lvl is null then raise exception 'not_owned'; end if;
+  if lvl >= 5 then raise exception 'maxed'; end if;
+  price := public.hero_level_price(lvl + 1);
+  select w.coins into have from public.wallets w where w.user_id = auth.uid() for update;
+  if coalesce(have, 0) < price then raise exception 'not_enough_coins'; end if;
+  update public.wallets set coins = public.wallets.coins - price, updated_at = now() where user_id = auth.uid();
+  update public.heroes set level = public.heroes.level + 1 where user_id = auth.uid() and hero = p_hero;
+  return query select w.coins, lvl + 1 from public.wallets w where w.user_id = auth.uid();
+end $$;
+-- Grants one achievement to the caller if new, paying its gems; returns the gems paid (0 if already had).
+create or replace function public.grant_achievement(p_key text) returns int
+language plpgsql security definer set search_path = ''
+as $$
+declare paid int := 0;
+begin
+  insert into public.achievements (user_id, key) values (auth.uid(), p_key) on conflict do nothing;
+  if found then
+    paid := public.achievement_gems(p_key);
+    update public.wallets set gems = public.wallets.gems + paid, updated_at = now() where user_id = auth.uid();
+  end if;
+  return paid;
+end $$;
+
 -- ================= Funções =================
 drop function if exists public.start_run();
 create or replace function public.start_run(p_mode text default 'defense')
@@ -144,8 +234,9 @@ end $$;
 -- abates por até 3, daí os 12 pontos por metro.
 drop function if exists public.finish_run(uuid, int, int, int, int);
 drop function if exists public.finish_run(uuid, int, int, int, int, text);
+drop function if exists public.finish_run(uuid, int, int, int, int, text, int);
 create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int, p_contracts text default null, p_coins int default 0)
-returns table (accepted boolean, week_rank int, all_rank int, best int, coins_won int, coins_total int)
+returns table (accepted boolean, week_rank int, all_rank int, best int, coins_won int, coins_total int, unlocked text, gems_total int)
 language plpgsql security definer set search_path = ''
 as $$
 declare
@@ -159,6 +250,8 @@ declare
   wal public.wallets;
   won int := 0;
   total int := 0;
+  unl text[] := '{}';
+  k text;
   week_start timestamptz := date_trunc('week', now());
 begin
   select * into r from public.runs
@@ -195,11 +288,24 @@ begin
     select * into wal from public.wallets where user_id = auth.uid() for update;
     if not found then insert into public.wallets (user_id) values (auth.uid()) returning * into wal; end if;
     if wal.day <> current_date then wal.runs_today := 0; wal.earned_today := 0; end if;
-    won := greatest(20, p_score / 200) + least(greatest(coalesce(p_coins, 0), 0), p_kills + 150 * bosses::int + 50);
+    won := greatest(20, p_score / 200) + least(greatest(coalesce(p_coins, 0), 0), 2 * (p_kills + 150 * bosses::int + 50)); -- ×2: the Thief's share
     if wal.runs_today < 3 then won := won * 2; else won := least(won, greatest(0, 5000 - wal.earned_today)); end if;
     update public.wallets
       set coins = coins + won, earned_today = wal.earned_today + won, runs_today = wal.runs_today + 1, day = current_date, updated_at = now()
       where user_id = auth.uid() returning coins into total;
+    -- achievements this run earns (each pays its gems once)
+    if r.mode = 'march' then
+      foreach k in array array['first_march', 'boss1', 'km2', 'km5', 'km8', 'km12', 'score100k', 'score500k', 'kills1k', 'contracts3'] loop
+        if (k = 'first_march' and p_wave >= 200) or (k = 'boss1' and p_wave >= 1000) or (k = 'km2' and p_wave >= 2000) or (k = 'km5' and p_wave >= 5000)
+           or (k = 'km8' and p_wave >= 8000) or (k = 'km12' and p_wave >= 12000) or (k = 'score100k' and p_score >= 100000) or (k = 'score500k' and p_score >= 500000)
+           or (k = 'kills1k' and p_kills >= 1000) or (k = 'contracts3' and ncon >= 3 and p_wave >= 2000) then
+          if public.grant_achievement(k) > 0 then unl := unl || k; end if;
+        end if;
+      end loop;
+    else
+      if p_wave >= 10 and public.grant_achievement('defense10') > 0 then unl := unl || 'defense10'; end if;
+      if p_wave >= 20 and public.grant_achievement('defense20') > 0 then unl := unl || 'defense20'; end if;
+    end if;
   end if;
 
   update public.runs
@@ -207,7 +313,7 @@ begin
     where id = p_run;
 
   if not ok then
-    return query select false, null::int, null::int, null::int, 0, (select w.coins from public.wallets w where w.user_id = auth.uid());
+    return query select false, null::int, null::int, null::int, 0, (select w.coins from public.wallets w where w.user_id = auth.uid()), null::text, (select w.gems from public.wallets w where w.user_id = auth.uid());
     return;
   end if;
 
@@ -229,7 +335,7 @@ begin
     select true,
            (select count(*)::int + 1 from others o where o.week_best > m.week_best),
            (select count(*)::int + 1 from others o where o.all_best > m.all_best),
-           m.all_best, won, total
+           m.all_best, won, total, nullif(array_to_string(unl, ','), ''), (select w.gems from public.wallets w where w.user_id = auth.uid())
     from mine m;
 end $$;
 
@@ -263,9 +369,14 @@ revoke execute on function public.get_leaderboard(text, int, text) from public, 
 revoke execute on function public.get_wallet() from public, anon, authenticated;
 revoke execute on function public.buy_quartel(text) from public, anon, authenticated;
 revoke execute on function public.refund_quartel() from public, anon, authenticated;
+revoke execute on function public.buy_hero(text, text) from public, anon, authenticated;
+revoke execute on function public.level_hero(text) from public, anon, authenticated;
+revoke execute on function public.grant_achievement(text) from public, anon, authenticated;
 grant execute on function public.start_run(text) to authenticated;
 grant execute on function public.finish_run(uuid, int, int, int, int, text, int) to authenticated;
 grant execute on function public.get_leaderboard(text, int, text) to anon, authenticated;
 grant execute on function public.get_wallet() to authenticated;
 grant execute on function public.buy_quartel(text) to authenticated;
 grant execute on function public.refund_quartel() to authenticated;
+grant execute on function public.buy_hero(text, text) to authenticated;
+grant execute on function public.level_hero(text) to authenticated;

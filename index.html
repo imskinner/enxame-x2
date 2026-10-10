@@ -71,6 +71,17 @@ body {
 .contracts button[aria-pressed="true"] { border-color: var(--gold); background: #fff3c4; }
 .contracts button[aria-pressed="true"] b { color: var(--ink); }
 .contracts button:focus-visible { outline: 3px solid var(--gold); }
+.contracts .ach { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; border: 2px solid rgba(27, 22, 64, .12); border-radius: 12px; padding: 10px 12px; background: var(--paper); font: 800 14px var(--font-body); color: var(--muted); letter-spacing: .04em; }
+.contracts .ach small { grid-column: 1; font-weight: 600; letter-spacing: 0; }
+.contracts .ach b { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-display); font-weight: 400; font-size: 18px; }
+.contracts .ach.done { color: var(--ink); border-color: var(--gold); background: #fff3c4; }
+.heroes { display: grid; gap: 10px; margin: 0 0 14px; }
+.hero { display: grid; gap: 6px; border: 2px solid rgba(27, 22, 64, .15); border-radius: 12px; padding: 10px 12px; background: var(--paper); }
+.hero.sel { border-color: var(--gold); background: #fff3c4; }
+.hero h4 { margin: 0; font: 400 20px var(--font-display); color: var(--ink); }
+.hero p { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--muted); }
+.hero .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.hero .row .btn.sm { flex: 1; font-size: 15px; padding: 9px 10px 7px; }
 .btn-icon {
   pointer-events: auto; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: var(--panel); color: var(--on-dark); display: grid; place-items: center; cursor: pointer;
@@ -295,6 +306,10 @@ body {
       <button class="btn alt" id="btnContracts" type="button">CONTRATOS <span id="contractsTag"></span></button>
       <button class="btn alt" id="btnQuartel" type="button" data-online hidden>QUARTEL</button>
     </div>
+    <div class="row2">
+      <button class="btn alt" id="btnHeroes" type="button" data-online hidden>HERÓIS</button>
+      <button class="btn alt" id="btnAch" type="button" data-online hidden>CONQUISTAS</button>
+    </div>
     <p class="best" id="bestMenu">RECORDE 0</p>
     <p class="account" id="accountLine" data-online hidden></p>
   </div>
@@ -318,6 +333,27 @@ body {
       <li><span class="ico horde"><b></b><b></b><b></b></span><span>Quebre muros de caixotes, liberte reféns das jaulas e derrube o chefão a cada 1000 m.</span></li>
     </ul>
     <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Fila (Marcha): <kbd>S</kbd>, <kbd>↑</kbd> ou clique. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
+<div class="screen sub" id="heroesScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">HERÓIS</h2>
+    <p class="note">Um por marcha: uma unidade maior na tropa, com uma passiva e uma ativa que dispara com a FILA. Desbloqueie com moedas ou diamantes; os níveis sobem só com moedas.</p>
+    <p class="label" id="heroesCoins">MOEDAS: 0</p>
+    <div class="heroes" id="heroList"></div>
+    <p class="msg" id="heroMsg"></p>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
+<div class="screen sub" id="achievementsScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">CONQUISTAS</h2>
+    <p class="note">Cada conquista paga diamantes uma vez. O servidor confere ao fim de cada partida válida.</p>
+    <p class="label" id="achCoins">MOEDAS: 0</p>
+    <div class="contracts" id="achList"></div>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
@@ -413,6 +449,7 @@ body {
     <div class="overOnline" id="overOnline" hidden>
       <p class="rankline" id="overRank"></p>
       <p class="rankline" id="overCoins" hidden></p>
+      <p class="rankline" id="overAch" hidden></p>
       <form class="field" id="overNickForm" hidden>
         <input id="overNick" maxlength="16" autocomplete="nickname" placeholder="Apelido para o ranking" aria-label="Apelido no ranking" required>
         <button class="btn sm" type="submit">SALVAR</button>
@@ -2257,7 +2294,7 @@ async function loadWallet() {
   if (!online.sb || !online.user) { online.wallet = null; return; }
   const { data, error } = await online.sb.rpc('get_wallet');
   const w = data?.[0];
-  online.wallet = error || !w ? null : { coins: w.coins, gems: w.gems, upgrades: w.upgrades || {} };
+  online.wallet = error || !w ? null : { coins: w.coins, gems: w.gems, upgrades: w.upgrades || {}, heroes: w.heroes || {}, achievements: w.achievements || [] };
 }
 async function ensureSession() {
   if (online.user) return online.user;
@@ -2344,7 +2381,13 @@ async function onlineRunFinish() {
   line.textContent = r.week_rank != null ? `#${fmt(r.week_rank)} na semana · #${fmt(r.all_rank)} geral` : `#${fmt(r.all_rank)} no ranking geral`;
   if (r.coins_won != null) { // the server pays the run's coins: the road's plus the score's bonus, doubled on the day's first three runs
     const oc = $('overCoins'); oc.hidden = false; oc.textContent = `+${fmt(r.coins_won)} moedas · ${fmt(r.coins_total)} no cofre`;
-    online.wallet = { ...(online.wallet || { gems: 0, upgrades: {} }), coins: r.coins_total };
+    online.wallet = { ...(online.wallet || { gems: 0, upgrades: {}, heroes: {}, achievements: [] }), coins: r.coins_total };
+  }
+  if (r.unlocked) { // achievements the server just granted, with their gems
+    const keys = r.unlocked.split(',').filter((k) => ACHIEVEMENTS[k]), oa = $('overAch');
+    oa.hidden = !keys.length; oa.textContent = keys.map((k) => `Conquista: ${ACHIEVEMENTS[k].name} · +${ACHIEVEMENTS[k].gems} diamantes`).join(' · ');
+    if (online.wallet) { online.wallet.gems = r.gems_total ?? online.wallet.gems; online.wallet.achievements = [...new Set([...(online.wallet.achievements || []), ...keys])]; }
+    if (keys.length) Sfx.play('victory');
   }
   if (!online.nickname) {
     form.hidden = false;
@@ -2393,7 +2436,84 @@ function openScreen(id) {
   if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
   if (id === 'contractsScreen') renderContracts();
   if (id === 'quartelScreen') { renderQuartel(); ensureSession().then(loadWallet).then(renderQuartel).catch(() => {}); }
+  if (id === 'heroesScreen') { renderHeroes(); ensureSession().then(loadWallet).then(renderHeroes).catch(() => {}); }
+  if (id === 'achievementsScreen') { renderAchievements(); ensureSession().then(loadWallet).then(renderAchievements).catch(() => {}); }
   el.querySelector('[data-back]').focus();
+}
+// ---- heroes: one per run, a bigger soldier with a passive and an active that fires with the FILA. Styles, not steps:
+// unlocked with coins (the long road) or gems (the short one), leveled with coins only. ----
+const HEROES = {
+  muralha: { name: 'MURALHA', role: 'Tanque', color: 0x4a6fa8, coins: 2500, gems: 60, passive: (l) => `escudo de ${(3 + 0.5 * (l - 1)).toFixed(1).replace('.', ',')} m em volta dela: ali ninguém morre num golpe`, active: 'FILA: a coluna inteira fica imune por 2 s' },
+  arqueira: { name: 'ARQUEIRA', role: 'Ataque', color: 0x3aa65a, coins: 3000, gems: 80, passive: (l) => `+${8 + 2 * (l - 1)} m de alcance`, active: 'FILA: tiros perfuram dois alvos e saem 50% mais rápido' },
+  ladrao: { name: 'LADRÃO', role: 'Economia', color: 0x6a3d9a, coins: 2000, gems: 50, passive: (l) => `+${50 + 10 * (l - 1)}% de moedas na pista`, active: 'FILA: ímã de moedas de 14 m' },
+};
+const HERO_MAX_LEVEL = 5, heroLevelPrice = (lvl) => Math.round(400 * Math.pow(1.3, lvl - 2)); // the price of reaching lvl (2 to 5)
+const HERO_KEY = 'enxame-x2-hero';
+let heroPick = (() => { try { return localStorage.getItem(HERO_KEY) || ''; } catch { return ''; } })();
+const heroLevel = (id) => online.wallet?.heroes?.[id] || 0;
+// Achievements are judged by the server at the end of a valid run; this is their text and the gems they pay.
+const ACHIEVEMENTS = {
+  first_march: { name: 'Primeira marcha', desc: 'Marche 200 m', gems: 5 },
+  boss1: { name: 'Primeiro chefão', desc: 'Passe dos 1.000 m', gems: 10 },
+  km2: { name: 'Dois quilômetros', desc: 'Passe dos 2.000 m', gems: 10 },
+  km5: { name: 'Cinco quilômetros', desc: 'Passe dos 5.000 m', gems: 20 },
+  km8: { name: 'Volta completa', desc: 'Passe dos 8.000 m, os oito mundos', gems: 30 },
+  km12: { name: 'Doze quilômetros', desc: 'Passe dos 12.000 m', gems: 40 },
+  score100k: { name: 'Cem mil', desc: '100.000 pontos numa marcha', gems: 15 },
+  score500k: { name: 'Meio milhão', desc: '500.000 pontos numa marcha', gems: 30 },
+  kills1k: { name: 'Mil abates', desc: '1.000 abates numa marcha', gems: 10 },
+  contracts3: { name: 'Três contratos', desc: 'Passe dos 2.000 m com três contratos', gems: 25 },
+  defense10: { name: 'Onda dez', desc: 'Chegue à onda 10 na defesa', gems: 10 },
+  defense20: { name: 'Onda vinte', desc: 'Chegue à onda 20 na defesa', gems: 20 },
+};
+const walletLine = (w) => (w ? `MOEDAS: ${fmt(w.coins)} · DIAMANTES: ${fmt(w.gems)}` : 'MOEDAS: …');
+function renderHeroes() {
+  const list = $('heroList'), w = online.wallet; list.textContent = '';
+  $('heroesCoins').textContent = walletLine(w);
+  for (const [id, h] of Object.entries(HEROES)) {
+    const lvl = heroLevel(id), owned = lvl > 0, sel = heroPick === id && owned;
+    const card = document.createElement('div'); card.className = 'hero' + (sel ? ' sel' : '');
+    const title = document.createElement('h4'); title.textContent = `${h.name} · ${h.role}${owned ? ` · nível ${lvl}` : ''}`;
+    const pas = document.createElement('p'); pas.textContent = h.passive(Math.max(1, lvl));
+    const act = document.createElement('p'); act.textContent = h.active;
+    const row = document.createElement('div'); row.className = 'row';
+    const btn = (text, on, cb) => { const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.textContent = text; b.disabled = !on; b.addEventListener('click', cb); row.append(b); };
+    if (!owned) {
+      btn(`${fmt(h.coins)} MOEDAS`, !!w && w.coins >= h.coins, () => buyHero(id, 'coins'));
+      btn(`${h.gems} DIAMANTES`, !!w && w.gems >= h.gems, () => buyHero(id, 'gems'));
+    } else {
+      btn(sel ? 'ESCOLHIDA' : 'ESCOLHER', !sel, () => { heroPick = id; try { localStorage.setItem(HERO_KEY, id); } catch { /* private mode */ } renderHeroes(); });
+      if (lvl < HERO_MAX_LEVEL) btn(`NÍVEL ${lvl + 1}: ${fmt(heroLevelPrice(lvl + 1))}`, !!w && w.coins >= heroLevelPrice(lvl + 1), () => levelHero(id));
+    }
+    card.append(title, pas, act, row); list.append(card);
+  }
+  const none = document.createElement('button'); none.className = 'btn sm'; none.type = 'button'; none.textContent = heroPick ? 'MARCHAR SEM HERÓI' : 'SEM HERÓI (escolhido)'; none.disabled = !heroPick;
+  none.addEventListener('click', () => { heroPick = ''; try { localStorage.removeItem(HERO_KEY); } catch { /* private mode */ } renderHeroes(); });
+  list.append(none);
+}
+async function buyHero(id, with_) {
+  setMsg($('heroMsg'), 'Comprando…');
+  const { data, error } = await online.sb.rpc('buy_hero', { p_hero: id, p_with: with_ });
+  if (error || !data?.[0]) { setMsg($('heroMsg'), RPC_ERR[error?.message] || 'Não deu para comprar agora', 'err'); return; }
+  online.wallet.coins = data[0].coins; online.wallet.gems = data[0].gems; online.wallet.heroes[id] = 1; heroPick = id;
+  try { localStorage.setItem(HERO_KEY, id); } catch { /* private mode */ }
+  Sfx.play('victory'); setMsg($('heroMsg'), `${HEROES[id].name} na tropa`, 'ok'); renderHeroes();
+}
+async function levelHero(id) {
+  setMsg($('heroMsg'), 'Treinando…');
+  const { data, error } = await online.sb.rpc('level_hero', { p_hero: id });
+  if (error || !data?.[0]) { setMsg($('heroMsg'), RPC_ERR[error?.message] || 'Não deu para treinar agora', 'err'); return; }
+  online.wallet.coins = data[0].coins; online.wallet.heroes[id] = data[0].level; Sfx.play('pickup');
+  setMsg($('heroMsg'), `${HEROES[id].name} nível ${data[0].level}`, 'ok'); renderHeroes();
+}
+function renderAchievements() {
+  const list = $('achList'), done = new Set(online.wallet?.achievements || []); list.textContent = '';
+  $('achCoins').textContent = walletLine(online.wallet);
+  for (const [key, a] of Object.entries(ACHIEVEMENTS)) {
+    const b = document.createElement('div'); b.className = 'ach' + (done.has(key) ? ' done' : '');
+    const name = document.createElement('span'), gems = document.createElement('b'), desc = document.createElement('small');
+    name.textContent = (done.has(key) ? '✓ ' : '') + a.name; gems.textContent = `${a.gems} 💎`; desc.textContent = a.desc; b.append(name, gems, desc); list.append(b);
+  }
 }
 // ---- the Quartel: permanent march upgrades bought with coins (the design in docs/economia.md) ----
 const QUARTEL = {
@@ -2407,10 +2527,10 @@ const QUARTEL = {
 };
 const quartelPrice = (id, lvl) => Math.round(QUARTEL[id].base * Math.pow(1.15, lvl));
 const qLevel = (id) => online.wallet?.upgrades?.[id] || 0;
-const RPC_ERR = { not_enough_coins: 'Moedas insuficientes', maxed: 'Já está no máximo', not_authenticated: 'Entre para usar o Quartel' };
+const RPC_ERR = { not_enough_coins: 'Moedas insuficientes', not_enough_gems: 'Diamantes insuficientes', maxed: 'Já está no máximo', owned: 'Você já tem esse herói', not_owned: 'Desbloqueie o herói primeiro', not_authenticated: 'Entre para usar' };
 function renderQuartel() {
   const list = $('quartelList'), w = online.wallet; list.textContent = '';
-  $('quartelCoins').textContent = w ? `MOEDAS: ${fmt(w.coins)}` : 'MOEDAS: …';
+  $('quartelCoins').textContent = walletLine(w);
   for (const [id, u] of Object.entries(QUARTEL)) {
     const lvl = qLevel(id), maxed = lvl >= u.max, price = maxed ? 0 : quartelPrice(id, lvl);
     const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(lvl > 0)); b.disabled = !w || maxed || w.coins < price;
@@ -2461,6 +2581,8 @@ for (const b of document.querySelectorAll('[data-back]')) b.addEventListener('cl
 $('btnHow').addEventListener('click', () => openScreen('howScreen'));
 $('btnContracts').addEventListener('click', () => openScreen('contractsScreen'));
 $('btnQuartel').addEventListener('click', () => openScreen('quartelScreen'));
+$('btnHeroes').addEventListener('click', () => openScreen('heroesScreen'));
+$('btnAch').addEventListener('click', () => openScreen('achievementsScreen'));
 $('btnRank').addEventListener('click', () => openScreen('rankScreen'));
 $('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
 for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
@@ -2553,11 +2675,12 @@ const M = {
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
   hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1,
   combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0, contracts: new Set(), cMul: 1,
-  coins: 0, q: { start: 10, cap: 0, statMax: 0, fila: 0, cd: 0, ult: 0, elMax: 2 },
+  coins: 0, coinAcc: 0, q: { start: 10, cap: 0, statMax: 0, fila: 0, cd: 0, ult: 0, elMax: 2 }, hero: null,
 };
 const con = (id) => M.contracts.has(id);
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
-const shotRange = () => clamp(WEAPON.range + M.stat.range, 32, 70);
+const heroRange = () => (M.hero?.id === 'arqueira' ? 8 + 2 * (M.hero.lvl - 1) : 0); // the Archer sees farther
+const shotRange = () => clamp(WEAPON.range + M.stat.range + heroRange(), 32, 70 + heroRange());
 const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
@@ -2717,6 +2840,28 @@ function scrollMarchWorld(dz) {
   placeMarchDecor();
 }
 
+// ---- the hero: a bigger soldier at the front of the formation, in the hero's color, with a halo; Muralha also wears
+// her shield dome. The mesh borrows the troop's geometry (so the Blender model, once loaded, dresses it too). ----
+const heroMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+const heroMesh = new THREE.Mesh(allyMesh.geometry, heroMat); heroMesh.castShadow = true; heroMesh.visible = false; scene.add(heroMesh);
+const heroHalo = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 6, 24).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff })); heroHalo.position.y = 2.6; heroMesh.add(heroHalo);
+const heroDome = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshBasicMaterial({ color: 0x8fc4ff, transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending })); heroDome.visible = false; scene.add(heroDome);
+const heroActive = (id) => !!M.hero && M.hero.id === id && M.hero.act > 0;
+// Muralha's passive and active: a soldier inside her dome, or any soldier during her FILA, survives a blow or a hazard.
+const allyShielded = (a) => !!M.hero && M.hero.id === 'muralha' && (M.hero.act > 0 || (a.x - M.hero.x) ** 2 + (a.z - M.hero.z) ** 2 < M.hero.r2);
+function updateHero(dt, R) {
+  const h = M.hero; heroMesh.visible = heroDome.visible = !!h && state.phase !== 'over';
+  if (!h) return;
+  h.act = Math.max(0, h.act - dt);
+  const tx = M.cx, tz = SQUAD_Z - R * 0.45, k = Math.min(1, dt * 8);
+  h.x += (tx - h.x) * k; h.z += (tz - h.z) * k;
+  const w = Math.sin(gt * 12) * clamp(M.speed / 5, 0, 1);
+  heroMesh.position.set(h.x, Math.abs(w) * 0.12, h.z); heroMesh.rotation.set(0, Math.PI, w * 0.05); heroMesh.scale.setScalar(1.7);
+  heroHalo.rotation.z = gt * 2;
+  heroDome.visible = h.id === 'muralha'; if (heroDome.visible) { heroDome.position.set(h.x, 0.9, h.z); heroDome.scale.setScalar(h.act > 0 ? R + 1 : h.r); heroDome.material.opacity = h.act > 0 ? 0.3 : 0.14; }
+  if (h.act > 0 && Math.random() < 0.5) emit(sparkSys, h.x + rand(-1, 1), rand(0.5, 2.5), h.z + rand(-1, 1), 0, rand(1, 2), 0, toColor(HEROES[h.id].color, 0.4), 0.4, 0.5, -0.4, 0, 0);
+}
+
 // ---- coins: the horde drops them, the troop picks them up by walking over (a small magnet helps). They are the run's
 // economy; the server pays them out at the end of the run with the score's own bonus (docs/economia.md). ----
 const COIN_MAX = 240;
@@ -2737,9 +2882,9 @@ function updateCoins(dt, dz, active) {
     const c = coins[i]; c.z += dz; c.t += dt;
     if (c.vy !== 0 || c.y > 0.6) { c.vy -= GRAVITY * dt; c.y += c.vy * dt; if (c.y <= 0.6) { c.y = 0.6; c.vy = 0; } }
     const dx = cx - c.x, dzz = SQUAD_Z - c.z, d = Math.hypot(dx, dzz);
-    if (active && d < R + 4) { const k = Math.min(1, dt * 6); c.x += dx * k; c.z += dzz * k; } // the magnet
+    if (active && d < R + (heroActive('ladrao') ? 14 : 4)) { const k = Math.min(1, dt * 6); c.x += dx * k; c.z += dzz * k; } // the magnet (the Thief's FILA widens it)
     if (active && d < R * 0.9 + 0.6) {
-      M.coins += c.value; got += c.value;
+      M.coinAcc += c.value * (M.hero?.id === 'ladrao' ? 1.5 + 0.1 * (M.hero.lvl - 1) : 1); const add = Math.floor(M.coinAcc); M.coinAcc -= add; M.coins += add; got += c.value;
       if (c.value > 1 || Math.random() < 0.3) sparks(c.x, 0.7, c.z, 0xffc629, c.value > 1 ? 8 : 3, 3, 0.4, 0.3, 2);
       coinPool.push(c); coins.splice(i, 1); continue;
     }
@@ -2770,7 +2915,7 @@ function fireVolley() {
   const troop = allies.filter((a) => a.alive && a.role === 'squad');
   if (!troop.length) return;
   const n = Math.min(troop.length, 22), each = (WEAPON.dmg * statMul('dmg') * troop.length) / n;
-  const life = shotRange() / WEAPON.speed, fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = hasEl('water') ? 1 : 0;
+  const life = shotRange() / WEAPON.speed, fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (heroActive('arqueira') ? 2 : 0);
   // FILA focuses the fire: while squeezed the bolts converge on the boss (or on the column's center line), so the shots
   // from the edges of the troop land too instead of passing beside it.
   // (a third of that focus is always on during a fight, so sidestepping the patterns doesn't throw the whole volley wide)
@@ -2924,6 +3069,7 @@ function upgrade(stat, v) {
 function squeeze() {
   if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0 || con('nofila')) return;
   M.sqT = M.sqMax = (M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T) + M.q.fila; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
+  if (M.hero) { M.hero.act = M.hero.id === 'muralha' ? 2 : M.sqMax; ring(M.hero.x, M.hero.z, HEROES[M.hero.id].color, 5, 0.5); } // the hero's active rides the FILA
 }
 function addSoldiers(k, x = null, text = null) {
   k = Math.min(k, squadCap() - squadCount());
@@ -3115,7 +3261,8 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
-    contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0,
+    contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0, coinAcc: 0,
+    hero: heroPick && heroLevel(heroPick) ? { id: heroPick, lvl: heroLevel(heroPick), x: 0, z: SQUAD_Z, act: 0, r: 3 + 0.5 * (heroLevel(heroPick) - 1), r2: (3 + 0.5 * (heroLevel(heroPick) - 1)) ** 2 } : null,
     // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
     q: { start: 10 + 2 * qLevel('recrutas'), cap: 10 * qLevel('alojamento'), statMax: 10 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
   });
@@ -3126,6 +3273,7 @@ function startMarch() {
   state.wave = 1; state.bossDown = false; state.phase = 'playing';
   if (!M.canals) { buildCanals(); M.canals = true; }
   if (!M.built || (PROP && !M.decorWithProps) || (!M.decorWithModels && flora.meshes.oak1_bark.geometry.type !== 'CylinderGeometry')) { buildMarchDecor(); M.built = true; }
+  if (M.hero) { heroMesh.geometry = allyMesh.geometry; heroMat.color.setHex(HEROES[M.hero.id].color); heroHalo.material.color.setHex(HEROES[M.hero.id].color).multiplyScalar(1.6); }
   addSoldiers(M.q.start, 0); state.ult = M.q.ult;
   for (const a of allies) { a.x = rand(-1, 1); a.z = SQUAD_Z + rand(-1, 1); }
   // the first segments are already on the road, so the run opens with a choice instead of 20 s of empty road
@@ -3219,7 +3367,7 @@ function simulateMarch(dt, realDt = dt) {
     if (state.rapid > 0) state.rapid = Math.max(0, state.rapid - dt);
     if (M.triple > 0) M.triple = Math.max(0, M.triple - dt);
     M.volley -= dt;
-    const interval = 1 / (WEAPON.rate * statMul('rate')) * (state.rapid > 0 ? 0.5 : 1);
+    const interval = 1 / (WEAPON.rate * statMul('rate')) * (state.rapid > 0 ? 0.5 : 1) * (heroActive('arqueira') ? 0.67 : 1);
     while (M.volley <= 0) { fireVolley(); M.volley += interval; }
   }
   updateShots(dt);
@@ -3257,6 +3405,7 @@ function simulateMarch(dt, realDt = dt) {
   updatePortals(dt, dz, active);
   updatePools(dt, dz);
   updateCoins(dt, dz, active);
+  updateHero(dt, R);
   updateWorldHazards(dt, dz, active, !!boss || M.portals.length > 0);
   updateMarchEnemies(dt, dz);
   updateUltimate(dt, realDt);
@@ -3324,7 +3473,7 @@ const hzCap = () => Math.max(1, Math.ceil(squadCount() * 0.02));
 const blowCap = () => Math.max(2, Math.ceil(squadCount() * 0.05));
 function killAlliesInRect(x, z, hw, hd, color, cap = hzCap()) {
   let n = 0;
-  for (const a of allies) if (a.alive && a.role !== 'caged' && Math.abs(a.x - x) < hw && Math.abs(a.z - z) < hd) {
+  for (const a of allies) if (a.alive && a.role !== 'caged' && Math.abs(a.x - x) < hw && Math.abs(a.z - z) < hd && !allyShielded(a)) {
     a.alive = false; if (++n % 3 === 0) debris(a.x, 0.6, a.z, color, 1, 4, 0.18);
     if (n >= cap) break;
   }
@@ -4196,7 +4345,7 @@ const fireballGeo = new THREE.SphereGeometry(0.6, 14, 10), fireballMat = new THR
 // On the march the troop is a dense blob, so one blast could wipe dozens: there it takes at most 5% of the troop (blowCap).
 function killAlliesNear(x, z, r, color, cap = state.mode === 'march' ? blowCap() : Infinity) {
   let n = 0;
-  for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - x) ** 2 + (a.z - z) ** 2 < r * r) {
+  for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - x) ** 2 + (a.z - z) ** 2 < r * r && !(state.mode === 'march' && allyShielded(a))) {
     a.alive = false; if (++n % 3 === 0) debris(a.x, 0.6, a.z, color, 1, 4, 0.18);
     if (n >= cap) break;
   }
@@ -4716,7 +4865,7 @@ if (mh) {
     console.log('MARCH', JSON.stringify(log), JSON.stringify(end));
     return end;
   };
-  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, frame };
+  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, frame, online };
   if (mh[2]) run(+mh[2]);
 }
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.

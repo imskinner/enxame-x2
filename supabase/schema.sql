@@ -62,7 +62,8 @@ end $$;
 
 -- Defesa: o teto por onda espelha buildWave() do jogo (inimigos comuns + 2 hordas gigantes + brutamontes + chefão +
 -- bônus da onda + caixas); pontuação aceita até 2x esse teto. Marcha: p_wave são os metros andados e a estrada nunca
--- passa de 16 m/s, então distância, abates e pontos são limitados pelo tempo da partida.
+-- passa de 16 m/s, então distância, abates e pontos são limitados pelo tempo da partida; os chefões (um a cada 1000 m,
+-- ~140 m antes da marca) valem 900 × mundo e a tropa cheia converte soldados em pontos, daí os 12 pontos por metro.
 create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int)
 returns table (accepted boolean, week_rank int, all_rank int, best int)
 language plpgsql security definer set search_path = ''
@@ -72,6 +73,7 @@ declare
   secs numeric;
   max_score numeric;
   max_kills numeric;
+  bosses numeric;
   ok boolean;
   week_start timestamptz := date_trunc('week', now());
 begin
@@ -82,9 +84,10 @@ begin
 
   secs := extract(epoch from now() - r.started_at);
   if r.mode = 'march' then
+    bosses := floor((p_wave + 140) / 1000.0);
     ok := p_wave between 0 and secs * 16 + 60
       and p_kills between 0 and secs * 30 + 50
-      and p_score between 0 and p_wave * 7 + p_kills * 60 + 700 * (p_wave / 1000.0 + 1) + 500
+      and p_score between 0 and p_wave * 12 + p_kills * 60 + 450 * bosses * (bosses + 1) + 500
       and p_peak between 0 and 1000;
   else
     select sum(20 * e + 60 * (4 + 1.1 * w) + 50 * w + 1000), sum(e)

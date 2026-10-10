@@ -1882,8 +1882,8 @@ function spawnBig(kind, x) {
     kind, mesh, maxHp: b.hp, x: x ?? (isBoss ? 0 : rand(-LANE_HALF + 2, LANE_HALF - 2)), z: SPAWN_Z - 1,
     flash: 0, phase: Math.random() * 6, alive: true, label: null, lastStep: 0, theme, abT: 3, sumT: 6, shield: 0, bubble: null,
   });
-  if (theme?.id === 'water') {
-    b.bubble = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 14), new THREE.MeshBasicMaterial({ color: 0x8ff4ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
+  if (theme?.id === 'water' || theme?.id === 'crystal') { // the Leviathan's bubble, the Golem's glow
+    b.bubble = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 14), new THREE.MeshBasicMaterial({ color: theme.id === 'crystal' ? 0xc8b0ff : 0x8ff4ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
     b.bubble.position.y = 0.85; b.bubble.visible = false; b.bubble.userData.own = true; mesh.add(b.bubble);
   }
   mesh.scale.setScalar(b.scale); mesh.position.set(b.x, 0, b.z); scene.add(mesh);
@@ -2457,7 +2457,7 @@ const ACHIEVEMENTS = {
   boss1: { name: 'Primeiro chefão', desc: 'Passe dos 1.000 m', gems: 10 },
   km2: { name: 'Dois quilômetros', desc: 'Passe dos 2.000 m', gems: 10 },
   km5: { name: 'Cinco quilômetros', desc: 'Passe dos 5.000 m', gems: 20 },
-  km8: { name: 'Volta completa', desc: 'Passe dos 8.000 m, os oito mundos', gems: 30 },
+  km8: { name: 'Oito quilômetros', desc: 'Passe dos 8.000 m', gems: 30 },
   km12: { name: 'Doze quilômetros', desc: 'Passe dos 12.000 m', gems: 40 },
   score100k: { name: 'Cem mil', desc: '100.000 pontos numa marcha', gems: 15 },
   score500k: { name: 'Meio milhão', desc: '500.000 pontos numa marcha', gems: 30 },
@@ -2668,6 +2668,8 @@ const ELEMENTS = {
   poison: { name: 'VENENO', hint: 'Quem morre deixa uma poça tóxica para a horda', tint: 0x7ad83a, shot: 0x9cff4a },
   zombie: { name: 'ZUMBI', hint: 'Inimigos abatidos se erguem e atacam a horda', tint: 0x8ab89a, shot: 0xc8ffd8 },
   void: { name: 'BURACO NEGRO', hint: 'Tiros perseguem os inimigos', tint: 0x9a5ae8, shot: 0xc86bff },
+  sand: { name: 'AREIA', hint: 'Tiros abrem em leque ao acertar', tint: 0xe8c070, shot: 0xffe0a0 },
+  crystal: { name: 'CRISTAL', hint: 'Tiros atravessam dois alvos e às vezes acertam em cheio', tint: 0xb8a0ff, shot: 0xe0d0ff },
 };
 for (const e of Object.values(ELEMENTS)) { e.tintC = new THREE.Color(e.tint); e.shotC = new THREE.Color(e.shot); }
 const M = {
@@ -2915,7 +2917,7 @@ function fireVolley() {
   const troop = allies.filter((a) => a.alive && a.role === 'squad');
   if (!troop.length) return;
   const n = Math.min(troop.length, 22), each = (WEAPON.dmg * statMul('dmg') * troop.length) / n;
-  const life = shotRange() / WEAPON.speed, fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (heroActive('arqueira') ? 2 : 0);
+  const life = shotRange() / WEAPON.speed, fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (hasEl('crystal') ? 2 : 0) + (heroActive('arqueira') ? 2 : 0);
   // FILA focuses the fire: while squeezed the bolts converge on the boss (or on the column's center line), so the shots
   // from the edges of the troop land too instead of passing beside it.
   // (a third of that focus is always on during a fight, so sidestepping the patterns doesn't throw the whole volley wide)
@@ -2925,7 +2927,7 @@ function fireVolley() {
     const a = troop[Math.floor(Math.random() * troop.length)];
     const b = boltPool.pop() || {};
     b.x = a.x + rand(-0.15, 0.15); b.y = 1.0 + rand(-0.1, 0.15); b.z = a.z - 0.6; b.v = WEAPON.speed * rand(0.95, 1.05); b.vx = vx * rand(0.85, 1.15) + (aimX - b.x) * 1.2 * focus;
-    b.dmg = each; b.life = life; b.pierce = pierce; b.last = null;
+    b.dmg = each; b.life = life; b.pierce = pierce; b.last = null; b.child = false;
     b.c = els.length ? ELEMENTS[els[k % els.length]].shotC : WEAPON.shotC;
     b.home = homing ? homingTarget(b.x, b.z) : null;
     M.bolts.push(b);
@@ -3454,6 +3456,8 @@ const HAZARDS = {
   poison: { title: 'GÁS VENENOSO', hint: 'Nuvens tóxicas cruzam a estrada', every: 5 },
   zombie: { title: 'CEMITÉRIO', hint: 'Mortos saem da terra perto da tropa', every: 4.5 },
   void: { title: 'RASGOS NO ESPAÇO', hint: 'Buracos negros puxam a tropa', every: 6.5 },
+  sand: { title: 'AREIA MOVEDIÇA', hint: 'Na areia a tropa atola e afunda', every: 5 },
+  crystal: { title: 'CRISTAIS DA PISTA', hint: 'Metade da pista vira espinhos: fique na outra', every: 5.5 },
 };
 const stageBiome = () => BIOMES[M.stage % BIOMES.length].id;
 const hazardLevel = () => { const d = M.dist - M.stageStart; return d < 200 ? -1 : clamp((d - 200) / 600, 0, 1); }; // -1: still calm
@@ -3465,7 +3469,7 @@ const arrowTex = canvasTex(128, 128, (g, w, h) => {
   g.beginPath(); g.moveTo(30, 34); g.lineTo(70, 64); g.lineTo(30, 94); g.lineTo(46, 94); g.lineTo(86, 64); g.lineTo(46, 34); g.closePath(); g.fill();
 });
 arrowTex.wrapS = arrowTex.wrapT = THREE.RepeatWrapping;
-const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f), poison: new THREE.Color(0x7ad83a), void: new THREE.Color(0xc86bff), zombie: new THREE.Color(0x6a5040) };
+const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f), poison: new THREE.Color(0x7ad83a), void: new THREE.Color(0xc86bff), zombie: new THREE.Color(0x6a5040), sand: new THREE.Color(0xe8c890) };
 // Road hazards, like the boss patterns, kill everyone they touch: each one is visible from far off and leaves a way
 // around (or a quiet phase to cross in), so a loss is a loss of attention, never of luck. hzCap stays for the odd
 // touch that isn't a dodge test (a boss's lingering gas, the stomp of a passing brute).
@@ -3535,6 +3539,17 @@ function spawnHazard(id, k) {
       addHazard({ type: 'void', x: side * (LANE_HALF - 2.5), z: MARCH_FAR, r: 1.7, ring }, core, ring, halo);
       break;
     }
+    case 'sand': { // a soft dark patch: inside it the troop steers like in mud and sinks a few soldiers a second
+      const r = rand(2.2, 3) + k * 0.5, pit = new THREE.Mesh(hzDisc, hzMat(0xb08a50, 0.9, false)), rim = new THREE.Mesh(hzRing, hzMat(0xe8c890, 0.8, false));
+      pit.scale.setScalar(r); pit.position.y = 0.04; rim.scale.setScalar(r * 1.08); rim.position.y = 0.05;
+      addHazard({ type: 'sand', x: rand(-LANE_HALF + 3, LANE_HALF - 3), z: MARCH_FAR, r }, pit, rim);
+      break;
+    }
+    case 'crystal': { // half the road sprouts crystals where the troop will be: step to the other half
+      const T = 1.4;
+      markPattern([{ kind: 'rect', x: side * 5.3, z: SQUAD_Z - M.speed * T, hw: 3.6, hd: 1.4 }], T, PAT.color.crystal, PAT_FX.crystal);
+      break;
+    }
   }
 }
 // A boss pattern on the march: zones (discs or stripes) marked on the road for T seconds, then everyone inside dies,
@@ -3563,8 +3578,9 @@ function markBlast(x, z, r, T, color, blast) {
   addHazard({ type: 'mark', x, z, r, T, ring, blast }, ring, fill);
 }
 const hzSpike = new THREE.ConeGeometry(0.24, 1.7, 5).translate(0, 0.85, 0);
-function iceSpikes(x, z, r) {
-  const mat = new THREE.MeshLambertMaterial({ color: 0xd8f6ff, emissive: 0x3a8acc, emissiveIntensity: 0.4, flatShading: true }), spikes = [];
+const iceSpikes = (x, z, r) => spikesFx(x, z, r);
+function spikesFx(x, z, r, color = 0xd8f6ff, emissive = 0x3a8acc) {
+  const mat = new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity: 0.4, flatShading: true }), spikes = [];
   for (let i = 0; i < 9; i++) {
     const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * r * 0.85, m = new THREE.Mesh(hzSpike, mat);
     m.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); m.rotation.set(rand(-0.3, 0.3), 0, rand(-0.3, 0.3)); m.scale.set(1, 0.01, 1); spikes.push(m);
@@ -3573,6 +3589,11 @@ function iceSpikes(x, z, r) {
 }
 // Per-frame behavior of each hazard; returns true once it is spent.
 const HZ_UPDATE = {
+  sand(h, dt, active) {
+    if (!active || Math.abs(h.z - SQUAD_Z) > h.r + 2) return;
+    M.grip = Math.min(M.grip, 0.3);
+    if ((h.tick -= dt) <= 0) { h.tick = 0.4; if (killAlliesNear(h.x, h.z, h.r, _hzC.sand, Math.ceil(squadCount() * 0.03)) && Math.random() < 0.5) smoke(h.x, 0.3, h.z, 2, 1.4, 0xe8c890, 0.8); }
+  },
   pattern(h, dt, active) {
     const u = clamp(h.t / h.T, 0, 1), pulse = 0.5 + 0.5 * Math.abs(Math.sin(gt * (8 + u * 16)));
     for (const q of h.zones) {
@@ -3685,7 +3706,7 @@ function hurt(t, dmg) {
   if (t.hp <= 0) t.mesh ? killBig(t) : killEnemy(t);
 }
 function updateShots(dt) {
-  const bolts = M.bolts, lava = hasEl('lava'), storm = hasEl('storm'), fire = hasEl('fire');
+  const bolts = M.bolts, lava = hasEl('lava'), storm = hasEl('storm'), fire = hasEl('fire'), sand = hasEl('sand'), crystal = hasEl('crystal');
   for (let i = 0; i < bolts.length; i++) {
     const b = bolts[i], z0 = b.z; b.z -= b.v * dt; b.life -= dt;
     if (b.home) { if (b.home.alive) b.vx = clamp((b.home.x - b.x) * 5, -14, 14); else b.home = null; }
@@ -3703,7 +3724,15 @@ function updateShots(dt) {
       if (inc) { hit.acc -= inc; if (hit.n < cap) setGateNumber(hit, Math.min(cap, hit.n + inc)); }
     } else if (hit.grp) { b.life = 0; hit.hp -= b.dmg * (fire ? 1.5 : 1); hit.flash = 1; if (hit.hp <= 0 && !hit.dead) breakObstacle(hit); } // crates and chains burn fast
     else {
-      if (!(hit.shield > 0)) hurt(hit, b.dmg);
+      if (!(hit.shield > 0)) { // crystal: one shot in five lands square (×2.5)
+        const crit = crystal && Math.random() < 0.2; hurt(hit, b.dmg * (crit ? 2.5 : 1));
+        if (crit) sparks(b.x, b.y, hz, 0xe0d0ff, 6, 6, 0.4, 0.3, 2);
+      }
+      if (sand && !b.child && bolts.length < BOLT_MAX - 2) for (const vx of [-7, 7]) { // sand: the hit bursts into a fan of two
+        const c = boltPool.pop() || {};
+        Object.assign(c, { x: b.x, y: b.y, z: hz - 0.3, v: b.v, vx, dmg: b.dmg * 0.4, life: 0.45, pierce: 0, last: hit, c: b.c, home: null, child: true });
+        bolts.push(c);
+      }
       if (lava) { // splash
         for (const e of enemies) if (e.alive && e !== hit && (e.x - b.x) ** 2 + (e.z - hz) ** 2 < 3.2) hurt(e, b.dmg * 0.5);
         if (Math.random() < 0.25) sparks(b.x, 0.6, hz, 0xff5a1f, 6, 4, 0.5, 0.35, 2);
@@ -4042,6 +4071,19 @@ const BIOMES = [
       leaves: 0x7a5ab0, bush: 0x6a4a9a, rock: 0x7a6aa8, liqA: 0x14002e, liqB: 0xd88bff, liquid: 1, liqFlow: 2, crack: 0xc86bff, crackO: 0.4,
       grass: 0, hole: 1, voidStream: 1, fort: 0x2a1a4a, fortGlow: 0x3a0a6a, liqLight: 0xb84aff, liqLightI: 1, vignette: 0.18 },
     climax: { voidStream: 2, lightning: 0.25, vignette: 0.24 } },
+  // the second lap of themes starts here: dunes and an oasis, then a valley of crystal
+  { id: 'sand', name: 'FARAÓ DA AREIA', short: 'Areia', hint: 'Tempestades de areia que puxam a tropa', css: '#e8c070',
+    skin: 0xd8b070, belly: 0xf4e2b0, accent: 0x2f7bff, glow: 0xffd060, glowI: 0.3, hpMul: 1.2,
+    look: { bg: 0xf0d8a0, fog: 0xf4e0b4, ground: 0xe0c078, lane: 0xf6e8c4, hemiSky: 0xfff0d0, hemiGround: 0xb08a50, sun: 0xfff0c0, sunI: 2.3, hemiI: 1.3,
+      leaves: 0x9ab860, bush: 0xa8b060, rock: 0xd0a870, liqA: 0x2aa0a0, liqB: 0xa8f0e8, liquid: 0.6, liqFlow: 0.4, crack: 0xc89850, crackO: 0.3,
+      grass: 0.1, fort: 0xb08a50, vignette: 0.06, fogNear: 0.95, fogFar: 0.9 },
+    climax: { vignette: 0.14, fogFar: 0.7 } },
+  { id: 'crystal', name: 'GOLEM DE CRISTAL', short: 'Cristal', hint: 'Reflete os tiros enquanto brilha', css: '#b8a0ff',
+    skin: 0x9a86d8, belly: 0xe6ddff, accent: 0x7ff0ff, glow: 0xc8b0ff, glowI: 0.5, hpMul: 1.3,
+    look: { bg: 0xd8ccf4, fog: 0xe8e0fa, ground: 0xc8bce8, lane: 0xeee8fc, hemiSky: 0xf4f0ff, hemiGround: 0x8a7ab8, sun: 0xf0e8ff, sunI: 2.0, hemiI: 1.5,
+      leaves: 0xb0a0e8, bush: 0xc0b0f0, rock: 0xd0c8f0, liqA: 0x6a50c0, liqB: 0xe0f8ff, liqIce: 1, liqFlow: 0, liquid: 1, crack: 0xb8a0ff, crackO: 0.35,
+      grass: 0.2, spikes: 1, fort: 0x6a5aa8, liqLight: 0xc8b0ff, liqLightI: 0.6, vignette: 0.08 },
+    climax: { lightning: 0.1, vignette: 0.16 } },
 ];
 for (const b of BIOMES) { b.full = makeLook(b.look); b.peak = makeLook({ ...b.look, ...b.climax }); }
 const biomeOf = (wave) => BIOMES[Math.floor((Math.max(1, wave) - 1) / 5) % BIOMES.length];
@@ -4249,7 +4291,7 @@ function bossArrive(b) {
   state.shake = Math.max(state.shake, 0.7); state.flash = Math.max(state.flash, 0.35);
   ring(0, SPAWN_Z - 1, t.glow, 18, 1.0); ring(0, SPAWN_Z - 1, 0xffffff, 10, 0.6);
   sparks(0, 3.4, SPAWN_Z - 4, t.glow, 120, 14, 1, 0.9, 4, 0.3);
-  if (t.id === 'storm' || t.id === 'lava' || t.id === 'void') setTimeout(() => strike(0, 0, SPAWN_Z - 2, true, t.id === 'void' ? 0xc86bff : 0x9f8cff), 700);
+  if (['storm', 'lava', 'void', 'crystal'].includes(t.id)) setTimeout(() => strike(0, 0, SPAWN_Z - 2, true, { void: 0xc86bff, crystal: 0xc8b0ff }[t.id] || 0x9f8cff), 700);
 }
 const CONFETTI = [0xffc629, 0x5ff3ff, 0xff6fa0, 0x6ff58a, 0xffffff].map((c) => new THREE.Color(c));
 function celebrate(x, z) {
@@ -4333,6 +4375,20 @@ function decorateBoss(root, head, t) {
         put(holder, orb, M.glow, 0.78, 0, 0).castShadow = false;
         spin.push(holder);
       }
+      break;
+    }
+    case 'sand': { // the pharaoh's headdress, a cobra on the brow and a scarab on the chest
+      const flap = new THREE.BoxGeometry(0.22, 0.42, 0.06), cobra = new THREE.ConeGeometry(0.06, 0.26, 6);
+      for (const s of [-1, 1]) put(head, flap, M.glow, s * 0.26, 0.02, 0.05, 0, 0, s * 0.12);
+      put(head, new THREE.BoxGeometry(0.5, 0.12, 0.42), M.glow, 0, 0.36, 0); put(head, cobra, M.acc, 0, 0.44, 0.2, -0.6, 0, 0);
+      put(root, new THREE.SphereGeometry(0.14, 10, 8), M.acc, 0, 1.05, -0.33).scale.set(1, 0.7, 1.2);
+      break;
+    }
+    case 'crystal': { // shards grow from the shoulders, the back and the brow
+      const g = new THREE.ConeGeometry(0.1, 0.62, 5);
+      for (const s of [-1, 1]) for (let i = 0; i < 3; i++) put(root, g, M.acc, s * (0.34 + i * 0.08), 1.2 + i * 0.06, -0.08 + i * 0.1, rand(-0.3, 0.3), 0, -s * (0.35 + i * 0.3), 1 + i * 0.15);
+      for (let i = 0; i < 5; i++) put(root, g, M.acc, rand(-0.3, 0.3), 0.95 + rand(0, 0.35), -0.38, -0.95, 0, rand(-0.5, 0.5), 1.3);
+      for (let i = 0; i < 3; i++) put(head, g, M.acc, (i - 1) * 0.14, 0.34, 0, (i - 1) * 0.2, 0, -(i - 1) * 0.4, 0.8);
       break;
     }
   }
@@ -4442,6 +4498,11 @@ function bossPower(b, dt) {
       vortex(b, dt);
       if (ready) { b.abT = 5.5; b.z = Math.min(b.z + 3, DEFENSE_Z - 12); sparks(b.x, 3, b.z, 0xc86bff, 40, 9, 0.8, 0.5); ring(b.x, b.z, 0xc86bff, 8, 0.5); Sfx.play('warp'); }
       break;
+    case 'sand': if (ready) { b.abT = 3.4; eruption(b); } break; // spikes of sand from the ground
+    case 'crystal': // a glowing shell that throws the volley back as shards
+      if (ready) { b.abT = 7; b.shield = 2.5; Sfx.play('bubble'); }
+      if (b.shield > 0 && (b.refT = (b.refT ?? 0) - dt) <= 0) { b.refT = 0.6; const a = frontAlly(b); if (a) { strike(a.x, 0, a.z, false, 0xc8b0ff); killAlliesNear(a.x, a.z, 1.6, new THREE.Color(0xc8b0ff)); } }
+      break;
   }
   bossTail(b, dt);
 }
@@ -4456,8 +4517,8 @@ function bossTail(b, dt) {
 // of the eight worlds shortens the warning, narrows the gaps and quickens the cadence. ----
 const marchCycle = () => Math.floor(M.stage / BIOMES.length);
 const PAT = {
-  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff },
-  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4 },
+  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff, sand: 0xffd060, crystal: 0xc8b0ff },
+  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4, sand: 3.8, crystal: 3.6 },
 };
 // Zone builders, all around the troop (M.cx, SQUAD_Z). The gap lands away from the troop most of the time, so it has to move.
 const patSide = () => { // one side of the road burns; the other side (11.5 m) always fits the whole troop (10.2 m at full width)
@@ -4498,6 +4559,8 @@ const PATTERNS = { // [sidestep pattern, FILA pattern]
   poison: [patSide, () => patGap(2.8)],
   zombie: [patSide, () => patStripes(3)],
   void: [patSide, () => patGap(4.2, true)],
+  sand: [patSide, () => patGap(3.2, true)], // sandstorms that drag the troop in
+  crystal: [patSide, () => patRain(5, 2.2)], // falling shards
 };
 const zoneSpan = (q) => (q.kind === 'disc' ? q.r : q.hw);
 const PAT_FX = { // the theme's impact on one zone
@@ -4509,12 +4572,23 @@ const PAT_FX = { // the theme's impact on one zone
   poison: (q) => { if (toxic.length >= 6) toxic.shift(); toxic.push({ x: q.x, z: q.z, r: Math.min(zoneSpan(q) * 0.8, 3), life: 3 }); ring(q.x, q.z, 0x9cff4a, 5, 0.6); Sfx.play('gas'); },
   zombie: (q) => { const n = 3 + Math.floor(state.wave / 10); for (let i = 0; i < n; i++) spawnEnemy('grunt', clamp(q.x + rand(-zoneSpan(q), zoneSpan(q)), -LANE_HALF + 0.5, LANE_HALF - 0.5), q.z + rand(-2, 2)); debris(q.x, 0.4, q.z, _hzC.zombie, 12, 6, 0.25); Sfx.play('summon'); },
   void: (q) => { sparks(q.x, 1, q.z, 0xc86bff, 60, 10, 0.8, 0.5); ring(q.x, q.z, 0xc86bff, zoneSpan(q) * 2, 0.6); state.shake = Math.max(state.shake, 0.4); Sfx.play('warp'); },
+  sand: (q) => { zoneSpikes(q, 0xf0d8a0, 0xb08a30); smoke(q.x, 0.5, q.z, 5, 2.0, 0xe8c890, 1.2); Sfx.play('thud'); },
+  crystal: (q) => { zoneSpikes(q, 0xe6ddff, 0x8a6ad8); sparks(q.x, 1, q.z, 0xc8b0ff, 40, 10, 0.7, 0.6, 2, 0.4); Sfx.play('freeze'); },
 };
+// spikes over a whole zone: one burst for a disc, three along a stripe
+function zoneSpikes(q, color, emissive) {
+  if (q.kind === 'disc') spikesFx(q.x, q.z, q.r, color, emissive);
+  else for (let i = -1; i <= 1; i++) spikesFx(q.x + i * q.hw * 0.6, q.z + rand(-2, 2), Math.min(q.hw, 3), color, emissive);
+}
 function marchBossPower(b, dt) {
   const t = b.theme.id, c = marchCycle();
   if (t === 'water') { b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.004 * dt); if ((b.shT = (b.shT ?? 5) - dt) <= 0) { b.shT = 6.5; b.shield = 2.6; Sfx.play('bubble'); } }
   if (t === 'zombie') b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.003 * dt);
   if (t === 'void') vortex(b, dt);
+  if (t === 'crystal') { // its glowing shell throws the volley back as shards that land on the shooters
+    if ((b.shT = (b.shT ?? 6) - dt) <= 0) { b.shT = 7; b.shield = 2.5; Sfx.play('bubble'); }
+    if (b.shield > 0 && (b.refT = (b.refT ?? 0) - dt) <= 0) { b.refT = 0.75; const a = frontAlly(b); if (a) markPattern([{ kind: 'disc', x: a.x, z: a.z, r: 1.3 }], 0.9, PAT.color.crystal, PAT_FX.crystal); }
+  }
   if (b.abT > 0) return;
   b.patN = (b.patN || 0) + 1;
   b.abT = PAT.every[t] * Math.max(0.7, 1 - 0.1 * c) / (con('fury') ? 1.5 : 1);
@@ -4525,7 +4599,7 @@ function marchBossPower(b, dt) {
   markPattern(PATTERNS[t][fila ? 1 : 0](), warn, PAT.color[t], PAT_FX[t]);
   Sfx.play('warn');
 }
-const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff };
+const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff, sand: 0xffe0a0, crystal: 0xe0d0ff };
 function bossAura(b) {
   const t = b.theme, c = toColor(AURA[t.id], 0.2), s = b.scale, cy = s * 0.9;
   for (let k = 0; k < 2; k++) {

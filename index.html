@@ -1882,8 +1882,8 @@ function spawnBig(kind, x) {
     kind, mesh, maxHp: b.hp, x: x ?? (isBoss ? 0 : rand(-LANE_HALF + 2, LANE_HALF - 2)), z: SPAWN_Z - 1,
     flash: 0, phase: Math.random() * 6, alive: true, label: null, lastStep: 0, theme, abT: 3, sumT: 6, shield: 0, bubble: null,
   });
-  if (theme?.id === 'water' || theme?.id === 'crystal') { // the Leviathan's bubble, the Golem's glow
-    b.bubble = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 14), new THREE.MeshBasicMaterial({ color: theme.id === 'crystal' ? 0xc8b0ff : 0x8ff4ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
+  if (['water', 'crystal', 'iron'].includes(theme?.id)) { // the Leviathan's bubble, the Golem's glow, the Colossus's open plates
+    b.bubble = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 14), new THREE.MeshBasicMaterial({ color: { crystal: 0xc8b0ff, iron: 0xff8a2a }[theme.id] || 0x8ff4ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
     b.bubble.position.y = 0.85; b.bubble.visible = false; b.bubble.userData.own = true; mesh.add(b.bubble);
   }
   mesh.scale.setScalar(b.scale); mesh.position.set(b.x, 0, b.z); scene.add(mesh);
@@ -2670,6 +2670,8 @@ const ELEMENTS = {
   void: { name: 'BURACO NEGRO', hint: 'Tiros perseguem os inimigos', tint: 0x9a5ae8, shot: 0xc86bff },
   sand: { name: 'AREIA', hint: 'Tiros abrem em leque ao acertar', tint: 0xe8c070, shot: 0xffe0a0 },
   crystal: { name: 'CRISTAL', hint: 'Tiros atravessam dois alvos e às vezes acertam em cheio', tint: 0xb8a0ff, shot: 0xe0d0ff },
+  wind: { name: 'VENTO', hint: 'Tiros mais rápidos e 6 m mais longe', tint: 0xbfe8ff, shot: 0xf0fbff },
+  iron: { name: 'FERRO', hint: 'Tiros ignoram escudos e blindagem e às vezes atordoam', tint: 0x9a9aa4, shot: 0xd8d8e0 },
 };
 for (const e of Object.values(ELEMENTS)) { e.tintC = new THREE.Color(e.tint); e.shotC = new THREE.Color(e.shot); }
 const M = {
@@ -2682,7 +2684,8 @@ const M = {
 const con = (id) => M.contracts.has(id);
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
 const heroRange = () => (M.hero?.id === 'arqueira' ? 8 + 2 * (M.hero.lvl - 1) : 0); // the Archer sees farther
-const shotRange = () => clamp(WEAPON.range + M.stat.range + heroRange(), 32, 70 + heroRange());
+const windRange = () => (hasEl('wind') ? 6 : 0), boltSpeed = () => WEAPON.speed * (hasEl('wind') ? 1.3 : 1); // the wind carries the bolts
+const shotRange = () => clamp(WEAPON.range + M.stat.range + heroRange() + windRange(), 32, 70 + heroRange() + windRange());
 const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
@@ -2917,7 +2920,7 @@ function fireVolley() {
   const troop = allies.filter((a) => a.alive && a.role === 'squad');
   if (!troop.length) return;
   const n = Math.min(troop.length, 22), each = (WEAPON.dmg * statMul('dmg') * troop.length) / n;
-  const life = shotRange() / WEAPON.speed, fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (hasEl('crystal') ? 2 : 0) + (heroActive('arqueira') ? 2 : 0);
+  const life = shotRange() / boltSpeed(), fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (hasEl('crystal') ? 2 : 0) + (heroActive('arqueira') ? 2 : 0);
   // FILA focuses the fire: while squeezed the bolts converge on the boss (or on the column's center line), so the shots
   // from the edges of the troop land too instead of passing beside it.
   // (a third of that focus is always on during a fight, so sidestepping the patterns doesn't throw the whole volley wide)
@@ -2926,7 +2929,7 @@ function fireVolley() {
     if (M.bolts.length >= BOLT_MAX) break;
     const a = troop[Math.floor(Math.random() * troop.length)];
     const b = boltPool.pop() || {};
-    b.x = a.x + rand(-0.15, 0.15); b.y = 1.0 + rand(-0.1, 0.15); b.z = a.z - 0.6; b.v = WEAPON.speed * rand(0.95, 1.05); b.vx = vx * rand(0.85, 1.15) + (aimX - b.x) * 1.2 * focus;
+    b.x = a.x + rand(-0.15, 0.15); b.y = 1.0 + rand(-0.1, 0.15); b.z = a.z - 0.6; b.v = boltSpeed() * rand(0.95, 1.05); b.vx = vx * rand(0.85, 1.15) + (aimX - b.x) * 1.2 * focus;
     b.dmg = each; b.life = life; b.pierce = pierce; b.last = null; b.child = false;
     b.c = els.length ? ELEMENTS[els[k % els.length]].shotC : WEAPON.shotC;
     b.home = homing ? homingTarget(b.x, b.z) : null;
@@ -3458,6 +3461,8 @@ const HAZARDS = {
   void: { title: 'RASGOS NO ESPAÇO', hint: 'Buracos negros puxam a tropa', every: 6.5 },
   sand: { title: 'AREIA MOVEDIÇA', hint: 'Na areia a tropa atola e afunda', every: 5 },
   crystal: { title: 'CRISTAIS DA PISTA', hint: 'Metade da pista vira espinhos: fique na outra', every: 5.5 },
+  wind: { title: 'VENTO LATERAL', hint: 'As rajadas empurram a tropa para o lado', every: 5 },
+  iron: { title: 'SERRAS', hint: 'Lâminas cruzam a pista devagar: não fique no caminho', every: 6 },
 };
 const stageBiome = () => BIOMES[M.stage % BIOMES.length].id;
 const hazardLevel = () => { const d = M.dist - M.stageStart; return d < 200 ? -1 : clamp((d - 200) / 600, 0, 1); }; // -1: still calm
@@ -3469,7 +3474,7 @@ const arrowTex = canvasTex(128, 128, (g, w, h) => {
   g.beginPath(); g.moveTo(30, 34); g.lineTo(70, 64); g.lineTo(30, 94); g.lineTo(46, 94); g.lineTo(86, 64); g.lineTo(46, 34); g.closePath(); g.fill();
 });
 arrowTex.wrapS = arrowTex.wrapT = THREE.RepeatWrapping;
-const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f), poison: new THREE.Color(0x7ad83a), void: new THREE.Color(0xc86bff), zombie: new THREE.Color(0x6a5040), sand: new THREE.Color(0xe8c890) };
+const _hzC = { fire: new THREE.Color(0xff7a1a), lava: new THREE.Color(0xff5a1f), poison: new THREE.Color(0x7ad83a), void: new THREE.Color(0xc86bff), zombie: new THREE.Color(0x6a5040), sand: new THREE.Color(0xe8c890), iron: new THREE.Color(0x8a8a94) };
 // Road hazards, like the boss patterns, kill everyone they touch: each one is visible from far off and leaves a way
 // around (or a quiet phase to cross in), so a loss is a loss of attention, never of luck. hzCap stays for the odd
 // touch that isn't a dodge test (a boss's lingering gas, the stomp of a passing brute).
@@ -3550,6 +3555,20 @@ function spawnHazard(id, k) {
       markPattern([{ kind: 'rect', x: side * 5.3, z: SQUAD_Z - M.speed * T, hw: 3.6, hd: 1.4 }], T, PAT.color.crystal, PAT_FX.crystal);
       break;
     }
+    case 'wind': { // a crosswind band: like the current, it shoves the troop sideways
+      const d = rand(6, 9), dir = side, mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: arrowTex.clone(), transparent: true, opacity: 0.5, depthWrite: false });
+      mat.map.wrapS = mat.map.wrapT = THREE.RepeatWrapping; mat.map.repeat.set((LANE_HALF * 2) / 2.2 * dir, d / 2.2); mat.map.needsUpdate = true;
+      const band = new THREE.Mesh(hzPlane, mat); band.scale.set(LANE_HALF * 2, 1, d); band.position.y = 0.05;
+      const under = new THREE.Mesh(hzBox, hzMat(0xbfe8ff, 0.25, false)); under.scale.set(LANE_HALF * 2, 1, d); under.position.y = 0.02;
+      addHazard({ type: 'water', x: 0, z: MARCH_FAR, d, dir, mat }, under, band);
+      break;
+    }
+    case 'iron': { // a saw blade that crawls across the road: slow, loud, deadly to whoever it touches
+      const blade = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.1, 12), new THREE.MeshLambertMaterial({ color: 0x8a8a94, flatShading: true })); blade.position.y = 0.35; blade.castShadow = true;
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.3, 8), new THREE.MeshLambertMaterial({ color: 0xff8a2a })); hub.position.y = 0.4;
+      addHazard({ type: 'saw', x: side * (LANE_HALF + 1.5), z: MARCH_FAR + 30, r: 1.5, vx: -side * rand(2.5, 3.5), blade }, blade, hub);
+      break;
+    }
   }
 }
 // A boss pattern on the march: zones (discs or stripes) marked on the road for T seconds, then everyone inside dies,
@@ -3589,6 +3608,12 @@ function spikesFx(x, z, r, color = 0xd8f6ff, emissive = 0x3a8acc) {
 }
 // Per-frame behavior of each hazard; returns true once it is spent.
 const HZ_UPDATE = {
+  saw(h, dt, active) {
+    h.x += h.vx * dt; h.grp.position.x = h.x; h.blade.rotation.y += dt * 10;
+    if (Math.random() < 0.4) sparks(h.x + rand(-1, 1), 0.3, h.z + rand(-1, 1), 0xffb060, 2, 4, 0.3, 0.25, 1);
+    if (active && Math.abs(h.z - SQUAD_Z) < 8 && (h.tick -= dt) <= 0) { h.tick = 0.25; killAlliesNear(h.x, h.z, h.r, _hzC.iron, Infinity); }
+    return Math.abs(h.x) > LANE_HALF + 3 && Math.sign(h.x) === Math.sign(h.vx);
+  },
   sand(h, dt, active) {
     if (!active || Math.abs(h.z - SQUAD_Z) > h.r + 2) return;
     M.grip = Math.min(M.grip, 0.3);
@@ -3600,6 +3625,7 @@ const HZ_UPDATE = {
       if (q.kind === 'disc') { q.mark.scale.setScalar(q.r * (1.6 - 0.6 * u)); q.mark.material.opacity = pulse; }
       else q.mark.material.opacity = 0.45 + 0.55 * pulse;
       if (q.pull && active) { M.drift += Math.sign(q.x - M.cx) * 3; M.grip = Math.min(M.grip, 0.6); } // the implosion drags the troop in
+      if (q.wind && active) { M.drift += q.wind * 7; M.grip = Math.min(M.grip, 0.7); } // the gust shoves the troop sideways
     }
     if (h.t < h.T) return false;
     let n = 0;
@@ -3699,6 +3725,7 @@ function hurt(t, dmg) {
   if (!t.alive) return;
   t.hp -= dmg; t.flash = 1;
   if (hasEl('ice')) { if (t.mesh) t.chill = 0.8; else if (Math.random() < 0.35) t.frozen = 2.5; }
+  if (hasEl('iron') && t.mesh && Math.random() < 0.1) t.stun = 0.6; // one iron bolt in ten stuns a big one
   if (hasEl('fire')) { // bigs burn for 1.5% of their health a second (through shields and regeneration), the horde just a little
     const dps = t.mesh ? t.maxHp * 0.015 : dmg * 0.6;
     t.burnDps = t.burn > 0 ? Math.max(t.burnDps, dps) : dps; t.burn = t.mesh ? 3 : 2;
@@ -3706,7 +3733,7 @@ function hurt(t, dmg) {
   if (t.hp <= 0) t.mesh ? killBig(t) : killEnemy(t);
 }
 function updateShots(dt) {
-  const bolts = M.bolts, lava = hasEl('lava'), storm = hasEl('storm'), fire = hasEl('fire'), sand = hasEl('sand'), crystal = hasEl('crystal');
+  const bolts = M.bolts, lava = hasEl('lava'), storm = hasEl('storm'), fire = hasEl('fire'), sand = hasEl('sand'), crystal = hasEl('crystal'), iron = hasEl('iron');
   for (let i = 0; i < bolts.length; i++) {
     const b = bolts[i], z0 = b.z; b.z -= b.v * dt; b.life -= dt;
     if (b.home) { if (b.home.alive) b.vx = clamp((b.home.x - b.x) * 5, -14, 14); else b.home = null; }
@@ -3724,8 +3751,9 @@ function updateShots(dt) {
       if (inc) { hit.acc -= inc; if (hit.n < cap) setGateNumber(hit, Math.min(cap, hit.n + inc)); }
     } else if (hit.grp) { b.life = 0; hit.hp -= b.dmg * (fire ? 1.5 : 1); hit.flash = 1; if (hit.hp <= 0 && !hit.dead) breakObstacle(hit); } // crates and chains burn fast
     else {
-      if (!(hit.shield > 0)) { // crystal: one shot in five lands square (×2.5)
-        const crit = crystal && Math.random() < 0.2; hurt(hit, b.dmg * (crit ? 2.5 : 1));
+      if (!(hit.shield > 0) || iron) { // crystal: one shot in five lands square (×2.5); iron bolts ignore shields and the Colossus's plates
+        const crit = crystal && Math.random() < 0.2, armor = hit.theme?.id === 'iron' && !(hit.vent > 0) && !iron ? 0.5 : 1;
+        hurt(hit, b.dmg * (crit ? 2.5 : 1) * armor);
         if (crit) sparks(b.x, b.y, hz, 0xe0d0ff, 6, 6, 0.4, 0.3, 2);
       }
       if (sand && !b.child && bolts.length < BOLT_MAX - 2) for (const vx of [-7, 7]) { // sand: the hit bursts into a fan of two
@@ -3789,7 +3817,7 @@ function updateMarchEnemies(dt, dz) {
     if (isBoss) {
       // one steady pace up to the troop's front, where it halts and rages (powers 1.5× faster) instead of trampling the
       // formation: a fight the troop is losing bleeds it, it doesn't wipe it in seconds
-      b.z = Math.min(SQUAD_Z - 9, b.z + dz + bossPace() * dt);
+      if (b.stun > 0) b.stun -= dt; else b.z = Math.min(SQUAD_Z - 9, b.z + dz + bossPace() * dt); // iron bolts stun it for a moment
       if (!b.rage && b.z >= SQUAD_Z - 9) { b.rage = true; b.rageT = 0; b.rageF = 1.5; floatText('FÚRIA!', b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.6); state.flash = Math.max(state.flash, 0.3); Sfx.play('boss'); }
       if (b.rage) { // and it climbs a step every 20 s (up to 3×), so a fight the troop can't win ends instead of stalling for minutes
         b.rageT += dt; const f = Math.min(3, 1.5 + Math.floor(b.rageT / 20) * 0.5);
@@ -3800,7 +3828,7 @@ function updateMarchEnemies(dt, dz) {
         b.arrived = true; b.abT = 0.8; b.sumT = 2.5;
         if (M.relicStage !== M.stage) { M.relicStage = M.stage; spawnArenaRelic(); }
       }
-    } else b.z += dz + b.speed * 0.3 * dt;
+    } else if (b.stun > 0) b.stun -= dt; else b.z += dz + b.speed * 0.3 * dt;
     b.x = clamp(b.x + Math.sin(gt * 0.9 + b.phase) * 0.4 * dt, -LANE_HALF + b.r, LANE_HALF - b.r);
     if (b.flash > 0) b.flash -= dt * 7;
     tickStatus(b, dt);
@@ -3814,7 +3842,7 @@ function updateMarchEnemies(dt, dz) {
     else if (b.chill > 0) { u.skin.emissive.setHex(0x6ac8ff); u.skin.emissiveIntensity = 0.45; }
     else { u.skin.emissive.setHex(u.glow); u.skin.emissiveIntensity = u.glowI * (0.85 + 0.15 * Math.sin(gt * 6)); }
     for (const r of u.spin) r.rotation.z += dt * 2.5;
-    if (isBoss && active && b.arrived) bossPower(b, (b.chill > 0 ? 0.6 : 1) * (b.rage ? b.rageF : 1) * dt); // ice slows its powers, rage speeds them
+    if (isBoss && active && b.arrived && !(b.stun > 0)) bossPower(b, (b.chill > 0 ? 0.6 : 1) * (b.rage ? b.rageF : 1) * dt); // ice slows its powers, rage speeds them, a stun stops them
     if (b.label) { drawLabel(b.label, Math.max(0, Math.ceil(b.hp))); b.label.sprite.position.set(b.x, b.scale * 1.8 + 0.6, b.z); }
     if (active && b.z > SQUAD_Z - b.r - 2) { // stomping into the troop
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - b.x) ** 2 + (a.z - b.z) ** 2 < (b.r + 0.5) ** 2) {
@@ -4084,6 +4112,18 @@ const BIOMES = [
       leaves: 0xb0a0e8, bush: 0xc0b0f0, rock: 0xd0c8f0, liqA: 0x6a50c0, liqB: 0xe0f8ff, liqIce: 1, liqFlow: 0, liquid: 1, crack: 0xb8a0ff, crackO: 0.35,
       grass: 0.2, spikes: 1, fort: 0x6a5aa8, liqLight: 0xc8b0ff, liqLightI: 0.6, vignette: 0.08 },
     climax: { lightning: 0.1, vignette: 0.16 } },
+  { id: 'wind', name: 'SENHOR DOS VENTOS', short: 'Vento', hint: 'Rajadas que empurram a tropa para o perigo', css: '#bfe8ff',
+    skin: 0xcfe4f4, belly: 0xffffff, accent: 0x6ab0e8, glow: 0xdff4ff, glowI: 0.3, hpMul: 1.25,
+    look: { bg: 0xbfe0f8, fog: 0xd8ecfc, ground: 0x8cc088, lane: 0xe4eef4, hemiSky: 0xe8f6ff, hemiGround: 0x6a8a70, sun: 0xffffff, sunI: 2.2, hemiI: 1.5,
+      leaves: 0x6ab890, bush: 0x7ac898, rock: 0xa0b0b8, liqA: 0x2a7ab8, liqB: 0xd0f4ff, liquid: 0.8, liqFlow: 2.2, crack: 0xbfe8ff, crackO: 0.1,
+      grass: 0.8, storm: 0.4, rain: 0.2, fort: 0x5a7a90, fogNear: 1.1, fogFar: 1.1 },
+    climax: { storm: 1, rain: 0.6, lightning: 0.08 } },
+  { id: 'iron', name: 'COLOSSO DE FERRO', short: 'Ferro', hint: 'Blindado: só sofre de verdade quando solta vapor', css: '#c8c0b8',
+    skin: 0x6a6a74, belly: 0x9a9aa4, accent: 0x2a2a30, glow: 0xff8a2a, glowI: 0.5, hpMul: 1.4,
+    look: { bg: 0x8a8a94, fog: 0xa0a0a8, ground: 0x6a6058, lane: 0xb8b4b0, hemiSky: 0xc8c8d0, hemiGround: 0x3a3a40, sun: 0xd8d0c8, sunI: 1.7, hemiI: 1.4,
+      leaves: 0x6a7a60, bush: 0x5a6a50, rock: 0x707078, liqA: 0x2a2018, liqB: 0x8a7a60, liquid: 0.9, liqFlow: 0.5, crack: 0xff8a2a, crackO: 0.3,
+      grass: 0.1, embers: 0.6, storm: 0.4, fort: 0x4a4a50, fortGlow: 0x3a1a08, liqLight: 0xff8a2a, liqLightI: 0.5, vignette: 0.14 },
+    climax: { embers: 1.4, lightning: 0.15, vignette: 0.2 } },
 ];
 for (const b of BIOMES) { b.full = makeLook(b.look); b.peak = makeLook({ ...b.look, ...b.climax }); }
 const biomeOf = (wave) => BIOMES[Math.floor((Math.max(1, wave) - 1) / 5) % BIOMES.length];
@@ -4391,6 +4431,22 @@ function decorateBoss(root, head, t) {
       for (let i = 0; i < 3; i++) put(head, g, M.acc, (i - 1) * 0.14, 0.34, 0, (i - 1) * 0.2, 0, -(i - 1) * 0.4, 0.8);
       break;
     }
+    case 'wind': { // three little clouds orbit him
+      const puff = new THREE.SphereGeometry(0.12, 8, 6);
+      for (let i = 0; i < 3; i++) {
+        const holder = new THREE.Group(); holder.position.y = 0.95 + i * 0.12; holder.rotation.set(0.2, i * 2.1, 0); root.add(holder);
+        for (const [dx, dy, s] of [[0.82, 0, 1], [0.95, 0.05, 0.7], [0.72, 0.06, 0.6]]) put(holder, puff, M.cloud, dx, dy, 0, 0, 0, 0, s).castShadow = false;
+        spin.push(holder);
+      }
+      break;
+    }
+    case 'iron': { // plated shoulders and chest, a glowing visor, a gear on the back
+      for (const s of [-1, 1]) put(root, new THREE.BoxGeometry(0.46, 0.14, 0.3), M.acc, s * 0.38, 1.26, 0, 0, 0, -s * 0.15);
+      put(root, new THREE.BoxGeometry(0.5, 0.42, 0.1), M.acc, 0, 0.95, 0.3);
+      put(head, new THREE.BoxGeometry(0.42, 0.09, 0.1), M.glow, 0, 0.1, 0.2).castShadow = false;
+      spin.push(put(root, new THREE.TorusGeometry(0.22, 0.06, 6, 8), M.acc, 0, 1.05, -0.38));
+      break;
+    }
   }
   root.userData.spin = spin;
 }
@@ -4503,12 +4559,15 @@ function bossPower(b, dt) {
       if (ready) { b.abT = 7; b.shield = 2.5; Sfx.play('bubble'); }
       if (b.shield > 0 && (b.refT = (b.refT ?? 0) - dt) <= 0) { b.refT = 0.6; const a = frontAlly(b); if (a) { strike(a.x, 0, a.z, false, 0xc8b0ff); killAlliesNear(a.x, a.z, 1.6, new THREE.Color(0xc8b0ff)); } }
       break;
+    case 'wind': if (ready) { b.abT = 3; const a = frontAlly(b); if (a) { sparks(a.x, 0.6, a.z, 0xffffff, 30, 9, 0.6, 0.5, 3, 0.4); killAlliesNear(a.x, a.z, 2.4, new THREE.Color(0xdff4ff)); Sfx.play('whoosh'); } } break; // a gust scatters the front
+    case 'iron': if (ready) { b.abT = 2.6; throwFireball(b); } break; // cannonballs
   }
   bossTail(b, dt);
 }
 function bossTail(b, dt) {
   b.shield = Math.max(0, (b.shield || 0) - dt);
-  if (b.bubble) { b.bubble.visible = b.shield > 0; b.bubble.material.opacity = 0.22 + 0.08 * Math.sin(gt * 8); }
+  b.vent = Math.max(0, (b.vent || 0) - dt);
+  if (b.bubble) { b.bubble.visible = b.shield > 0 || b.vent > 0; b.bubble.material.opacity = 0.22 + 0.08 * Math.sin(gt * 8); }
   bossAura(b);
 }
 // ---- march boss patterns: every blow is a set of zones with a safe gap, marked on the road; at impact everyone inside
@@ -4517,8 +4576,8 @@ function bossTail(b, dt) {
 // of the eight worlds shortens the warning, narrows the gaps and quickens the cadence. ----
 const marchCycle = () => Math.floor(M.stage / BIOMES.length);
 const PAT = {
-  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff, sand: 0xffd060, crystal: 0xc8b0ff },
-  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4, sand: 3.8, crystal: 3.6 },
+  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff, sand: 0xffd060, crystal: 0xc8b0ff, wind: 0xdff4ff, iron: 0xffb060 },
+  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4, sand: 3.8, crystal: 3.6, wind: 3.6, iron: 3.8 },
 };
 // Zone builders, all around the troop (M.cx, SQUAD_Z). The gap lands away from the troop most of the time, so it has to move.
 const patSide = () => { // one side of the road burns; the other side (11.5 m) always fits the whole troop (10.2 m at full width)
@@ -4561,6 +4620,8 @@ const PATTERNS = { // [sidestep pattern, FILA pattern]
   void: [patSide, () => patGap(4.2, true)],
   sand: [patSide, () => patGap(3.2, true)], // sandstorms that drag the troop in
   crystal: [patSide, () => patRain(5, 2.2)], // falling shards
+  wind: [patSide, () => { const z = patStripes(3); z[0].wind = Math.random() < 0.5 ? -1 : 1; return z; }], // stripes under a crosswind
+  iron: [patSide, () => patRain(4, 2.6)], // cannonballs
 };
 const zoneSpan = (q) => (q.kind === 'disc' ? q.r : q.hw);
 const PAT_FX = { // the theme's impact on one zone
@@ -4574,6 +4635,8 @@ const PAT_FX = { // the theme's impact on one zone
   void: (q) => { sparks(q.x, 1, q.z, 0xc86bff, 60, 10, 0.8, 0.5); ring(q.x, q.z, 0xc86bff, zoneSpan(q) * 2, 0.6); state.shake = Math.max(state.shake, 0.4); Sfx.play('warp'); },
   sand: (q) => { zoneSpikes(q, 0xf0d8a0, 0xb08a30); smoke(q.x, 0.5, q.z, 5, 2.0, 0xe8c890, 1.2); Sfx.play('thud'); },
   crystal: (q) => { zoneSpikes(q, 0xe6ddff, 0x8a6ad8); sparks(q.x, 1, q.z, 0xc8b0ff, 40, 10, 0.7, 0.6, 2, 0.4); Sfx.play('freeze'); },
+  wind: (q) => { sparks(q.x, 0.6, q.z, 0xffffff, 30, 9, 0.6, 0.5, 3, 0.4); smoke(q.x, 0.5, q.z, 4, 1.8, 0xdff4ff, 0.9); Sfx.play('whoosh'); },
+  iron: (q) => { sparks(q.x, 0.5, q.z, 0xffb060, 40, 8, 0.8, 0.6, 5, 0.3); smoke(q.x, 0.5, q.z, 5, 1.6, 0x4a4a50, 1.3); ring(q.x, q.z, 0xffb060, zoneSpan(q) * 2, 0.5); state.shake = Math.max(state.shake, 0.3); Sfx.play('boom'); },
 };
 // spikes over a whole zone: one burst for a disc, three along a stripe
 function zoneSpikes(q, color, emissive) {
@@ -4585,6 +4648,9 @@ function marchBossPower(b, dt) {
   if (t === 'water') { b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.004 * dt); if ((b.shT = (b.shT ?? 5) - dt) <= 0) { b.shT = 6.5; b.shield = 2.6; Sfx.play('bubble'); } }
   if (t === 'zombie') b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.003 * dt);
   if (t === 'void') vortex(b, dt);
+  if (t === 'iron' && (b.ventT = (b.ventT ?? 5) - dt) <= 0) { // the plates open for 3 s every 8: the only time it takes full damage
+    b.ventT = 8; b.vent = 3; floatText('SOLTOU VAPOR!', b.x, b.scale * 1.8 + 1.2, b.z, 'gold'); smoke(b.x, b.scale, b.z, 10, 2, 0xdddddd, 1.2); Sfx.play('thud');
+  }
   if (t === 'crystal') { // its glowing shell throws the volley back as shards that land on the shooters
     if ((b.shT = (b.shT ?? 6) - dt) <= 0) { b.shT = 7; b.shield = 2.5; Sfx.play('bubble'); }
     if (b.shield > 0 && (b.refT = (b.refT ?? 0) - dt) <= 0) { b.refT = 0.75; const a = frontAlly(b); if (a) markPattern([{ kind: 'disc', x: a.x, z: a.z, r: 1.3 }], 0.9, PAT.color.crystal, PAT_FX.crystal); }
@@ -4599,7 +4665,7 @@ function marchBossPower(b, dt) {
   markPattern(PATTERNS[t][fila ? 1 : 0](), warn, PAT.color[t], PAT_FX[t]);
   Sfx.play('warn');
 }
-const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff, sand: 0xffe0a0, crystal: 0xe0d0ff };
+const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff, sand: 0xffe0a0, crystal: 0xe0d0ff, wind: 0xffffff, iron: 0xffb060 };
 function bossAura(b) {
   const t = b.theme, c = toColor(AURA[t.id], 0.2), s = b.scale, cy = s * 0.9;
   for (let k = 0; k < 2; k++) {

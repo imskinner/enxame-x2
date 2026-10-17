@@ -1851,7 +1851,7 @@ function spawnEnemy(kind, x, z) {
   if (enemies.length >= MAX_ENEMIES) return;
   const e = enemyPool.pop() || {};
   const n = state.wave;
-  e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = 0;
+  e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = e.bites = 0;
   if (kind === 'runner') Object.assign(e, { hp: 1, speed: gruntSpeed(n) * 1.65, r: 0.36, color: COL.runner, scale: 0.85, dmg: 1, score: 15, ult: 1 });
   else if (kind === 'armored') Object.assign(e, { hp: 2 + Math.floor(n / 5), speed: gruntSpeed(n) * 0.9, r: 0.47, color: COL.armored, scale: 1.15, dmg: 2, score: 20, ult: 1.4 });
   else Object.assign(e, { hp: 1 + Math.floor(n / 7), speed: gruntSpeed(n) * rand(0.9, 1.1), r: 0.42, color: COL.grunt, scale: 1, dmg: 1, score: 10, ult: 0.8 });
@@ -1901,7 +1901,7 @@ function removeBig(b) {
 function killEnemy(e, fromUlt = false) {
   const march = state.mode === 'march';
   e.alive = false; state.score += march ? Math.round(e.score * M.combo * M.cMul) : e.score; state.kills++;
-  if (march && !fromUlt) M.comboK++; // the ultimate's kills don't build the combo
+  if (march && !fromUlt) M.comboK += hasEl('gold') ? 2 : 1; // the ultimate's kills don't build the combo; gold counts double
   debris(e.x, 0.7, e.z, e.color, fromUlt ? 2 : 4, 5, 0.2);
   sparks(e.x, 0.8, e.z, e.color, fromUlt ? 3 : 6, 5, 0.5, 0.4, 2);
   Sfx.play('pop');
@@ -2118,7 +2118,7 @@ const ultWall = new THREE.Group();
 }
 // Later waves have far more kills, so each kill charges less. On the march the charge follows the world instead, so the
 // ultimate comes about once per world: spend it on the rush or save it for the boss, who refunds half when it falls.
-const ultGainScale = () => (state.mode === 'march' ? 0.5 / (1 + 0.3 * M.stage) : 4 / (3 + state.wave));
+const ultGainScale = () => (state.mode === 'march' ? (0.5 / (1 + 0.3 * M.stage)) * (hasEl('clock') ? 2 : 1) : 4 / (3 + state.wave)); // the clock element charges it twice as fast
 function addUlt(v) {
   if (state.phase !== 'playing' && state.phase !== 'break') return;
   const was = state.ult >= ULT_MAX;
@@ -2676,6 +2676,8 @@ const ELEMENTS = {
   shadow: { name: 'SOMBRA', hint: 'Quem leva um tiro sofre 25% a mais por 3 s', tint: 0x6a4a9a, shot: 0xb080ff },
   stone: { name: 'PEDRA', hint: 'Tiros empurram a horda e seguram o chefão', tint: 0xa89878, shot: 0xe8d8b8 },
   ghost: { name: 'FANTASMA', hint: 'Um quinto dos caídos num golpe volta por 5 s como espectro', tint: 0x9affe8, shot: 0xd8fff8 },
+  gold: { name: 'OURO', hint: 'Cada abate conta em dobro para o combo e a horda solta mais moedas', tint: 0xffd040, shot: 0xfff0a0 },
+  clock: { name: 'RELÓGIO', hint: 'O ultimate carrega duas vezes mais rápido', tint: 0x8ae8ff, shot: 0xd0f8ff },
 };
 for (const e of Object.values(ELEMENTS)) { e.tintC = new THREE.Color(e.tint); e.shotC = new THREE.Color(e.shot); }
 const M = {
@@ -2693,7 +2695,7 @@ const shotRange = () => clamp(WEAPON.range + M.stat.range + heroRange() + windRa
 const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
-const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul') n++; return n; };
+const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul' && a.role !== 'statue') n++; return n; };
 const squadCap = () => Math.round(Math.min(SQUAD_MAX + M.q.cap, SQUAD_BASE + M.q.cap + 25 * M.stage) * (con('lean') ? 0.5 : 1)); // the cap climbs 25 a world, so every world has room to grow into
 const statMax = (stat) => STATS[stat].max + (stat === 'range' ? M.q.statMax / 5 : M.q.statMax); // the Arsenal raises the ceilings
 
@@ -3101,7 +3103,7 @@ function recruit(k, x = null, what = null) {
   fullTroop(k - fit, M.cx, SQUAD_Z, fit > 0 ? 4.2 : 3);
 }
 function loseSoldiers(k) {
-  const troop = allies.filter((a) => a.alive && a.role !== 'caged' && a.role !== 'ghoul');
+  const troop = allies.filter((a) => a.alive && a.role !== 'caged' && a.role !== 'ghoul' && a.role !== 'statue');
   for (let i = 0; i < k && troop.length; i++) {
     const a = troop.splice(Math.floor(Math.random() * troop.length), 1)[0];
     a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16);
@@ -3111,7 +3113,7 @@ function loseSoldiers(k) {
 // Kills on the march only charge the ultimate (in killEnemy); soldiers come from cages and multiplier gates. The poison
 // and zombie elements add their own aftermath.
 function marchKill(e) {
-  if (e.mesh) for (let i = 0; i < 5; i++) dropCoin(e.x, e.z); else if (Math.random() < 0.3) dropCoin(e.x, e.z); // the horde drops coins
+  if (e.mesh) for (let i = 0; i < 5; i++) dropCoin(e.x, e.z); else if (Math.random() < (hasEl('gold') ? 0.5 : 0.3)) dropCoin(e.x, e.z); // the horde drops coins (more under the gold element)
   if (hasEl('poison') && M.pools.length < 14) M.pools.push({ x: e.x, z: e.z, r: 1.6, life: 2.6 });
   if (hasEl('zombie') && Math.random() < 0.3 && allies.filter((a) => a.alive && a.role === 'ghoul').length < 12) {
     const a = spawnAlly(e.x, e.z, 0, 0, 0, 0); if (!a) return;
@@ -3339,9 +3341,10 @@ function simulateMarch(dt, realDt = dt) {
   // the road halts while a boss is standing in it
   const boss = bigs.find((b) => b.alive && b.kind === 'boss');
   const arena = !!boss;
+  const tempo = M.tempoT > 0 ? M.tempoK : 1; if (M.tempoT > 0) M.tempoT -= dt; M.tempo = tempo; // the clock world's bands shift the pace for a few seconds
   const target = active ? (arena ? 0 : Math.min(15, 8 + M.dist / 350)) : 0;
   M.speed += (target - M.speed) * Math.min(1, dt * (arena ? 3 : 1.2));
-  const dz = M.speed * dt;
+  const dz = M.speed * tempo * dt;
   if (dz > 0) { M.dist += dz; scrollMarchWorld(dz); if (active) { M.scoreAcc += dz * M.combo * M.cMul; const add = Math.floor(M.scoreAcc); M.scoreAcc -= add; state.score += add; } }
   // five waves of look per stage; the boss closes the fifth and the world holds there until the vortex
   const wave = 1 + M.stage * 5 + Math.floor(clamp(M.dist - M.stageStart, 0, BOSS_EVERY - 1) / 200);
@@ -3361,6 +3364,7 @@ function simulateMarch(dt, realDt = dt) {
   for (const a of allies) {
     if (!a.alive) continue;
     if (a.role === 'caged') { a.x = a.cage.x + a.ox; a.z = a.cage.z + a.oz; continue; }
+    if (a.role === 'statue') { a.z += dz; if (a.z > MARCH_BEHIND) a.alive = false; continue; } // a golden statue stays where it stood and rolls off with the road
     if (a.ghostT > 0 && (a.ghostT -= dt) <= 0) { a.alive = false; M.lastN--; emit(sparkSys, a.x, 0.6, a.z, 0, 2, 0, WISP, 0.8, 0.8, -0.3, -0.5, 0); continue; } // a spectre fades (not a loss for the combo)
     if (a.role === 'ghoul') { // zombie element: the risen dead charge the horde and burst on the first one they reach
       a.z -= 7 * dt; a.life -= dt;
@@ -3475,6 +3479,8 @@ const HAZARDS = {
   shadow: { title: 'POÇAS DE SOMBRA', hint: 'A névoa esconde as poças escuras: olhe para o chão', every: 4.5 },
   stone: { title: 'DESABAMENTOS', hint: 'Pedras caem onde a tropa vai estar: sobra um corredor', every: 5 },
   ghost: { title: 'TÚMULOS', hint: 'As lápides puxam a tropa; quem chega à pedra é levado', every: 6.5 },
+  gold: { title: 'MOEDAS COM ARMADILHA', hint: 'Pilhas de ouro sobre alçapões: passe ao lado, o ímã puxa de longe', every: 5.5 },
+  clock: { title: 'FAIXAS DE TEMPO', hint: 'Cruzar uma faixa acelera ou arrasta o mundo por 3 s', every: 5 },
 };
 const stageBiome = () => BIOMES[M.stage % BIOMES.length].id;
 const hazardLevel = () => { const d = M.dist - M.stageStart; return d < 200 ? -1 : clamp((d - 200) / 600, 0, 1); }; // -1: still calm
@@ -3605,11 +3611,29 @@ function spawnHazard(id, k) {
       addHazard({ type: 'tomb', x: side * (LANE_HALF - 2.2), z: MARCH_FAR, r: 1.1 }, stone, halo);
       break;
     }
+    case 'gold': { // a trapdoor with a pile of coins on it: the magnet reaches them from outside the trap
+      const r = 2.0, door = new THREE.Mesh(hzDisc, hzMat(0x5a3a10, 0.9, false)), pile = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.6, 8), new THREE.MeshLambertMaterial({ color: 0xffd040, emissive: 0x8a6400, emissiveIntensity: 0.3, flatShading: true }));
+      door.scale.setScalar(r); door.position.y = 0.04; pile.position.y = 0.3; pile.castShadow = true;
+      const x = side * (LANE_HALF - 2.4);
+      addHazard({ type: 'trap', x, z: MARCH_FAR, r }, door, pile);
+      for (let i = 0; i < 3; i++) dropCoin(x + rand(-0.8, 0.8), MARCH_FAR + rand(-0.8, 0.8), 2);
+      break;
+    }
+    case 'clock': { // a band of slow (blue) or fast (orange) time across the road
+      const d = rand(7, 10), k = Math.random() < 0.5 ? 0.5 : 1.7, mat = new THREE.MeshBasicMaterial({ color: k < 1 ? 0x8ad0e8 : 0xff8a4a, map: arrowTex.clone(), transparent: true, opacity: 0.5, depthWrite: false });
+      mat.map.wrapS = mat.map.wrapT = THREE.RepeatWrapping; mat.map.repeat.set((d / 2.2) * (k < 1 ? -1 : 1), (LANE_HALF * 2) / 2.2); mat.map.rotation = -Math.PI / 2; mat.map.center.set(0.5, 0.5); mat.map.needsUpdate = true;
+      const band = new THREE.Mesh(hzPlane, mat); band.scale.set(LANE_HALF * 2, 1, d); band.position.y = 0.05;
+      const under = new THREE.Mesh(hzBox, hzMat(k < 1 ? 0x2a6a88 : 0x8a3a10, 0.3, false)); under.scale.set(LANE_HALF * 2, 1, d); under.position.y = 0.02;
+      addHazard({ type: 'tempo', x: 0, z: MARCH_FAR, d, k, mat }, under, band);
+      break;
+    }
   }
 }
+const jitterZ = (q) => (q.kind === 'disc' ? rand(-1, 1) : rand(-2, 2)); // a spot inside a zone, along the road
 // A boss pattern on the march: zones (discs or stripes) marked on the road for T seconds, then everyone inside dies,
 // no cap. Each zone gets the theme's impact effect; a zone with `pull` drags the troop toward it while it is marked.
-function markPattern(zones, T, color, fx) {
+// With `midas` the soldiers inside become golden statues instead (lost all the same, but left standing on the road).
+function markPattern(zones, T, color, fx, midas = false) {
   const meshes = [];
   for (const q of zones) {
     if (q.kind === 'disc') {
@@ -3623,7 +3647,7 @@ function markPattern(zones, T, color, fx) {
       q.mark = edge; meshes.push(edge, fill);
     }
   }
-  addHazard({ type: 'pattern', x: 0, z: 0, T, zones, colorC: new THREE.Color(color), fx }, ...meshes);
+  addHazard({ type: 'pattern', x: 0, z: 0, T, zones, colorC: new THREE.Color(color), fx, midas }, ...meshes);
 }
 // Boss blows on the march are telegraphed like the road hazards: a ring marks the spot and closes in, then the blow
 // lands there, so the troop can step aside or squeeze out of it.
@@ -3643,7 +3667,34 @@ function spikesFx(x, z, r, color = 0xd8f6ff, emissive = 0x3a8acc) {
   addHazard({ type: 'icefx', x, z, life: 0.9 }, ...spikes);
 }
 // Per-frame behavior of each hazard; returns true once it is spent.
+// Midas's touch: the soldiers inside the zone turn to gold where they stand (statues scroll off with the road).
+function midasTouch(q, zoff) {
+  let n = 0;
+  for (const a of allies) {
+    if (!a.alive || a.role === 'caged' || a.role === 'ghoul' || a.role === 'statue' || allyShielded(a)) continue;
+    const inside = q.kind === 'disc' ? (a.x - q.x) ** 2 + (a.z - q.z - zoff) ** 2 < q.r * q.r : Math.abs(a.x - q.x) < q.hw && Math.abs(a.z - q.z - zoff) < q.hd;
+    if (!inside) continue;
+    a.role = 'statue'; a.ghostT = 0; if (++n % 4 === 0) sparks(a.x, 0.8, a.z, 0xffe060, 4, 4, 0.5, 0.4, 2);
+  }
+  if (n) floatText('VIRARAM OURO!', M.cx, 3.6, SQUAD_Z, 'gold');
+  return n;
+}
 const HZ_UPDATE = {
+  trap(h, dt, active) { // a pile of coins on a trapdoor: step on it and spikes come up where the pile was
+    const pile = h.grp.children[1]; pile.rotation.y += dt * 2; pile.position.y = 0.3 + Math.sin(h.t * 3) * 0.06;
+    if (!active || Math.abs(h.z - SQUAD_Z) > M.R + 2) return false;
+    for (const a of allies) if (a.alive && a.role === 'squad' && (a.x - h.x) ** 2 + (a.z - h.z) ** 2 < h.r * h.r) {
+      markPattern([{ kind: 'disc', x: h.x, z: h.z, r: h.r }], 0.8, PAT.color.gold, PAT_FX.gold); Sfx.play('warn'); return true;
+    }
+    return false;
+  },
+  tempo(h, dt, active) { // a band of slow or fast time: crossing it sets the world's pace (road and horde) for 3 s
+    h.mat.map.offset.x -= dt * h.k * 1.2;
+    if (active && !h.hit && Math.abs(h.z - SQUAD_Z) < h.d / 2 + 0.5) {
+      h.hit = true; M.tempoK = h.k; M.tempoT = 3; floatText(h.k < 1 ? 'TEMPO LENTO' : 'TEMPO RÁPIDO', M.cx, 3.6, SQUAD_Z, 'cyan'); Sfx.play(h.k < 1 ? 'freeze' : 'warp');
+      sparks(M.cx, 0.6, SQUAD_Z, h.k < 1 ? 0x8ad0e8 : 0xff8a4a, 40, 8, 0.7, 0.6, 3, 0.3);
+    }
+  },
   tomb(h, dt, active) {
     if (Math.random() < 0.5) emit(sparkSys, h.x + rand(-1, 1), rand(0.3, 1.5), h.z + rand(-1, 1), 0, rand(0.5, 1.5), 0, WISP, 0.6, 0.8, -0.3, -0.5, 0);
     const d = Math.abs(h.z - SQUAD_Z);
@@ -3674,11 +3725,12 @@ const HZ_UPDATE = {
       else q.mark.material.opacity = 0.45 + 0.55 * pulse;
       if (q.pull && active) { M.drift += Math.sign(q.x - M.cx) * 3; M.grip = Math.min(M.grip, 0.6); } // the implosion drags the troop in
       if (q.wind && active) { M.drift += q.wind * 7; M.grip = Math.min(M.grip, 0.7); } // the gust shoves the troop sideways
+      if (q.slow && active) M.grip = Math.min(M.grip, 0.5); // the time bubble: the troop answers the controls late
     }
     if (h.t < h.T) return false;
     let n = 0;
     for (const q of h.zones) {
-      if (active) n += q.kind === 'disc' ? killAlliesNear(q.x, q.z + h.z, q.r, h.colorC, Infinity) : killAlliesInRect(q.x, q.z + h.z, q.hw, q.hd, h.colorC, Infinity);
+      if (active) n += h.midas ? midasTouch(q, h.z) : q.kind === 'disc' ? killAlliesNear(q.x, q.z + h.z, q.r, h.colorC, Infinity) : killAlliesInRect(q.x, q.z + h.z, q.hw, q.hd, h.colorC, Infinity);
       h.fx(q);
     }
     if (active) { if (n) { floatText('-' + n, M.cx, 3.2, SQUAD_Z, 'red'); state.shake = Math.max(state.shake, 0.3); } else floatText('DESVIOU!', M.cx, 3.2, SQUAD_Z, 'cyan'); }
@@ -3850,16 +3902,16 @@ function updateMarchEnemies(dt, dz) {
     // the horde walks slowly on top of the scrolling road, and charges at full speed once the road halts for a boss
     const frozen = e.frozen > 0;
     if (e.knock > 0) { e.knock -= dt; e.z -= 4 * dt; } // shoved back by a stone bolt
-    e.z += dz + (frozen || e.knock > 0 ? 0 : e.speed * (1 - 0.75 * clamp(M.speed / 8, 0, 1)) * dt);
+    e.z += dz + (frozen || e.knock > 0 ? 0 : e.speed * (1 - 0.75 * clamp(M.speed / 8, 0, 1)) * (M.tempo || 1) * dt);
     if (!frozen) e.x = clamp(e.x + Math.sin(gt * 1.7 + e.phase) * 0.35 * dt, -LANE_HALF + 0.4, LANE_HALF - 0.4);
     if (e.flash > 0) e.flash -= dt * 6;
     tickStatus(e, dt);
     if (!e.alive) continue;
-    if (active && e.z > SQUAD_Z - M.R - 1.5 && e.z < SQUAD_Z + M.R + 1.5) { // trade one for one with the troop; frozen ones just shatter
+    if (active && e.z > SQUAD_Z - M.R - 1.5 && e.z < SQUAD_Z + M.R + 1.5) { // trade with the troop, four of ours at most (a late armored has 20 hp: it used to eat 20 soldiers); frozen ones just shatter
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - e.x) ** 2 + (a.z - e.z) ** 2 < (e.r + 0.3) ** 2) {
         if (frozen) { debris(e.x, 0.6, e.z, new THREE.Color(0xd8f6ff), 5, 5, 0.2); killEnemy(e); break; }
         a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1;
-        if (e.hp <= 0) { killEnemy(e); break; }
+        if (e.hp <= 0 || ++e.bites >= 4) { killEnemy(e); break; }
       }
     }
     if (e.z > MARCH_BEHIND) e.alive = false;
@@ -4201,6 +4253,18 @@ const BIOMES = [
       leaves: 0x5a7a70, bush: 0x4a6a60, rock: 0x7a8a88, liqA: 0x1a3a3a, liqB: 0x9ad8d0, liquid: 0.8, liqFlow: 0.3, graves: 1, wisps: 1, crack: 0x9affe8, crackO: 0.15,
       grass: 0.3, fort: 0x4a5a5a, fogNear: 0.8, fogFar: 0.75, vignette: 0.22 },
     climax: { wisps: 2, lightning: 0.1, vignette: 0.3 } },
+  { id: 'gold', name: 'REI MIDAS', short: 'Ouro', hint: 'Seu toque vira a tropa em estátuas de ouro', css: '#ffd040',
+    skin: 0xffd040, belly: 0xfff4c0, accent: 0xb02040, glow: 0xffe060, glowI: 0.6, hpMul: 1.3,
+    look: { bg: 0xffe8a0, fog: 0xfff0c0, ground: 0xd8b860, lane: 0xfff0c8, hemiSky: 0xfff8d8, hemiGround: 0x8a6a20, sun: 0xfff4c0, sunI: 2.3, hemiI: 1.4,
+      leaves: 0xc8a040, bush: 0xd8b040, rock: 0xc0a050, liqA: 0xb88a10, liqB: 0xfff0a0, liquid: 1, liqFlow: 1.2, crack: 0xffd040, crackO: 0.5,
+      grass: 0.2, embers: 0.4, fort: 0xb08a20, liqLight: 0xffd040, liqLightI: 1, vignette: 0.06 },
+    climax: { embers: 1, vignette: 0.14 } },
+  { id: 'clock', name: 'CRONOMANTE', short: 'Relógio', hint: 'Rebobina a própria vida e trava o tempo da tropa', css: '#8ae8ff',
+    skin: 0xb08a50, belly: 0xe0d0a0, accent: 0x2a3a48, glow: 0x8ae8ff, glowI: 0.4, hpMul: 1.0,
+    look: { bg: 0x8aa0b0, fog: 0xa8bcc8, ground: 0x7a8a78, lane: 0xd0d8d8, hemiSky: 0xd8e8f0, hemiGround: 0x4a5058, sun: 0xe8f0f8, sunI: 1.8, hemiI: 1.4,
+      leaves: 0x7a9a70, bush: 0x6a8a60, rock: 0x8a9098, liqA: 0x2a4a58, liqB: 0xa8d8e8, liquid: 0.7, liqFlow: 1.5, crack: 0xb8e0ff, crackO: 0.2,
+      grass: 0.4, fort: 0x6a5a40, liqLight: 0x8ad0e8, liqLightI: 0.4, vignette: 0.1 },
+    climax: { lightning: 0.12, vignette: 0.18 } },
 ];
 for (const b of BIOMES) { b.full = makeLook(b.look); b.peak = makeLook({ ...b.look, ...b.climax }); }
 const biomeOf = (wave) => BIOMES[Math.floor((Math.max(1, wave) - 1) / 5) % BIOMES.length];
@@ -4550,6 +4614,19 @@ function decorateBoss(root, head, t) {
       }
       break;
     }
+    case 'gold': { // a crown and a royal cape
+      put(head, new THREE.TorusGeometry(0.17, 0.035, 6, 16), M.glow, 0, 0.36, 0, Math.PI / 2).castShadow = false;
+      const pt = new THREE.ConeGeometry(0.035, 0.12, 4);
+      for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; put(head, pt, M.glow, Math.cos(a) * 0.17, 0.43, Math.sin(a) * 0.17).castShadow = false; }
+      put(root, new THREE.PlaneGeometry(0.9, 1.1), M.acc, 0, 0.85, -0.34, 0.1, Math.PI, 0);
+      break;
+    }
+    case 'clock': { // a clock face on the chest, a gear on the back
+      put(root, new THREE.CylinderGeometry(0.22, 0.22, 0.04, 20), M.belly, 0, 0.98, 0.3, Math.PI / 2).castShadow = false;
+      for (const [len, s, rz] of [[0.17, 0.025, 0], [0.12, 0.04, 2.1]]) { const g = new THREE.BoxGeometry(s, len, 0.02); g.translate(0, len / 2, 0); const hand = put(root, g, M.acc, 0, 0.98, 0.335, 0, 0, rz); hand.castShadow = false; spin.push(hand); }
+      spin.push(put(root, new THREE.TorusGeometry(0.24, 0.06, 6, 8), M.acc, 0, 1.05, -0.38));
+      break;
+    }
   }
   root.userData.spin = spin;
 }
@@ -4571,6 +4648,15 @@ function killAlliesNear(x, z, r, color, cap = state.mode === 'march' ? blowCap()
 function raiseGhosts(x, z, n) {
   if (!hasEl('ghost')) return;
   for (let i = 0, k = Math.round(n * 0.2); i < k; i++) { const a = spawnAlly(x + rand(-1, 1), z + rand(-1, 1), 0, 0, 0, 1); if (!a) break; a.role = 'squad'; a.ghostT = 5; }
+}
+// The Chronomancer: every 12 s it winds back a quarter of what it lost since the last tick (8% of its health at most),
+// so slow damage is damage undone and a burst is what sticks.
+function rewind(b, dt) {
+  if (b.hpAt == null) b.hpAt = b.hp;
+  if ((b.rewT = (b.rewT ?? 12) - dt) > 0) return;
+  b.rewT = 12; const back = Math.round(Math.min(Math.max(0, b.hpAt - b.hp) * 0.25, b.maxHp * 0.08));
+  if (back > 0) { b.hp = Math.min(b.maxHp, b.hp + back); floatText('REBOBINOU +' + back, b.x, b.scale * 1.8 + 1.2, b.z, 'red'); sparks(b.x, 3, b.z, 0x8ae8ff, 40, 9, 0.8, 0.6); ring(b.x, b.z, 0x8ae8ff, 7, 0.6); Sfx.play('warp'); }
+  b.hpAt = b.hp;
 }
 function frontAlly(b) {
   for (let k = 0; k < 8; k++) { const a = allies[Math.floor(Math.random() * allies.length)]; if (a && a.alive && a.z > b.z + 2 && a.z < DEFENSE_Z - 2) return a; }
@@ -4674,6 +4760,8 @@ function bossPower(b, dt) {
     case 'shadow': if (ready) { b.abT = 3.2; eruption(b); } break; // tendrils from the ground
     case 'stone': if (ready) { b.abT = 3.5; eruption(b); } break; // rocks from the ground
     case 'ghost': if (ready) { b.abT = 4; raiseDead(b); } break; // spectres
+    case 'gold': if (ready && state.mode !== 'march') { b.abT = 3; const a = frontAlly(b); if (a) { sparks(a.x, 0.8, a.z, 0xffe060, 40, 8, 0.8, 0.6, 3, 0.4); killAlliesNear(a.x, a.z, 2.4, COL.gold); Sfx.play('pickup'); } } break; // the golden touch (on the march it is the patterns that turn soldiers to gold)
+    case 'clock': rewind(b, dt); if (ready) { b.abT = 3.4; eruption(b); } break; // bursts of time, and the clock turned back
   }
   bossTail(b, dt);
 }
@@ -4691,8 +4779,8 @@ function bossTail(b, dt) {
 // of the eight worlds shortens the warning, narrows the gaps and quickens the cadence. ----
 const marchCycle = () => Math.floor(M.stage / BIOMES.length);
 const PAT = {
-  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff, sand: 0xffd060, crystal: 0xc8b0ff, wind: 0xdff4ff, iron: 0xffb060, light: 0xfff0a0, shadow: 0x9a3aff, stone: 0xd8c8a0, ghost: 0x9affe8 },
-  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4, sand: 3.8, crystal: 3.6, wind: 3.6, iron: 3.8, light: 3.4, shadow: 3.6, stone: 4.0, ghost: 3.8 },
+  color: { ice: 0xbff4ff, fire: 0xff7a1a, lava: 0xff5a1f, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0x9ad8a8, void: 0xc86bff, sand: 0xffd060, crystal: 0xc8b0ff, wind: 0xdff4ff, iron: 0xffb060, light: 0xfff0a0, shadow: 0x9a3aff, stone: 0xd8c8a0, ghost: 0x9affe8, gold: 0xffd040, clock: 0x8ae8ff },
+  every: { ice: 4.2, fire: 3.4, lava: 3.8, storm: 3.2, water: 4.0, poison: 4.4, zombie: 4.0, void: 3.4, sand: 3.8, crystal: 3.6, wind: 3.6, iron: 3.8, light: 3.4, shadow: 3.6, stone: 4.0, ghost: 3.8, gold: 3.8, clock: 3.5 },
 };
 // Zone builders, all around the troop (M.cx, SQUAD_Z). The gap lands away from the troop most of the time, so it has to move.
 const patSide = () => { // one side of the road burns; the other side (11.5 m) always fits the whole troop (10.2 m at full width)
@@ -4741,6 +4829,8 @@ const PATTERNS = { // [sidestep pattern, FILA pattern]
   shadow: [patSide, () => patGap(3.0)], // tendrils with a gap
   stone: [patSide, () => patStripes(3)], // rockfall on two lanes of three
   ghost: [patSide, () => patGap(2.8)], // spectral hands with a gap
+  gold: [patSide, () => patGap(3.0)], // the golden touch: whoever it reaches turns to a statue
+  clock: [patSide, () => { const z = patStripes(4); for (const q of z) q.slow = true; return z; }], // stripes inside a time bubble
 };
 const zoneSpan = (q) => (q.kind === 'disc' ? q.r : q.hw);
 const PAT_FX = { // the theme's impact on one zone
@@ -4760,6 +4850,8 @@ const PAT_FX = { // the theme's impact on one zone
   shadow: (q) => { sparks(q.x, 0.6, q.z, 0x7a3aff, 40, 8, 0.8, 0.6, 3, 0.3); debris(q.x, 0.4, q.z, new THREE.Color(0x120a20), 10, 6, 0.25); smoke(q.x, 0.4, q.z, 4, 1.8, 0x2a1a40, 1.2); Sfx.play('gas'); },
   stone: (q) => { for (let i = 0; i < 3; i++) debris(q.x + rand(-zoneSpan(q), zoneSpan(q)), 1.2, q.z + rand(-2, 2), new THREE.Color(0x8a8078), 8, 8, 0.35); smoke(q.x, 0.5, q.z, 5, 2.0, 0xb8a890, 1.2); state.shake = Math.max(state.shake, 0.4); Sfx.play('thud'); },
   ghost: (q) => { for (let i = 0; i < 6; i++) emit(sparkSys, q.x + rand(-zoneSpan(q), zoneSpan(q)), 0.4, q.z + rand(-1, 1), 0, rand(2, 4), 0, WISP, 1, 1, -0.3, -0.5, 0); sparks(q.x, 0.8, q.z, 0x9affe8, 30, 7, 0.7, 0.6, 2, 0.4); Sfx.play('summon'); },
+  gold: (q) => { sparks(q.x, 0.8, q.z, 0xffe060, 50, 9, 0.8, 0.7, 3, 0.4); ring(q.x, q.z, 0xffd040, zoneSpan(q) * 2, 0.5); Sfx.play('pickup'); },
+  clock: (q) => { sparks(q.x, 0.8, q.z, 0x8ae8ff, 40, 8, 0.7, 0.6, 3, 0.3); ring(q.x, q.z, 0x8ae8ff, zoneSpan(q) * 2, 0.5); Sfx.play('freeze'); },
 };
 // spikes over a whole zone: one burst for a disc, three along a stripe
 function zoneSpikes(q, color, emissive) {
@@ -4771,6 +4863,7 @@ function marchBossPower(b, dt) {
   if (t === 'water') { b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.004 * dt); if ((b.shT = (b.shT ?? 5) - dt) <= 0) { b.shT = 6.5; b.shield = 2.6; Sfx.play('bubble'); } }
   if (t === 'zombie') b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.003 * dt);
   if (t === 'void') vortex(b, dt);
+  if (t === 'clock') rewind(b, dt); // the Chronomancer turns its own clock back
   if (t === 'ghost') { // it phases out of reach every 6 s, and every 8 s it takes six soldiers for itself
     if ((b.phaseT = (b.phaseT ?? 4) - dt) <= 0) { b.phaseT = 8; b.vanish = 1.5; sparks(b.x, 3, b.z, 0x9affe8, 30, 8, 0.7, 0.5); }
     if ((b.posT = (b.posT ?? 6) - dt) <= 0) { b.posT = 12; possess(b); }
@@ -4793,7 +4886,9 @@ function marchBossPower(b, dt) {
   // every other blow needs the FILA column, but only when FILA will be back by the impact: using it to focus fire means
   // the next blows are the ones the whole troop sidesteps. The player never faces a gap with no way through.
   const fila = b.patN % 2 === 0 && M.sqT <= 0 && M.sqCd <= warn * 0.5 && !con('nofila');
-  markPattern(PATTERNS[t][fila ? 1 : 0](), warn, PAT.color[t], PAT_FX[t]);
+  const zones = PATTERNS[t][fila ? 1 : 0]();
+  markPattern(zones, warn, PAT.color[t], PAT_FX[t], t === 'gold'); // Midas's blows turn soldiers to gold instead of killing them
+  if (t === 'gold' && b.patN % 3 === 0) for (const q of zones) dropCoin(q.x + rand(-1, 1), q.z + jitterZ(q), 2); // greed: a coin inside each danger zone
   if (t === 'light' && b.patN % 3 === 0) { state.flash = Math.max(state.flash, 0.5); Sfx.play('thunder'); } // every third blow comes with a glare
   if (t === 'stone' && b.patN % 4 === 0) { M.quake = 2; state.shake = Math.max(state.shake, 0.6); floatText('TERREMOTO!', M.cx, 3.8, SQUAD_Z, 'red'); Sfx.play('thud'); } // every fourth blow shakes the steering loose
 }
@@ -4809,7 +4904,7 @@ function possess(b) {
 
   Sfx.play('warn');
 }
-const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff, sand: 0xffe0a0, crystal: 0xe0d0ff, wind: 0xffffff, iron: 0xffb060, light: 0xfff8d0, shadow: 0x7a3aff, stone: 0xe8d8b8, ghost: 0xd8fff8 };
+const AURA = { ice: 0xe8fbff, fire: 0xffa53a, lava: 0xff7a2a, storm: 0xfff07a, water: 0x8ff4ff, poison: 0x9cff4a, zombie: 0xc8ffd8, void: 0xc86bff, sand: 0xffe0a0, crystal: 0xe0d0ff, wind: 0xffffff, iron: 0xffb060, light: 0xfff8d0, shadow: 0x7a3aff, stone: 0xe8d8b8, ghost: 0xd8fff8, gold: 0xfff0a0, clock: 0xd0f8ff };
 function bossAura(b) {
   const t = b.theme, c = toColor(AURA[t.id], 0.2), s = b.scale, cy = s * 0.9;
   for (let k = 0; k < 2; k++) {
@@ -4976,7 +5071,7 @@ function drawCrowds() {
   for (let i = 0; i < allies.length; i++) {
     const a = allies[i], k = march && a.role === 'joining' ? 1 : amp, w = Math.sin(gt * 15 + a.phase) * k, bob = a.y > 0 ? a.y : Math.abs(w) * 0.1;
     writeMatrix(ma, i, a.x, bob, a.z, Math.PI, w * 0.06, 1, a.y > 0 ? 1.08 : 1 - Math.abs(w) * 0.04);
-    writeColor(ca, i, march ? (a.role === 'caged' ? COL.caged : a.role === 'ghoul' ? ELEMENTS.zombie.tintC : a.ghostT > 0 ? ELEMENTS.ghost.tintC : troopColor(a.phase > Math.PI ? 1 : 0)) : a.tint ? COL.allyClone : COL.ally, a.role === 'joining' ? 0.35 : 0);
+    writeColor(ca, i, march ? (a.role === 'caged' ? COL.caged : a.role === 'ghoul' ? ELEMENTS.zombie.tintC : a.role === 'statue' ? COL.gold : a.ghostT > 0 ? ELEMENTS.ghost.tintC : troopColor(a.phase > Math.PI ? 1 : 0)) : a.tint ? COL.allyClone : COL.ally, a.role === 'joining' ? 0.35 : 0);
   }
   allyMesh.count = allies.length; allyMesh.instanceMatrix.needsUpdate = true; allyMesh.instanceColor.needsUpdate = true;
   ma = enemyMesh.instanceMatrix.array; ca = enemyMesh.instanceColor.array;

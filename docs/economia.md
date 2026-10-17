@@ -86,9 +86,9 @@ Modificadores opcionais escolhidos antes da run, até três por vez, cada um com
 
 - **Baú de fim de run (feito):** o servidor sorteia em `finish_run`, até cinco por dia. Bronze (500 m ou onda 3): 20 a 50 moedas, 4% de 1 diamante. Prata (2.500 m ou onda 8): 60 a 150 moedas, 12% de 1 a 3 diamantes. Ouro (6.000 m ou onda 15): 180 a 400 moedas, 30% de 3 a 8 diamantes. Nunca comprável; as probabilidades ficam na tela Missões. Fragmentos de skin entram quando houver skins.
 - **Missões (feito):** 3 diárias (moedas, 60 a 100) e 3 semanais (diamantes, 10 a 20), sorteadas por um hash do dia/semana UTC, as mesmas para todo mundo. O progresso é somado (ou o melhor guardado) em `mission_progress`, chamada por `finish_run` só em partidas válidas; a recompensa é pega em `claim_mission`. Alvos e prêmios vivem em `mission_def` no servidor; o cliente só tem os textos.
-- **Temporada de 30 dias:** passe gratuito e premium; cada temporada estreia um tema novo e um herói. O passe premium dá cosméticos, diamantes e o herói da temporada mais cedo (o herói também abre por moedas depois).
+- **Temporada de 30 dias (feito):** janelas de 30 dias a partir de 2026-10-17 UTC (`season_no`). Pontos por partida válida: 10 mais 1 por 100 m na marcha ou 2 por onda na defesa (até 60), e 25 por missão concluída, creditados por `finish_run` em `season_points`. 30 níveis de 150 pontos (`season_tier`): trilha grátis 100+10n moedas e 5 diamantes a cada cinco níveis; trilha premium 200+20n moedas, 2 diamantes por nível e 10 a cada cinco (138 diamantes no total). Passe premium a 120 diamantes (`buy_season_pass`, por Pix via Stripe depois), que também dá a estrela ✦ no ranking. `claim_season` paga todos os níveis alcançados de uma trilha. Um jogador diário (3 partidas e as missões) fecha o passe em uns 25 dias. O tema e o herói de estreia entram quando houver um novo por temporada.
 - **Eventos de fim de semana:** moedas em dobro, mundo em fúria, chefão convidado.
-- **Ranking semanal:** diamantes por faixa (top 1, 10, 100, 1.000) e cor de nome para o top 10.
+- **Ranking semanal (feito):** na primeira chamada depois de segunda 00:00 UTC o servidor liquida a semana anterior (`settle_week`, uma vez, com trava): melhor partida válida de cada jogador com apelido, por modo, e grava os prêmios (#1 25, top 10 12, top 100 5, top 1000 2 diamantes) para pegar na tela de ranking (`claim_week_reward`). `get_leaderboard` marca o top 10 da semana anterior (cor do nome, coroa no #1) e quem tem o passe (✦).
 
 ## Loja e pagamento
 
@@ -124,7 +124,7 @@ D1/D7/D30, runs por dia por jogador, moedas ganhas e gastas por dia (fonte × su
 1. Curva de habilidade (2 PRs): padrões de chefão com zona segura e dano sem teto, formação compacta, armadilhas com caminho livre, contratos.
 2. Base da economia (1 PR): moedas na pista e no fim da run, carteira no servidor, Quartel, tela de fim de run.
 3. Heróis (2 PRs): Muralha, Arqueira, Ladrão; seleção; desbloqueio por moedas ou diamantes; conquistas que dão diamantes.
-4. Temas novos de dois em dois (feito: dezoito mundos), missões e baús (feito); faltam o ranking semanal com prêmios e a temporada.
+4. Temas novos de dois em dois (feito: dezoito mundos), missões e baús (feito), ranking semanal com prêmios e temporada (feito).
 5. Loja com Stripe por último, quando houver o que vender.
 
 ## Referências

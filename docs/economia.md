@@ -84,8 +84,8 @@ Modificadores opcionais escolhidos antes da run, até três por vez, cada um com
 
 ## Baús, missões, temporada e eventos
 
-- **Baú de fim de run:** 1 a 3 itens aleatórios (moedas, diamantes raros, fragmentos de skin). Nunca comprável. Probabilidades publicadas na tela do baú.
-- **Missões:** 3 diárias (ex.: derrube 2 chefões, liberte 5 relíquias, chegue a 3.000 m) e 3 semanais.
+- **Baú de fim de run (feito):** o servidor sorteia em `finish_run`, até cinco por dia. Bronze (500 m ou onda 3): 20 a 50 moedas, 4% de 1 diamante. Prata (2.500 m ou onda 8): 60 a 150 moedas, 12% de 1 a 3 diamantes. Ouro (6.000 m ou onda 15): 180 a 400 moedas, 30% de 3 a 8 diamantes. Nunca comprável; as probabilidades ficam na tela Missões. Fragmentos de skin entram quando houver skins.
+- **Missões (feito):** 3 diárias (moedas, 60 a 100) e 3 semanais (diamantes, 10 a 20), sorteadas por um hash do dia/semana UTC, as mesmas para todo mundo. O progresso é somado (ou o melhor guardado) em `mission_progress`, chamada por `finish_run` só em partidas válidas; a recompensa é pega em `claim_mission`. Alvos e prêmios vivem em `mission_def` no servidor; o cliente só tem os textos.
 - **Temporada de 30 dias:** passe gratuito e premium; cada temporada estreia um tema novo e um herói. O passe premium dá cosméticos, diamantes e o herói da temporada mais cedo (o herói também abre por moedas depois).
 - **Eventos de fim de semana:** moedas em dobro, mundo em fúria, chefão convidado.
 - **Ranking semanal:** diamantes por faixa (top 1, 10, 100, 1.000) e cor de nome para o top 10.
@@ -124,7 +124,7 @@ D1/D7/D30, runs por dia por jogador, moedas ganhas e gastas por dia (fonte × su
 1. Curva de habilidade (2 PRs): padrões de chefão com zona segura e dano sem teto, formação compacta, armadilhas com caminho livre, contratos.
 2. Base da economia (1 PR): moedas na pista e no fim da run, carteira no servidor, Quartel, tela de fim de run.
 3. Heróis (2 PRs): Muralha, Arqueira, Ladrão; seleção; desbloqueio por moedas ou diamantes; conquistas que dão diamantes.
-4. Temas novos de dois em dois, alternando com missões, baús, ranking semanal com prêmios e temporada.
+4. Temas novos de dois em dois (feito: dezoito mundos), missões e baús (feito); faltam o ranking semanal com prêmios e a temporada.
 5. Loja com Stripe por último, quando houver o que vender.
 
 ## Referências

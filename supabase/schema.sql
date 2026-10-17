@@ -208,6 +208,142 @@ begin
   return paid;
 end $$;
 
+-- Missoes diarias e semanais, bau de fim de corrida. Tudo concedido pelo servidor a partir de partidas validas.
+alter table public.wallets add column if not exists chests_today int not null default 0;
+
+create table if not exists public.missions (
+  user_id uuid not null references auth.users on delete cascade,
+  period text not null,
+  key text not null,
+  progress int not null default 0,
+  claimed boolean not null default false,
+  primary key (user_id, period, key)
+);
+alter table public.missions enable row level security;
+drop policy if exists "le as proprias missoes" on public.missions;
+create policy "le as proprias missoes" on public.missions for select to authenticated using (user_id = auth.uid());
+revoke insert, update, delete on public.missions from anon, authenticated;
+
+-- A mission: target, reward (coins for daily, gems for weekly) and how it progresses ('sum' adds each run, 'max' keeps the best run).
+create or replace function public.mission_def(p_key text) returns table (target int, coins int, gems int, how text)
+language sql immutable as $$
+  select v.target, v.coins, v.gems, v.how from (values
+    ('d_runs2', 2, 60, 0, 'sum'),
+    ('d_km3', 3000, 100, 0, 'max'),
+    ('d_kills500', 500, 80, 0, 'sum'),
+    ('d_boss2', 2, 100, 0, 'sum'),
+    ('d_coins150', 150, 60, 0, 'sum'),
+    ('d_wave8', 8, 80, 0, 'max'),
+    ('d_contract', 1000, 100, 0, 'max'),
+    ('d_troop200', 200, 80, 0, 'max'),
+    ('d_relics3', 3, 80, 0, 'sum'),
+    ('w_km8', 8000, 0, 15, 'max'),
+    ('w_runs10', 10, 0, 10, 'sum'),
+    ('w_kills5k', 5000, 0, 15, 'sum'),
+    ('w_boss10', 10, 0, 20, 'sum'),
+    ('w_wave15', 15, 0, 15, 'max'),
+    ('w_score300k', 300000, 0, 20, 'max'),
+    ('w_contracts3', 2000, 0, 20, 'max'),
+    ('w_coins1k', 1000, 0, 10, 'sum')
+  ) as v(key, target, coins, gems, how) where v.key = p_key;
+$$;
+
+-- 'd' = the UTC day, 'w' = the ISO week (UTC).
+create or replace function public.mission_period(p_kind text) returns text language sql stable as $$
+  select case when p_kind = 'd' then 'd' || to_char(now() at time zone 'utc', 'YYYY-MM-DD') else 'w' || to_char(now() at time zone 'utc', 'IYYY-IW') end;
+$$;
+
+-- The three missions of a period, picked from the pool by a hash of the period: everyone gets the same three.
+create or replace function public.mission_keys(p_period text) returns text[] language plpgsql immutable as $$
+declare pool text[]; picked text[] := '{}'; i int := 0; k text;
+begin
+  pool := case when left(p_period, 1) = 'd'
+    then array['d_runs2', 'd_km3', 'd_kills500', 'd_boss2', 'd_coins150', 'd_wave8', 'd_contract', 'd_troop200', 'd_relics3']
+    else array['w_km8', 'w_runs10', 'w_kills5k', 'w_boss10', 'w_wave15', 'w_score300k', 'w_contracts3', 'w_coins1k'] end;
+  while coalesce(array_length(picked, 1), 0) < 3 and i < 60 loop
+    k := pool[1 + (('x' || substr(md5(p_period || ':' || i), 1, 7))::bit(28)::int % array_length(pool, 1))];
+    if not (k = any(picked)) then picked := picked || k; end if;
+    i := i + 1;
+  end loop;
+  return picked;
+end $$;
+
+create or replace function public.get_missions()
+returns table (period text, key text, progress int, target int, coins int, gems int, claimed boolean)
+language plpgsql security definer set search_path = ''
+as $$
+declare per text; k text;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  foreach per in array array[public.mission_period('d'), public.mission_period('w')] loop
+    foreach k in array public.mission_keys(per) loop
+      return query
+        select per, k, coalesce(m.progress, 0), d.target, d.coins, d.gems, coalesce(m.claimed, false)
+        from public.mission_def(k) d
+        left join public.missions m on m.user_id = auth.uid() and m.period = per and m.key = k;
+    end loop;
+  end loop;
+end $$;
+
+create or replace function public.claim_mission(p_period text, p_key text) returns table (coins int, gems int)
+language plpgsql security definer set search_path = ''
+as $$
+declare d record; m public.missions;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if p_period not in (public.mission_period('d'), public.mission_period('w')) then raise exception 'expired'; end if;
+  if not (p_key = any(public.mission_keys(p_period))) then raise exception 'unknown_mission'; end if;
+  select * into d from public.mission_def(p_key);
+  select * into m from public.missions x where x.user_id = auth.uid() and x.period = p_period and x.key = p_key for update;
+  if not found or m.progress < d.target then raise exception 'not_done'; end if;
+  if m.claimed then raise exception 'claimed'; end if;
+  update public.missions set claimed = true where user_id = auth.uid() and period = p_period and key = p_key;
+  insert into public.wallets (user_id) values (auth.uid()) on conflict do nothing;
+  update public.wallets set coins = public.wallets.coins + d.coins, gems = public.wallets.gems + d.gems, updated_at = now() where user_id = auth.uid();
+  return query select w.coins, w.gems from public.wallets w where w.user_id = auth.uid();
+end $$;
+
+-- Applies one valid run to the current missions; returns the keys it completed (comma-separated) or null.
+create or replace function public.mission_progress(p_mode text, p_meters int, p_wave int, p_kills int, p_bosses int, p_coins int, p_score int, p_peak int, p_ncon int, p_relics int)
+returns text language plpgsql security definer set search_path = ''
+as $$
+declare per text; k text; v int; d record; cur int; nxt int; done text[] := '{}';
+begin
+  foreach per in array array[public.mission_period('d'), public.mission_period('w')] loop
+    foreach k in array public.mission_keys(per) loop
+      v := case k
+        when 'd_runs2' then 1
+        when 'w_runs10' then 1
+        when 'd_km3' then case when p_mode = 'march' then p_meters else 0 end
+        when 'w_km8' then case when p_mode = 'march' then p_meters else 0 end
+        when 'd_kills500' then p_kills
+        when 'w_kills5k' then p_kills
+        when 'd_boss2' then p_bosses
+        when 'w_boss10' then p_bosses
+        when 'd_coins150' then p_coins
+        when 'w_coins1k' then p_coins
+        when 'd_wave8' then case when p_mode = 'defense' then p_wave else 0 end
+        when 'w_wave15' then case when p_mode = 'defense' then p_wave else 0 end
+        when 'd_contract' then case when p_mode = 'march' and p_ncon >= 1 then p_meters else 0 end
+        when 'w_contracts3' then case when p_mode = 'march' and p_ncon >= 3 then p_meters else 0 end
+        when 'd_troop200' then case when p_mode = 'march' then p_peak else 0 end
+        when 'w_score300k' then case when p_mode = 'march' then p_score else 0 end
+        when 'd_relics3' then p_relics
+        else 0 end;
+      if v <= 0 then continue; end if;
+      select * into d from public.mission_def(k);
+      insert into public.missions (user_id, period, key, progress) values (auth.uid(), per, k, 0) on conflict do nothing;
+      select x.progress into cur from public.missions x where x.user_id = auth.uid() and x.period = per and x.key = k for update;
+      nxt := case when d.how = 'sum' then least(cur + v, d.target) else greatest(cur, least(v, d.target)) end;
+      if nxt <> cur then
+        update public.missions set progress = nxt where user_id = auth.uid() and period = per and key = k;
+        if nxt >= d.target then done := done || k; end if;
+      end if;
+    end loop;
+  end loop;
+  return nullif(array_to_string(done, ','), '');
+end $$;
+
 -- ================= Funções =================
 drop function if exists public.start_run();
 create or replace function public.start_run(p_mode text default 'defense')
@@ -235,8 +371,9 @@ end $$;
 drop function if exists public.finish_run(uuid, int, int, int, int);
 drop function if exists public.finish_run(uuid, int, int, int, int, text);
 drop function if exists public.finish_run(uuid, int, int, int, int, text, int);
-create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int, p_contracts text default null, p_coins int default 0)
-returns table (accepted boolean, week_rank int, all_rank int, best int, coins_won int, coins_total int, unlocked text, gems_total int)
+-- finish_run gains p_relics (cages and relics opened) and returns the run's chest and the missions it completed.
+create or replace function public.finish_run(p_run uuid, p_score int, p_wave int, p_kills int, p_peak int, p_contracts text default null, p_coins int default 0, p_relics int default 0)
+returns table (accepted boolean, week_rank int, all_rank int, best int, coins_won int, coins_total int, unlocked text, gems_total int, chest text, chest_coins int, chest_gems int, missions text)
 language plpgsql security definer set search_path = ''
 as $$
 declare
@@ -245,13 +382,17 @@ declare
   max_score numeric;
   max_kills numeric;
   bosses numeric := 0;
-  ncon int;
+  ncon int := 0;
   ok boolean;
   wal public.wallets;
   won int := 0;
   total int := 0;
   unl text[] := '{}';
   k text;
+  tier text := null;
+  chest_c int := 0;
+  chest_g int := 0;
+  done text := null;
   week_start timestamptz := date_trunc('week', now());
 begin
   select * into r from public.runs
@@ -262,13 +403,14 @@ begin
   secs := extract(epoch from now() - r.started_at);
   if r.mode = 'march' then
     bosses := floor((p_wave + 140) / 1000.0);
-    -- contracts multiply the score (up to ×2.73 with three); the client reports which ones it ran under
+    -- contracts multiply the score (up to x2.73 with three); the client reports which ones it ran under
     ncon := least(3, coalesce(array_length(string_to_array(coalesce(p_contracts, ''), ','), 1), 0));
     if p_contracts = '' then ncon := 0; end if;
     ok := p_wave between 0 and secs * 16 + 60
       and p_kills between 0 and secs * 30 + 50
       and p_score between 0 and (p_wave * 12 + p_kills * 60 + 450 * bosses * (bosses + 1) + 500) * (1 + 0.65 * ncon)
-      and p_peak between 0 and 1000;
+      and p_peak between 0 and 1000
+      and coalesce(p_relics, 0) between 0 and p_wave / 50 + 3;
   else
     select sum(20 * e + 60 * (4 + 1.1 * w) + 50 * w + 1000), sum(e)
       into max_score, max_kills
@@ -287,11 +429,27 @@ begin
   if ok then
     select * into wal from public.wallets where user_id = auth.uid() for update;
     if not found then insert into public.wallets (user_id) values (auth.uid()) returning * into wal; end if;
-    if wal.day <> current_date then wal.runs_today := 0; wal.earned_today := 0; end if;
-    won := greatest(20, p_score / 200) + least(greatest(coalesce(p_coins, 0), 0), 2 * (p_kills + 150 * bosses::int + 50)); -- ×2: the Thief's share
+    if wal.day <> current_date then wal.runs_today := 0; wal.earned_today := 0; wal.chests_today := 0; end if;
+    won := greatest(20, p_score / 200) + least(greatest(coalesce(p_coins, 0), 0), 2 * (p_kills + 150 * bosses::int + 50)); -- x2: the Thief's share
     if wal.runs_today < 3 then won := won * 2; else won := least(won, greatest(0, 5000 - wal.earned_today)); end if;
+    -- The run's chest: the tier comes from how far it went, the contents are rolled here, five chests a day at most.
+    -- bronze 20-50 coins (4%: 1 gem), silver 60-150 (12%: 1-3 gems), gold 180-400 (30%: 3-8 gems).
+    if r.mode = 'march' then
+      tier := case when p_wave >= 6000 then 'gold' when p_wave >= 2500 then 'silver' when p_wave >= 500 then 'bronze' end;
+    else
+      tier := case when p_wave >= 15 then 'gold' when p_wave >= 8 then 'silver' when p_wave >= 3 then 'bronze' end;
+    end if;
+    if tier is not null and wal.chests_today < 5 then
+      chest_c := case tier when 'gold' then 180 + floor(random() * 221)::int when 'silver' then 60 + floor(random() * 91)::int else 20 + floor(random() * 31)::int end;
+      chest_g := case when tier = 'gold' and random() < 0.30 then 3 + floor(random() * 6)::int
+                      when tier = 'silver' and random() < 0.12 then 1 + floor(random() * 3)::int
+                      when tier = 'bronze' and random() < 0.04 then 1 else 0 end;
+    else
+      tier := null;
+    end if;
     update public.wallets
-      set coins = coins + won, earned_today = wal.earned_today + won, runs_today = wal.runs_today + 1, day = current_date, updated_at = now()
+      set coins = coins + won + chest_c, gems = gems + chest_g, earned_today = wal.earned_today + won, runs_today = wal.runs_today + 1,
+          chests_today = wal.chests_today + (case when tier is null then 0 else 1 end), day = current_date, updated_at = now()
       where user_id = auth.uid() returning coins into total;
     -- achievements this run earns (each pays its gems once)
     if r.mode = 'march' then
@@ -306,6 +464,8 @@ begin
       if p_wave >= 10 and public.grant_achievement('defense10') > 0 then unl := unl || 'defense10'; end if;
       if p_wave >= 20 and public.grant_achievement('defense20') > 0 then unl := unl || 'defense20'; end if;
     end if;
+    -- the missions this run advances
+    done := public.mission_progress(r.mode, p_wave, p_wave, p_kills, bosses::int, greatest(coalesce(p_coins, 0), 0), p_score, p_peak, ncon, coalesce(p_relics, 0));
   end if;
 
   update public.runs
@@ -313,11 +473,11 @@ begin
     where id = p_run;
 
   if not ok then
-    return query select false, null::int, null::int, null::int, 0, (select w.coins from public.wallets w where w.user_id = auth.uid()), null::text, (select w.gems from public.wallets w where w.user_id = auth.uid());
+    return query select false, null::int, null::int, null::int, 0, (select w.coins from public.wallets w where w.user_id = auth.uid()), null::text, (select w.gems from public.wallets w where w.user_id = auth.uid()), null::text, 0, 0, null::text;
     return;
   end if;
 
-  -- Posição entre os melhores de cada jogador com apelido, no mesmo modo (o próprio jogador conta mesmo sem apelido).
+  -- Position among each nicknamed player's best, same mode (the player counts even without a nickname).
   return query
     with mine as (
       select max(x.score) as all_best,
@@ -335,7 +495,8 @@ begin
     select true,
            (select count(*)::int + 1 from others o where o.week_best > m.week_best),
            (select count(*)::int + 1 from others o where o.all_best > m.all_best),
-           m.all_best, won, total, nullif(array_to_string(unl, ','), ''), (select w.gems from public.wallets w where w.user_id = auth.uid())
+           m.all_best, won, total, nullif(array_to_string(unl, ','), ''), (select w.gems from public.wallets w where w.user_id = auth.uid()),
+           tier, chest_c, chest_g, done
     from mine m;
 end $$;
 

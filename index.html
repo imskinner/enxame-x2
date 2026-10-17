@@ -231,7 +231,55 @@ body {
 .rankline { margin: 0 0 8px; text-align: center; font-family: var(--font-display); font-size: 22px; line-height: 1.15; color: var(--ally); }
 .overOnline .msg { text-align: center; }
 
-@media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready { animation: none; } .btn { transition: none; } }
+/* Economy: sprites rendered in Blender (tools/blender/ui_sprites.py), wallet chips, missions and the run's chest */
+.spr { width: 30px; height: 30px; object-fit: contain; vertical-align: middle; filter: drop-shadow(0 2px 0 rgba(27, 22, 64, .18)); }
+.wallet { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.wchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 6px; border-radius: 999px; background: rgba(27, 22, 64, .07); font-family: var(--font-display); font-size: 20px; color: var(--gold-deep); font-variant-numeric: tabular-nums; }
+.wchip.gem { color: #1f8fb8; }
+.wchip.empty { color: var(--muted); font: 800 13px var(--font-body); letter-spacing: .08em; padding: 8px 12px; }
+.btn.missions { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; text-align: left; margin-top: 12px; }
+.btn.missions .spr { width: 44px; height: 44px; }
+.btn .tag { min-width: 26px; padding: 3px 8px 1px; border-radius: 999px; background: var(--foe); color: #fff; font: 900 13px var(--font-body); text-align: center; box-shadow: 0 2px 0 rgba(27, 22, 64, .3); }
+.btn .tag:empty { display: none; }
+.missions { display: grid; gap: 10px; margin: 0 0 16px; }
+.mission { display: grid; grid-template-columns: 58px 1fr auto; gap: 4px 10px; align-items: center; border: 2px solid rgba(27, 22, 64, .12); border-radius: 14px; padding: 10px 12px; background: var(--paper); }
+.mission .reward { grid-row: 1 / span 3; display: grid; justify-items: center; gap: 2px; font-family: var(--font-display); font-size: 17px; color: var(--gold-deep); }
+.mission .reward .spr { width: 40px; height: 40px; }
+.mission.weekly .reward { color: #1f8fb8; }
+.mission h4 { margin: 0; font: 800 15px var(--font-body); color: var(--ink); }
+.mission p { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.3; }
+.mission .bar { grid-column: 2; height: 10px; border-radius: 5px; background: rgba(27, 22, 64, .1); overflow: hidden; }
+.mission .bar i { display: block; height: 100%; width: 0; border-radius: 5px; background: linear-gradient(90deg, var(--gate), #5ff3ff); transition: width .4s; }
+.mission .n { grid-column: 3; grid-row: 1 / span 3; font: 900 13px var(--font-body); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mission .btn.sm { grid-column: 3; grid-row: 1 / span 3; font-size: 17px; padding: 9px 12px 7px; animation: ultPulse 1.2s ease-in-out infinite; }
+.mission.done { border-color: var(--gold); background: #fff3c4; box-shadow: 0 0 0 3px rgba(255, 198, 41, .25); }
+.mission.claimed { opacity: .6; }
+.mission.claimed .n { color: var(--ok); }
+.chestInfo { margin: 0 0 16px; font-size: 13px; font-weight: 700; color: var(--muted); line-height: 1.5; }
+.chestInfo summary { cursor: pointer; font-weight: 900; letter-spacing: .08em; font-size: 12px; color: var(--ink); }
+.chestInfo p { margin: 8px 0 4px; }
+.chestInfo .row { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; margin-top: 6px; }
+.chestInfo .row .spr { width: 44px; height: 44px; }
+.chestInfo b { color: var(--ink); }
+.chestBox { position: relative; display: grid; justify-items: center; gap: 6px; margin: -6px 0 14px; padding: 10px 0 6px; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.chestBox::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgba(255, 198, 41, .5), rgba(255, 198, 41, 0) 62%); opacity: 0; transition: opacity .4s; pointer-events: none; }
+.chestBox.open::before { opacity: 1; }
+.chestBtn { position: relative; border: 0; background: none; padding: 0; cursor: pointer; animation: bob 1.6s ease-in-out infinite; }
+.chestBtn img { width: 150px; height: 150px; object-fit: contain; filter: drop-shadow(0 8px 0 rgba(27, 22, 64, .18)); }
+.chestBtn:focus-visible { outline: 3px solid var(--gold); border-radius: 20px; }
+.chestBox.open .chestBtn { animation: chestPop .5s cubic-bezier(.2, 1.6, .4, 1) both; cursor: default; }
+@keyframes bob { 50% { transform: translateY(-6px) rotate(-2deg); } }
+@keyframes chestPop { from { transform: scale(.8); } to { transform: scale(1); } }
+.chestLabel { margin: 0; font: 900 13px var(--font-body); letter-spacing: .1em; color: var(--muted); text-align: center; }
+.loot { position: relative; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.loot .wchip { background: var(--gold); color: var(--ink); font-size: 24px; box-shadow: 0 3px 0 var(--gold-deep); animation: pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.loot .wchip.gem { background: #bff4ff; box-shadow: 0 3px 0 #1f8fb8; animation-delay: .15s; }
+.spark { position: absolute; left: 50%; top: 45%; width: 10px; height: 10px; border-radius: 50%; background: var(--gold); pointer-events: none; animation: fly .9s ease-out both; }
+@keyframes fly { from { transform: translate(-50%, -50%) scale(1); opacity: 1; } to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0); opacity: 0; } }
+.chip.coins .spr { width: 22px; height: 22px; filter: none; }
+.missionLine { margin: 0 0 10px; text-align: center; font-weight: 800; font-size: 13px; line-height: 1.4; color: var(--gate); }
+
+@media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready, .chestBtn, .chestBox, .loot .wchip, .spark, .mission .btn.sm { animation: none; } .btn { transition: none; } }
 </style>
 </head>
 <body>
@@ -253,7 +301,7 @@ body {
     <div class="stack-left">
       <div class="chip"><span class="k" id="waveK">ONDA</span><span class="v" id="waveNum">1</span></div>
       <div class="chip next" id="nextBoss"><i id="nextDot"></i><span id="nextText">Gelo · onda 5</span></div>
-      <div class="chip coins" id="coinsChip" hidden><span class="k">MOEDAS</span><span class="v" id="coinsV">0</span></div>
+      <div class="chip coins" id="coinsChip" hidden><img class="spr" src="assets/ui/coin.webp" alt=""><span class="k">MOEDAS</span><span class="v" id="coinsV">0</span></div>
     </div>
     <div class="score" id="score">0</div>
     <div class="chip hp" id="hpChip"><span class="k">MURO</span><div class="bar"><i id="hpFill"></i></div><span class="v" id="hpText">30</span></div>
@@ -294,10 +342,12 @@ body {
   <div class="card">
     <h1 class="title">ENXAME <span class="badge">×2</span></h1>
     <p class="lead" id="menuLead">Seu canhão dispara uma tropa. Multiplique a tropa nos portões e segure a horda antes que ela chegue ao muro.</p>
+    <div class="wallet" id="menuWallet" data-online hidden></div>
     <div class="modes">
       <button class="btn mode" id="btnPlay" type="button">DEFESA<small>Segure a horda no muro</small></button>
       <button class="btn mode march" id="btnMarch" type="button">MARCHA<small>Avance pela estrada sem fim</small></button>
     </div>
+    <button class="btn alt missions" id="btnMissions" type="button" data-online hidden><img class="spr" src="assets/ui/chest_gold.webp" alt="">MISSÕES<span class="tag" id="missionsTag"></span></button>
     <div class="row2">
       <button class="btn alt" id="btnRank" type="button" data-online hidden>RANKING</button>
       <button class="btn alt" id="btnHow" type="button">COMO JOGAR</button>
@@ -341,7 +391,7 @@ body {
   <div class="card">
     <h2 class="title sub">HERÓIS</h2>
     <p class="note">Um por marcha: uma unidade maior na tropa, com uma passiva e uma ativa que dispara com a FILA. Desbloqueie com moedas ou diamantes; os níveis sobem só com moedas.</p>
-    <p class="label" id="heroesCoins">MOEDAS: 0</p>
+    <div class="wallet" id="heroesCoins"></div>
     <div class="heroes" id="heroList"></div>
     <p class="msg" id="heroMsg"></p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
@@ -352,7 +402,7 @@ body {
   <div class="card">
     <h2 class="title sub">CONQUISTAS</h2>
     <p class="note">Cada conquista paga diamantes uma vez. O servidor confere ao fim de cada partida válida.</p>
-    <p class="label" id="achCoins">MOEDAS: 0</p>
+    <div class="wallet" id="achCoins"></div>
     <div class="contracts" id="achList"></div>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
@@ -362,13 +412,33 @@ body {
   <div class="card">
     <h2 class="title sub">QUARTEL</h2>
     <p class="note">Melhorias permanentes da marcha, pagas com as moedas das suas partidas. O preço sobe 15% por nível; o reembolso devolve tudo.</p>
-    <p class="label" id="quartelCoins">MOEDAS: 0</p>
+    <div class="wallet" id="quartelCoins"></div>
     <div class="contracts" id="quartelList"></div>
     <p class="msg" id="quartelMsg"></p>
     <div class="stack">
       <button class="btn alt" id="btnRefund" type="button">REEMBOLSAR TUDO</button>
       <button class="btn alt" type="button" data-back>VOLTAR</button>
     </div>
+  </div>
+</div>
+
+<div class="screen sub" id="missionsScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">MISSÕES</h2>
+    <div class="wallet" id="missionsWallet"></div>
+    <p class="label">DIÁRIAS · RENOVAM EM <span id="dailyLeft"></span></p>
+    <div class="missions" id="dailyList"></div>
+    <p class="label">SEMANAIS · RENOVAM EM <span id="weeklyLeft"></span></p>
+    <div class="missions" id="weeklyList"></div>
+    <p class="msg" id="missionsMsg"></p>
+    <details class="chestInfo">
+      <summary>BAÚS DE FIM DE PARTIDA</summary>
+      <p>Toda partida válida abre um baú, até cinco por dia. O que vem dentro é sorteado no servidor:</p>
+      <div class="row"><img class="spr" src="assets/ui/chest_bronze.webp" alt=""><span><b>Bronze</b> · 500 m ou onda 3 · 20 a 50 moedas · 4% de 1 diamante</span></div>
+      <div class="row"><img class="spr" src="assets/ui/chest_silver.webp" alt=""><span><b>Prata</b> · 2.500 m ou onda 8 · 60 a 150 moedas · 12% de 1 a 3 diamantes</span></div>
+      <div class="row"><img class="spr" src="assets/ui/chest_gold.webp" alt=""><span><b>Ouro</b> · 6.000 m ou onda 15 · 180 a 400 moedas · 30% de 3 a 8 diamantes</span></div>
+    </details>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
 
@@ -445,6 +515,12 @@ body {
       <div class="stat"><div class="k">ABATES</div><div class="v" id="stKills">0</div></div>
       <div class="stat"><div class="k">MAIOR TROPA</div><div class="v" id="stPeak">0</div></div>
     </div>
+    <div class="chestBox" id="chestBox" hidden>
+      <button class="chestBtn" id="chestBtn" type="button" aria-label="Abrir o baú"><img id="chestImg" src="" alt="" draggable="false"></button>
+      <p class="chestLabel" id="chestLabel"></p>
+      <div class="loot" id="chestLoot" hidden></div>
+    </div>
+    <p class="missionLine" id="overMissions" hidden></p>
     <p class="note center" id="overContracts" hidden></p>
     <div class="overOnline" id="overOnline" hidden>
       <p class="rankline" id="overRank"></p>
@@ -2285,7 +2361,7 @@ async function setUser(user) {
       const { data } = await online.sb.from('profiles').select('nickname').eq('id', user.id).maybeSingle();
       if (online.user?.id === user.id) online.nickname = data?.nickname ?? null;
     }
-    if (user) await loadWallet(); else online.wallet = null;
+    if (user) { await loadWallet(); loadMissions().catch(() => {}); } else { online.wallet = null; online.missions = null; }
   }
   renderAccount();
 }
@@ -2332,6 +2408,7 @@ function renderAccount() {
   $('loginBox').hidden = !!u && !isAnon();
   $('btnSignOut').hidden = !u || isAnon();
   if (document.activeElement !== $('nickInput')) $('nickInput').value = online.nickname || '';
+  renderMenuWallet();
 }
 
 async function loginGoogle() {
@@ -2371,7 +2448,7 @@ async function onlineRunFinish() {
   if (!pending) return;
   line.textContent = 'Enviando pontuação…';
   // The march reports meters marched in the wave slot (the server validates them against the run time).
-  const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak, p_coins: state.mode === 'march' ? M.coins : 0 };
+  const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak, p_coins: state.mode === 'march' ? M.coins : 0, p_relics: state.mode === 'march' ? M.freed : 0 };
   if (state.mode === 'march' && M.contracts.size) stats.p_contracts = [...M.contracts].join(','); // only sent when used: the old finish_run still takes a plain run
   const runId = await pending;
   const { data, error } = runId ? await online.sb.rpc('finish_run', { p_run: runId, ...stats }) : { error: true };
@@ -2381,7 +2458,7 @@ async function onlineRunFinish() {
   line.textContent = r.week_rank != null ? `#${fmt(r.week_rank)} na semana · #${fmt(r.all_rank)} geral` : `#${fmt(r.all_rank)} no ranking geral`;
   if (r.coins_won != null) { // the server pays the run's coins: the road's plus the score's bonus, doubled on the day's first three runs
     const oc = $('overCoins'); oc.hidden = false; oc.textContent = `+${fmt(r.coins_won)} moedas · ${fmt(r.coins_total)} no cofre`;
-    online.wallet = { ...(online.wallet || { gems: 0, upgrades: {}, heroes: {}, achievements: [] }), coins: r.coins_total };
+    online.wallet = { ...(online.wallet || { gems: 0, upgrades: {}, heroes: {}, achievements: [] }), coins: r.coins_total, gems: r.gems_total ?? online.wallet?.gems ?? 0 };
   }
   if (r.unlocked) { // achievements the server just granted, with their gems
     const keys = r.unlocked.split(',').filter((k) => ACHIEVEMENTS[k]), oa = $('overAch');
@@ -2389,6 +2466,13 @@ async function onlineRunFinish() {
     if (online.wallet) { online.wallet.gems = r.gems_total ?? online.wallet.gems; online.wallet.achievements = [...new Set([...(online.wallet.achievements || []), ...keys])]; }
     if (keys.length) Sfx.play('victory');
   }
+  if (r.chest) showChest(r.chest, r.chest_coins, r.chest_gems); // the run's chest, already credited by the server
+  if (r.missions) { // missions this run completed: the reward waits on the MISSÕES screen
+    const keys = r.missions.split(',').filter((k) => MISSIONS[k]), om = $('overMissions');
+    om.hidden = !keys.length; om.textContent = keys.map((k) => `Missão concluída: ${MISSIONS[k].name}`).join(' · ') + ' · pegue a recompensa em MISSÕES';
+  }
+  loadMissions().then(renderMenuWallet).catch(() => {});
+  renderMenuWallet();
   if (!online.nickname) {
     form.hidden = false;
     setMsg(msg, 'Escolha um apelido para aparecer no ranking.');
@@ -2438,6 +2522,7 @@ function openScreen(id) {
   if (id === 'quartelScreen') { renderQuartel(); ensureSession().then(loadWallet).then(renderQuartel).catch(() => {}); }
   if (id === 'heroesScreen') { renderHeroes(); ensureSession().then(loadWallet).then(renderHeroes).catch(() => {}); }
   if (id === 'achievementsScreen') { renderAchievements(); ensureSession().then(loadWallet).then(renderAchievements).catch(() => {}); }
+  if (id === 'missionsScreen') { renderMissions(); ensureSession().then(() => Promise.all([loadWallet(), loadMissions()])).then(renderMissions).catch(() => {}); }
   el.querySelector('[data-back]').focus();
 }
 // ---- heroes: one per run, a bigger soldier with a passive and an active that fires with the FILA. Styles, not steps:
@@ -2466,10 +2551,24 @@ const ACHIEVEMENTS = {
   defense10: { name: 'Onda dez', desc: 'Chegue à onda 10 na defesa', gems: 10 },
   defense20: { name: 'Onda vinte', desc: 'Chegue à onda 20 na defesa', gems: 20 },
 };
-const walletLine = (w) => (w ? `MOEDAS: ${fmt(w.coins)} · DIAMANTES: ${fmt(w.gems)}` : 'MOEDAS: …');
+// ---- the economy's sprites (assets/ui, rendered by tools/blender/ui_sprites.py) and the wallet chips built from them ----
+const SPR = (name) => `assets/ui/${name}.webp`;
+function sprite(name) { const img = document.createElement('img'); img.className = 'spr'; img.src = SPR(name); img.alt = ''; img.draggable = false; return img; }
+function walletChip(kind, n, prefix = '') {
+  const s = document.createElement('span'); s.className = 'wchip' + (kind === 'gem' ? ' gem' : '');
+  s.append(sprite(kind), document.createTextNode(prefix + fmt(n))); return s;
+}
+function renderWalletBar(el, w) {
+  el.textContent = '';
+  if (!w) { const s = document.createElement('span'); s.className = 'wchip empty'; s.textContent = 'CARTEIRA…'; el.append(s); return; }
+  el.append(walletChip('coin', w.coins), walletChip('gem', w.gems));
+}
+function renderMenuWallet() {
+  const el = $('menuWallet'); el.hidden = !online.sb || !online.user; renderWalletBar(el, online.wallet); renderMissionsTag();
+}
 function renderHeroes() {
   const list = $('heroList'), w = online.wallet; list.textContent = '';
-  $('heroesCoins').textContent = walletLine(w);
+  renderWalletBar($('heroesCoins'), w);
   for (const [id, h] of Object.entries(HEROES)) {
     const lvl = heroLevel(id), owned = lvl > 0, sel = heroPick === id && owned;
     const card = document.createElement('div'); card.className = 'hero' + (sel ? ' sel' : '');
@@ -2508,12 +2607,93 @@ async function levelHero(id) {
 }
 function renderAchievements() {
   const list = $('achList'), done = new Set(online.wallet?.achievements || []); list.textContent = '';
-  $('achCoins').textContent = walletLine(online.wallet);
+  renderWalletBar($('achCoins'), online.wallet);
   for (const [key, a] of Object.entries(ACHIEVEMENTS)) {
     const b = document.createElement('div'); b.className = 'ach' + (done.has(key) ? ' done' : '');
     const name = document.createElement('span'), gems = document.createElement('b'), desc = document.createElement('small');
     name.textContent = (done.has(key) ? '✓ ' : '') + a.name; gems.textContent = `${a.gems} 💎`; desc.textContent = a.desc; b.append(name, gems, desc); list.append(b);
   }
+}
+// ---- missions: three a day (coins) and three a week (gems), the same for everyone, judged by the server at the end of
+// each valid run; the reward is claimed here. The server holds targets and rewards; this is only their text. ----
+const MISSIONS = {
+  d_runs2: { name: 'Duas partidas', desc: 'Jogue 2 partidas hoje' },
+  d_km3: { name: 'Três quilômetros', desc: 'Marche 3.000 m numa partida' },
+  d_kills500: { name: 'Quinhentos abates', desc: 'Abata 500 inimigos hoje' },
+  d_boss2: { name: 'Dois chefões', desc: 'Derrube 2 chefões hoje' },
+  d_coins150: { name: 'Garimpo', desc: 'Recolha 150 moedas na pista hoje' },
+  d_wave8: { name: 'Onda oito', desc: 'Chegue à onda 8 na defesa' },
+  d_contract: { name: 'Sob contrato', desc: 'Marche 1.000 m com um contrato ativo' },
+  d_troop200: { name: 'Duzentos', desc: 'Chegue a 200 soldados numa marcha' },
+  d_relics3: { name: 'Libertador', desc: 'Abra 3 jaulas ou relíquias hoje' },
+  w_km8: { name: 'Oito quilômetros', desc: 'Marche 8.000 m numa partida' },
+  w_runs10: { name: 'Dez partidas', desc: 'Jogue 10 partidas na semana' },
+  w_kills5k: { name: 'Cinco mil abates', desc: 'Abata 5.000 inimigos na semana' },
+  w_boss10: { name: 'Dez chefões', desc: 'Derrube 10 chefões na semana' },
+  w_wave15: { name: 'Onda quinze', desc: 'Chegue à onda 15 na defesa' },
+  w_score300k: { name: 'Trezentos mil', desc: '300.000 pontos numa marcha' },
+  w_contracts3: { name: 'Três contratos', desc: 'Marche 2.000 m com três contratos' },
+  w_coins1k: { name: 'Mil moedas', desc: 'Recolha 1.000 moedas na pista na semana' },
+};
+async function loadMissions() {
+  if (!online.sb || !online.user) { online.missions = null; return; }
+  const { data, error } = await online.sb.rpc('get_missions');
+  online.missions = error ? null : data;
+  renderMissionsTag();
+}
+const missionsClaimable = () => (online.missions || []).filter((m) => !m.claimed && m.progress >= m.target).length;
+function renderMissionsTag() { const n = missionsClaimable(); $('missionsTag').textContent = n ? String(n) : ''; }
+function periodLeft(kind) { // until the UTC day turns, or the ISO week (Monday 00:00 UTC)
+  const now = new Date(), y = now.getUTCFullYear(), mo = now.getUTCMonth(), d = now.getUTCDate();
+  const end = kind === 'd' ? Date.UTC(y, mo, d + 1) : Date.UTC(y, mo, d + ((8 - now.getUTCDay()) % 7 || 7));
+  const s = Math.max(0, end - now) / 1000, days = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return days ? `${days}d ${h}h` : h ? `${h}h ${m}min` : `${m}min`;
+}
+function renderMissions() {
+  renderWalletBar($('missionsWallet'), online.wallet);
+  $('dailyLeft').textContent = periodLeft('d'); $('weeklyLeft').textContent = periodLeft('w');
+  for (const [kind, id] of [['d', 'dailyList'], ['w', 'weeklyList']]) {
+    const list = $(id); list.textContent = '';
+    const rows = (online.missions || []).filter((m) => m.period.startsWith(kind));
+    if (!rows.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = online.missions ? 'Nenhuma missão agora.' : 'Carregando…'; list.append(p); continue; }
+    for (const m of rows) {
+      const t = MISSIONS[m.key] || { name: m.key, desc: '' }, done = m.progress >= m.target;
+      const card = document.createElement('div'); card.className = 'mission' + (kind === 'w' ? ' weekly' : '') + (m.claimed ? ' claimed' : done ? ' done' : '');
+      const reward = document.createElement('div'); reward.className = 'reward'; reward.append(sprite(m.gems ? 'gem' : 'coin'), document.createTextNode('+' + fmt(m.gems || m.coins)));
+      const h = document.createElement('h4'); h.textContent = t.name; const p = document.createElement('p'); p.textContent = t.desc;
+      const bar = document.createElement('div'); bar.className = 'bar'; const fill = document.createElement('i'); fill.style.width = Math.min(100, (100 * m.progress) / m.target) + '%'; bar.append(fill);
+      card.append(reward, h, p, bar);
+      if (m.claimed) { const n = document.createElement('span'); n.className = 'n'; n.textContent = '✓ PEGO'; card.append(n); }
+      else if (done) { const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.textContent = 'PEGAR'; b.addEventListener('click', () => claimMission(m, b)); card.append(b); }
+      else { const n = document.createElement('span'); n.className = 'n'; n.textContent = `${fmt(m.progress)}/${fmt(m.target)}`; card.append(n); }
+      list.append(card);
+    }
+  }
+  renderMissionsTag();
+}
+async function claimMission(m, btn) {
+  btn.disabled = true; setMsg($('missionsMsg'), 'Pegando…');
+  const { data, error } = await online.sb.rpc('claim_mission', { p_period: m.period, p_key: m.key });
+  if (error || !data?.[0]) { btn.disabled = false; setMsg($('missionsMsg'), RPC_ERR[error?.message] || 'Não deu para pegar agora', 'err'); return; }
+  m.claimed = true; online.wallet = { ...(online.wallet || { upgrades: {}, heroes: {}, achievements: [] }), coins: data[0].coins, gems: data[0].gems };
+  Sfx.play(m.gems ? 'victory' : 'pickup'); setMsg($('missionsMsg'), `+${fmt(m.gems || m.coins)} ${m.gems ? 'diamantes' : 'moedas'} no cofre`, 'ok');
+  renderMissions(); renderMenuWallet();
+}
+// The run's chest (tier and contents come from the server): it waits closed on the game-over card until tapped.
+function showChest(tier, coins, gems) {
+  const box = $('chestBox'), img = $('chestImg'), btn = $('chestBtn'), loot = $('chestLoot'), label = $('chestLabel');
+  box.hidden = false; box.classList.remove('open'); loot.hidden = true; loot.textContent = ''; btn.disabled = false;
+  img.src = SPR('chest_' + tier); label.textContent = `BAÚ DE ${{ bronze: 'BRONZE', silver: 'PRATA', gold: 'OURO' }[tier]} · TOQUE PARA ABRIR`;
+  btn.onclick = () => {
+    btn.disabled = true; box.classList.add('open'); img.src = SPR('chest_' + tier + '_open'); label.textContent = 'JÁ ESTÁ NO COFRE';
+    loot.hidden = false; loot.append(walletChip('coin', coins, '+')); if (gems) loot.append(walletChip('gem', gems, '+'));
+    for (let i = 0; i < 16; i++) {
+      const s = document.createElement('span'); s.className = 'spark'; const a = Math.random() * 6.28, d = 60 + Math.random() * 80;
+      s.style.setProperty('--dx', Math.cos(a) * d + 'px'); s.style.setProperty('--dy', Math.sin(a) * d - 40 + 'px');
+      if (Math.random() < 0.4) s.style.background = '#5ff3ff'; box.append(s); setTimeout(() => s.remove(), 1000);
+    }
+    Sfx.play(gems ? 'victory' : 'pickup');
+  };
 }
 // ---- the Quartel: permanent march upgrades bought with coins (the design in docs/economia.md) ----
 const QUARTEL = {
@@ -2527,10 +2707,11 @@ const QUARTEL = {
 };
 const quartelPrice = (id, lvl) => Math.round(QUARTEL[id].base * Math.pow(1.15, lvl));
 const qLevel = (id) => online.wallet?.upgrades?.[id] || 0;
-const RPC_ERR = { not_enough_coins: 'Moedas insuficientes', not_enough_gems: 'Diamantes insuficientes', maxed: 'Já está no máximo', owned: 'Você já tem esse herói', not_owned: 'Desbloqueie o herói primeiro', not_authenticated: 'Entre para usar' };
+const RPC_ERR = { not_enough_coins: 'Moedas insuficientes', not_enough_gems: 'Diamantes insuficientes', maxed: 'Já está no máximo', owned: 'Você já tem esse herói', not_owned: 'Desbloqueie o herói primeiro', not_authenticated: 'Entre para usar',
+  expired: 'Essa missão já venceu', not_done: 'Ainda não concluída', claimed: 'Já pega', unknown_mission: 'Missão desconhecida' };
 function renderQuartel() {
   const list = $('quartelList'), w = online.wallet; list.textContent = '';
-  $('quartelCoins').textContent = walletLine(w);
+  renderWalletBar($('quartelCoins'), w);
   for (const [id, u] of Object.entries(QUARTEL)) {
     const lvl = qLevel(id), maxed = lvl >= u.max, price = maxed ? 0 : quartelPrice(id, lvl);
     const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(lvl > 0)); b.disabled = !w || maxed || w.coins < price;
@@ -2583,6 +2764,7 @@ $('btnContracts').addEventListener('click', () => openScreen('contractsScreen'))
 $('btnQuartel').addEventListener('click', () => openScreen('quartelScreen'));
 $('btnHeroes').addEventListener('click', () => openScreen('heroesScreen'));
 $('btnAch').addEventListener('click', () => openScreen('achievementsScreen'));
+$('btnMissions').addEventListener('click', () => openScreen('missionsScreen'));
 $('btnRank').addEventListener('click', () => openScreen('rankScreen'));
 $('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
 for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
@@ -2685,7 +2867,7 @@ const M = {
   elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, built: false, best: 0,
   hz: [], hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1,
   combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0, contracts: new Set(), cMul: 1,
-  coins: 0, coinAcc: 0, q: { start: 10, cap: 0, statMax: 0, fila: 0, cd: 0, ult: 0, elMax: 2 }, hero: null,
+  coins: 0, coinAcc: 0, freed: 0, q: { start: 10, cap: 0, statMax: 0, fila: 0, cd: 0, ult: 0, elMax: 2 }, hero: null,
 };
 const con = (id) => M.contracts.has(id);
 const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
@@ -3027,7 +3209,7 @@ function breakObstacle(o) {
     const r = RELICS[o.buff], c = new THREE.Color(PICKUPS[o.buff].color);
     debris(o.x, 1.3, o.z, new THREE.Color(0x55556e), 16, 8, 0.2); sparks(o.x, 1.3, o.z, c, 50, 9, 0.8, 0.6, 2, 0.4);
     ring(o.x, o.z, PICKUPS[o.buff].color, 6, 0.5); floatText(r.apply() || r.text, o.x, 3, o.z, r.cls); Sfx.play('pickup');
-    removeObstacle(o); return;
+    M.freed++; removeObstacle(o); return;
   }
   const c = new THREE.Color(o.type === 'cage' ? 0x6a6a88 : 0xa8774c);
   debris(o.x, 1, o.z, c, 18, 7, 0.28); smoke(o.x, 0.8, o.z, 5, 1.6, 0xc8b8a0, 0.9); Sfx.play('bigdie');
@@ -3035,7 +3217,7 @@ function breakObstacle(o) {
     let room = squadCap() - squadCount(), freed = 0, extra = 0; // the troop never grows past its cap
     for (const a of o.inmates) if (a.alive) { if (room-- > 0) { a.role = 'joining'; a.cage = null; freed++; } else { a.alive = false; extra++; } }
     if (freed) floatText(`+${freed} SOLDADOS`, o.x, 3, o.z, 'cyan');
-    fullTroop(extra, o.x, o.z, freed ? 4.2 : 3); ring(o.x, o.z, 0x5ff3ff, 6, 0.5);
+    fullTroop(extra, o.x, o.z, freed ? 4.2 : 3); ring(o.x, o.z, 0x5ff3ff, 6, 0.5); M.freed++;
   }
   removeObstacle(o);
 }
@@ -3273,7 +3455,7 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
-    contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0, coinAcc: 0,
+    contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0, coinAcc: 0, freed: 0,
     hero: heroPick && heroLevel(heroPick) ? { id: heroPick, lvl: heroLevel(heroPick), x: 0, z: SQUAD_Z, act: 0, r: 3 + 0.5 * (heroLevel(heroPick) - 1), r2: (3 + 0.5 * (heroLevel(heroPick) - 1)) ** 2 } : null,
     // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
     q: { start: 10 + 2 * qLevel('recrutas'), cap: 10 * qLevel('alojamento'), statMax: 10 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
@@ -4025,6 +4207,7 @@ function showGameOver() {
   const bo = $('bestOver');
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
   bo.classList.toggle('newbest', isBest);
+  $('chestBox').hidden = true; $('overMissions').hidden = true;
   ui.over.hidden = false; ui.bossBar.hidden = true; $('btnAgain').focus();
   onlineRunFinish();
 }
@@ -5155,7 +5338,7 @@ function frame(now) {
     if (state.dyingTimer <= 0) showGameOver();
   }
   if (state.phase === 'menu' || state.phase === 'over') { gt += dt; updateGates(dt); updatePickups(dt); }
-  else if (state.mode === 'march') simulateMarch(dt, realDt);
+  else if (state.mode === 'march') { if (window.botDrive) marchBot(); simulateMarch(dt, realDt); } // botDrive: the test bot steers a real run
   else simulate(dt, realDt);
   drawCrowds(); drawAmbient(realDt, dt);
   if (state.mode === 'march') drawBolts(); else boltMesh.count = 0;
@@ -5175,6 +5358,7 @@ if (location.hash === '#autoplay') startGame('defense');
 // holds the elements of the bosses before).
 // Add t<seconds> (#march0t60) to play that long instantly with a bot that takes the best gate, dodges crate walls and
 // fires the ultimate at bosses; it logs the troop, weapon and elements every 10 s.
+window.dbg = { M, state, allies, enemies, bigs, online, frame, loadMissions, renderMissions }; // console handle for testing real runs
 const mh = /^#march(\d+)?(?:t(\d+))?$/.exec(location.hash);
 const marchBot = () => {
   const ahead = (o) => o.z < SQUAD_Z - 1 && o.z > SQUAD_Z - 45;

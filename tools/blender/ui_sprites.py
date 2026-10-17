@@ -1,5 +1,5 @@
 # Renders the economy's UI sprites to assets/ui/*.webp (transparent, 512x512): the three chests closed and open,
-# a coin, a coin stack, a coin bag, a gem and a gem cluster. Same low-poly language as the game's models
+# a coin, a coin stack, a coin bag, a gem, a gem cluster, a trophy, a season pass ticket and a crown. Same low-poly language as the game's models
 # (beveled primitives, flat shading), rendered in EEVEE with a sun, a rim light and a Freestyle ink outline, so they
 # read like stickers on the menu cards. Run:
 #   blender --background --factory-startup --python tools/blender/ui_sprites.py [-- <dir for PNG previews>]
@@ -161,9 +161,66 @@ def gems():
     finish('gems')
 
 
+def star_shape(p, c, r, depth=0.08, rot=(0, 0, 0)):
+    """A five-point star extruded by `depth`, built from explicit faces (a fan from the center, top and bottom)."""
+    bm = p.bm; m = euler(rot); cv = Vector(c)
+    at = lambda x, y, z: bm.verts.new(cv + m @ Vector((x, y, z)))
+    def ring(z):
+        pts = []
+        for i in range(10):
+            a = math.pi / 2 + i * math.pi / 5; rr = r if i % 2 == 0 else r * 0.45
+            pts.append(at(rr * math.cos(a), rr * math.sin(a), z))
+        return pts
+    top, bot = ring(depth / 2), ring(-depth / 2); ct, cb = at(0, 0, depth / 2), at(0, 0, -depth / 2)
+    for i in range(10):
+        bm.faces.new((ct, top[i], top[(i + 1) % 10])); bm.faces.new((cb, bot[(i + 1) % 10], bot[i]))
+        bm.faces.new((top[i], bot[i], bot[(i + 1) % 10], top[(i + 1) % 10]))
+    p._paint(top + bot + [ct, cb], None)
+
+
+def trophy():
+    base = colored(part('trophy_base', 'trophy'), (0.3, 0.22, 0.4), rough=0.6)
+    base.box((0, 0, 0.07), (0.95, 0.95, 0.14), bevel=0.03); base.box((0, 0, 0.19), (0.6, 0.6, 0.1), bevel=0.02)
+    cup = colored(part('trophy_cup', 'trophy'), GOLD, rough=0.3)
+    cup.cyl((0, 0, 0.4), 0.1, 0.16, 0.34, segs=12); cup.cyl((0, 0, 0.6), 0.3, 0.3, 0.08, segs=16)
+    cup.cyl((0, 0, 1.0), 0.3, 0.55, 0.72, segs=16); cup.torus((0, 0, 1.36), 0.55, 0.045, segs=20, tube=6)
+    for s in (-1, 1): cup.torus((s * 0.66, 0, 1.0), 0.26, 0.05, segs=14, tube=6, rot=(math.pi / 2, 0, 0))
+    plate = colored(part('trophy_plate', 'trophy'), (0.95, 0.9, 0.7), rough=0.5)
+    star_shape(plate, (0, -0.52, 1.0), 0.17, depth=0.06, rot=(math.pi / 2, 0, 0))
+    finish('trophy')
+
+
+def ticket():
+    rot = (math.radians(52), 0, math.radians(-14))  # the printed face tilts toward the camera
+    card = colored(part('ticket_card', 'ticket'), GOLD, rough=0.35)
+    card.box((0, 0, 0.75), (1.8, 1.05, 0.08), rot=rot, bevel=0.04)
+    band = colored(part('ticket_band', 'ticket'), (0.3, 0.22, 0.4), rough=0.6)
+    m = euler(rot)
+    band.box(Vector((0, 0, 0.75)) + m @ Vector((-0.62, 0, 0.05)), (0.36, 0.95, 0.03), rot=rot, bevel=0.0)
+    for i in range(3): band.box(Vector((0, 0, 0.75)) + m @ Vector((0.25, -0.3 + 0.3 * i, 0.05)), (0.8, 0.08, 0.03), rot=rot, bevel=0.0)
+    star = colored(part('ticket_star', 'ticket'), (1.0, 0.97, 0.85), rough=0.4)
+    star_shape(star, Vector((0, 0, 0.75)) + m @ Vector((-0.62, 0, 0.07)), 0.15, depth=0.05, rot=rot)
+    finish('ticket')
+
+
+def crown():
+    g = colored(part('crown_gold', 'crown'), GOLD, rough=0.3)
+    g.cyl((0, 0, 0.18), 0.55, 0.5, 0.36, segs=20, caps=False)
+    g.torus((0, 0, 0.36), 0.52, 0.06, segs=20, tube=6)
+    for i in range(5):
+        a = i / 5 * 2 * math.pi + math.pi / 2
+        g.cyl((0.5 * math.cos(a), 0.5 * math.sin(a), 0.58), 0.13, 0.02, 0.5, segs=6)
+    j = colored(part('crown_gems', 'crown'), GEM, rough=0.4)
+    for i in range(5):
+        a = i / 5 * 2 * math.pi + math.pi / 2
+        j.ball((0.5 * math.cos(a), 0.5 * math.sin(a), 0.84), 0.07, subdiv=1)
+    j.ball((0, -0.52, 0.2), 0.1, subdiv=1)
+    finish('crown')
+
+
 for tier in ('bronze', 'silver', 'gold'):
     chest(tier, False); chest(tier, True)
-coin(); coins(); bag(); gem(); gems()
+coin(); coins(); bag(); gem(); gems(); trophy(); ticket(); crown()
 
 # ---------- render: EEVEE, a warm sun plus a cool rim light, flat ambient, Freestyle ink outline ----------
 sc = bpy.context.scene

@@ -279,6 +279,54 @@ body {
 .chip.coins .spr { width: 22px; height: 22px; filter: none; }
 .missionLine { margin: 0 0 10px; text-align: center; font-weight: 800; font-size: 13px; line-height: 1.4; color: var(--gate); }
 
+/* Season pass and the weekly ranking prizes */
+.row2.icons .btn.missions { margin-top: 0; padding-inline: 10px; font-size: 19px; }
+.btn.missions .lbl { display: grid; line-height: 1; }
+.btn.missions .lbl small { font: 800 11px var(--font-body); letter-spacing: 0; color: var(--muted); margin-top: 3px; }
+.btn .tag { display: inline-block; margin-left: 6px; vertical-align: 2px; }
+.btn.missions .tag { margin-left: 0; }
+.spr.big { width: 64px; height: 64px; }
+.spr.mini { width: 18px; height: 18px; filter: none; }
+.seasonHead { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; margin: 0 0 12px; }
+.seasonHead h3 { margin: 0; font: 400 24px var(--font-display); color: var(--gold-deep); line-height: 1; }
+.seasonHead p { margin: 4px 0 0; font: 800 13px var(--font-body); color: var(--muted); }
+.seasonBar { margin: 0 0 12px; }
+.seasonBar .bar { height: 14px; border-radius: 7px; background: rgba(27, 22, 64, .1); overflow: hidden; margin-bottom: 6px; }
+.seasonBar .bar i { display: block; height: 100%; width: 0; border-radius: 7px; background: linear-gradient(90deg, var(--gold-deep), var(--gold)); transition: width .4s; }
+.passBox { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin: 0 0 12px; padding: 12px; border-radius: 14px; background: linear-gradient(135deg, #2a1f5e, #5a3c9a); color: #fff; }
+.passBox h4 { margin: 0; font: 400 20px var(--font-display); color: var(--gold); }
+.passBox p { margin: 2px 0 0; font: 700 12px var(--font-body); opacity: .85; line-height: 1.35; }
+.passBox .btn.sm { display: inline-flex; align-items: center; gap: 4px; font-size: 18px; }
+.passBox .btn.sm .spr { width: 24px; height: 24px; filter: none; }
+.passBox.on { background: linear-gradient(135deg, #b9770e, var(--gold-deep)); }
+.passBox.on h4 { color: #fff; }
+#seasonClaims { margin: 0 0 6px; }
+#seasonClaims .btn.sm { width: 100%; font-size: 17px; }
+.btn.sm.prem { background: #5a3c9a; color: #fff; box-shadow: 0 5px 0 #2a1f5e; }
+.btn.sm.prem:active { box-shadow: 0 1px 0 #2a1f5e; }
+.tiers { display: grid; gap: 6px; margin: 10px 0 16px; }
+.tier { display: grid; grid-template-columns: 34px 1fr 1.3fr; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 12px; background: rgba(27, 22, 64, .05); }
+.tier .n { font-family: var(--font-display); font-size: 18px; color: var(--muted); }
+.tier .cell { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.tier .rw { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-display); font-size: 16px; color: var(--gold-deep); white-space: nowrap; }
+.tier .rw.gem { color: #1f8fb8; }
+.tier .rw .spr { width: 24px; height: 24px; filter: none; }
+.tier .cell.prem { opacity: .5; }
+.tier.pass .cell.prem { opacity: 1; }
+.tier.reached { background: #fff3c4; }
+.tier.reached .n { color: var(--ink); }
+.tier .cell.got .rw { opacity: .45; }
+.tier .cell.got::after { content: "✓"; align-self: center; font: 900 13px var(--font-body); color: var(--ok); }
+.tier .cell.lock::before { content: "✦"; align-self: center; font-size: 12px; color: #5a3c9a; }
+.prizes { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: center; margin: 0 0 10px; font: 700 12px var(--font-body); color: var(--muted); line-height: 1.35; }
+.prizes .spr { width: 34px; height: 34px; }
+.prizes b { color: var(--ink); }
+.board .nick.top1 { color: var(--gold-deep); }
+.board .nick.top10 { color: #1f8fb8; }
+.board .nick .spr.mini { margin-right: 4px; vertical-align: -4px; }
+.board .nick .pass { color: #5a3c9a; margin-left: 4px; }
+.board li.me .nick.top1, .board li.me .nick.top10, .board li.me .nick .pass { color: var(--ink); }
+
 @media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready, .chestBtn, .chestBox, .loot .wchip, .spark, .mission .btn.sm { animation: none; } .btn { transition: none; } }
 </style>
 </head>
@@ -347,9 +395,12 @@ body {
       <button class="btn mode" id="btnPlay" type="button">DEFESA<small>Segure a horda no muro</small></button>
       <button class="btn mode march" id="btnMarch" type="button">MARCHA<small>Avance pela estrada sem fim</small></button>
     </div>
-    <button class="btn alt missions" id="btnMissions" type="button" data-online hidden><img class="spr" src="assets/ui/chest_gold.webp" alt="">MISSÕES<span class="tag" id="missionsTag"></span></button>
+    <div class="row2 icons" data-online hidden>
+      <button class="btn alt missions" id="btnMissions" type="button"><img class="spr" src="assets/ui/chest_gold.webp" alt=""><span class="lbl">MISSÕES<small id="missionsSub"></small></span><span class="tag" id="missionsTag"></span></button>
+      <button class="btn alt missions" id="btnSeason" type="button"><img class="spr" src="assets/ui/ticket.webp" alt=""><span class="lbl">TEMPORADA<small id="seasonSub"></small></span><span class="tag" id="seasonTag"></span></button>
+    </div>
     <div class="row2">
-      <button class="btn alt" id="btnRank" type="button" data-online hidden>RANKING</button>
+      <button class="btn alt" id="btnRank" type="button" data-online hidden>RANKING<span class="tag" id="rankTag"></span></button>
       <button class="btn alt" id="btnHow" type="button">COMO JOGAR</button>
     </div>
     <div class="row2">
@@ -442,6 +493,27 @@ body {
   </div>
 </div>
 
+<div class="screen sub" id="seasonScreen" hidden>
+  <div class="card">
+    <h2 class="title sub">TEMPORADA</h2>
+    <div class="seasonHead">
+      <img class="spr big" src="assets/ui/ticket.webp" alt="">
+      <div><h3 id="seasonName">TEMPORADA</h3><p id="seasonDays">Carregando…</p></div>
+    </div>
+    <div class="wallet" id="seasonWallet"></div>
+    <div class="seasonBar"><div class="bar"><i id="seasonFill"></i></div><p class="label" id="seasonLevel">NÍVEL 0</p></div>
+    <p class="note">Pontos por partida válida: 10, mais 1 por 100 m na marcha ou 2 por onda na defesa (até 60), e 25 por missão concluída. São 30 níveis de 150 pontos em 30 dias.</p>
+    <div class="passBox" id="passBox"></div>
+    <div class="row2" id="seasonClaims">
+      <button class="btn sm" id="btnClaimFree" type="button" disabled>PEGAR GRÁTIS</button>
+      <button class="btn sm prem" id="btnClaimPrem" type="button" disabled>PEGAR PREMIUM</button>
+    </div>
+    <p class="msg" id="seasonMsg"></p>
+    <div class="tiers" id="tierList"></div>
+    <button class="btn alt" type="button" data-back>VOLTAR</button>
+  </div>
+</div>
+
 <div class="screen sub" id="contractsScreen" hidden>
   <div class="card">
     <h2 class="title sub">CONTRATOS</h2>
@@ -463,6 +535,9 @@ body {
       <button type="button" role="tab" data-period="week" aria-selected="true">SEMANA</button>
       <button type="button" role="tab" data-period="all" aria-selected="false">GERAL</button>
     </div>
+    <p class="prizes"><img class="spr" src="assets/ui/trophy.webp" alt=""><span>Toda segunda, diamantes pela semana que passou, por modo: <b>#1 25</b> · top 10 <b>12</b> · top 100 <b>5</b> · top 1000 <b>2</b>. O top 10 leva a cor do nome na semana seguinte.</span></p>
+    <div class="missions" id="weekRewards"></div>
+    <p class="msg" id="rankMsg"></p>
     <ol class="board" id="board"></ol>
     <p class="note center" id="boardNote" hidden></p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
@@ -521,6 +596,7 @@ body {
       <div class="loot" id="chestLoot" hidden></div>
     </div>
     <p class="missionLine" id="overMissions" hidden></p>
+    <p class="missionLine" id="overSeason" hidden></p>
     <p class="note center" id="overContracts" hidden></p>
     <div class="overOnline" id="overOnline" hidden>
       <p class="rankline" id="overRank"></p>
@@ -2361,7 +2437,8 @@ async function setUser(user) {
       const { data } = await online.sb.from('profiles').select('nickname').eq('id', user.id).maybeSingle();
       if (online.user?.id === user.id) online.nickname = data?.nickname ?? null;
     }
-    if (user) { await loadWallet(); loadMissions().catch(() => {}); } else { online.wallet = null; online.missions = null; }
+    if (user) { await loadWallet(); Promise.all([loadMissions(), loadSeason(), loadWeekRewards()]).then(renderMenuWallet).catch(() => {}); }
+    else { online.wallet = null; online.missions = null; online.season = null; online.weekRewards = null; }
   }
   renderAccount();
 }
@@ -2471,7 +2548,8 @@ async function onlineRunFinish() {
     const keys = r.missions.split(',').filter((k) => MISSIONS[k]), om = $('overMissions');
     om.hidden = !keys.length; om.textContent = keys.map((k) => `Missão concluída: ${MISSIONS[k].name}`).join(' · ') + ' · pegue a recompensa em MISSÕES';
   }
-  loadMissions().then(renderMenuWallet).catch(() => {});
+  if (r.season_add) { const os = $('overSeason'); os.hidden = false; os.textContent = `+${fmt(r.season_add)} pontos de temporada · nível ${Math.min(SEASON_TIERS, Math.floor((r.season_total || 0) / SEASON_STEP))}`; }
+  Promise.all([loadMissions(), loadSeason()]).then(renderMenuWallet).catch(() => {});
   renderMenuWallet();
   if (!online.nickname) {
     form.hidden = false;
@@ -2500,7 +2578,9 @@ async function loadBoard(period = online.period, mode = online.boardMode) {
     const li = document.createElement('li');
     li.className = (row.is_me ? 'me' : '') + (row.pos <= 3 ? ' top' : '');
     const pos = document.createElement('span'); pos.className = 'pos'; pos.textContent = row.pos;
-    const nick = document.createElement('span'); nick.className = 'nick'; nick.textContent = row.nickname;
+    const nick = document.createElement('span'); nick.className = 'nick' + (row.badge ? ' ' + row.badge : ''); nick.textContent = row.nickname;
+    if (row.badge === 'top1') { const c = sprite('crown'); c.classList.add('mini'); c.title = 'Primeiro da semana passada'; nick.prepend(c); }
+    if (row.pass) { const st = document.createElement('span'); st.className = 'pass'; st.textContent = '✦'; st.title = 'Passe da temporada'; nick.append(st); }
     const small = document.createElement('small'); small.textContent = mode === 'march' ? fmt(row.wave) + ' M' : 'ONDA ' + row.wave; nick.append(small);
     const ids = (row.contracts || '').split(',').filter((id) => CONTRACTS[id]);
     if (ids.length) { const tag = document.createElement('small'); tag.className = 'con'; tag.textContent = '×' + fmtMul(contractMul(ids)); nick.append(tag); }
@@ -2516,13 +2596,18 @@ function openScreen(id) {
   const from = [ui.menu, ui.over].find((s) => !s.hidden);
   if (from) { screenBack = from; from.hidden = true; }
   const el = $(id); el.hidden = false;
-  if (id === 'rankScreen') loadBoard(online.period, from === ui.over ? state.mode : online.boardMode);
+  if (id === 'rankScreen') { // last week's prizes first (that settles the week and paints the badges), then the board
+    setMsg($('rankMsg'), ''); renderWeekRewards();
+    const go = () => loadBoard(online.period, from === ui.over ? state.mode : online.boardMode);
+    if (online.user) loadWeekRewards().then(renderWeekRewards).catch(() => {}).finally(go); else go();
+  }
   if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
   if (id === 'contractsScreen') renderContracts();
   if (id === 'quartelScreen') { renderQuartel(); ensureSession().then(loadWallet).then(renderQuartel).catch(() => {}); }
   if (id === 'heroesScreen') { renderHeroes(); ensureSession().then(loadWallet).then(renderHeroes).catch(() => {}); }
   if (id === 'achievementsScreen') { renderAchievements(); ensureSession().then(loadWallet).then(renderAchievements).catch(() => {}); }
   if (id === 'missionsScreen') { renderMissions(); ensureSession().then(() => Promise.all([loadWallet(), loadMissions()])).then(renderMissions).catch(() => {}); }
+  if (id === 'seasonScreen') { setMsg($('seasonMsg'), ''); renderSeason(); ensureSession().then(() => Promise.all([loadWallet(), loadSeason()])).then(renderSeason).catch(() => {}); }
   el.querySelector('[data-back]').focus();
 }
 // ---- heroes: one per run, a bigger soldier with a passive and an active that fires with the FILA. Styles, not steps:
@@ -2564,7 +2649,7 @@ function renderWalletBar(el, w) {
   el.append(walletChip('coin', w.coins), walletChip('gem', w.gems));
 }
 function renderMenuWallet() {
-  const el = $('menuWallet'); el.hidden = !online.sb || !online.user; renderWalletBar(el, online.wallet); renderMissionsTag();
+  const el = $('menuWallet'); el.hidden = !online.sb || !online.user; renderWalletBar(el, online.wallet); renderMissionsTag(); renderSeasonTag(); renderRankTag();
 }
 function renderHeroes() {
   const list = $('heroList'), w = online.wallet; list.textContent = '';
@@ -2695,6 +2780,105 @@ function showChest(tier, coins, gems) {
     Sfx.play(gems ? 'victory' : 'pickup');
   };
 }
+// ---- the season: 30 days from 2026-10-17 UTC, 30 tiers of 150 points, a free track for everyone and a premium pass
+// bought with gems (120). Points come from valid runs and completed missions; the server holds the rules
+// (season_tier, claim_season), this mirrors them for the list. ----
+const SEASONS = { 1: { name: 'REI MIDAS' } };
+const SEASON_TIERS = 30, SEASON_STEP = 150;
+const seasonTier = (n) => ({ coinsFree: 100 + 10 * n, gemsFree: n % 5 === 0 ? 5 : 0, coinsPrem: 200 + 20 * n, gemsPrem: n % 5 === 0 ? 10 : 2 });
+async function loadSeason() {
+  if (!online.sb || !online.user) { online.season = null; return; }
+  const { data, error } = await online.sb.rpc('get_season');
+  online.season = error || !data?.[0] ? null : data[0];
+  renderSeasonTag();
+}
+const seasonClaimable = (s = online.season) => (s ? Math.max(0, s.tier - s.free_claimed) + (s.premium ? Math.max(0, s.tier - s.prem_claimed) : 0) : 0);
+function daysLeft(iso) { const d = Math.max(0, (new Date(iso) - Date.now()) / 864e5); return d >= 1 ? `${Math.floor(d)} dias` : `${Math.max(1, Math.floor(d * 24))} h`; }
+function renderSeasonTag() {
+  const s = online.season, n = seasonClaimable(s);
+  $('seasonTag').textContent = n ? String(n) : '';
+  $('seasonSub').textContent = s ? `Nível ${s.tier} · ${daysLeft(s.ends_at)}` : '';
+  $('missionsSub').textContent = online.missions ? `${online.missions.filter((m) => m.progress >= m.target).length}/${online.missions.length} feitas` : '';
+}
+function renderSeason() {
+  const s = online.season; renderWalletBar($('seasonWallet'), online.wallet);
+  $('seasonName').textContent = s ? `TEMPORADA ${s.season}` + (SEASONS[s.season] ? ` · ${SEASONS[s.season].name}` : '') : 'TEMPORADA';
+  $('seasonDays').textContent = s ? `termina em ${daysLeft(s.ends_at)}` : 'Carregando…';
+  const pts = s?.points || 0, tier = s?.tier || 0;
+  $('seasonFill').style.width = (100 * Math.min(1, pts / (SEASON_TIERS * SEASON_STEP))) + '%';
+  $('seasonLevel').textContent = tier >= SEASON_TIERS ? `NÍVEL ${SEASON_TIERS} · PASSE COMPLETO` : `NÍVEL ${tier} · ${fmt(pts)} / ${fmt((tier + 1) * SEASON_STEP)} PONTOS`;
+  const box = $('passBox'); box.textContent = ''; box.classList.toggle('on', !!s?.premium);
+  const info = document.createElement('div'), h = document.createElement('h4'), p = document.createElement('p');
+  h.textContent = s?.premium ? '✦ PASSE PREMIUM ATIVO' : 'PASSE PREMIUM';
+  p.textContent = s?.premium
+    ? 'Trilha premium liberada: moedas em dobro por nível, 2 diamantes em cada nível e 10 a cada cinco, e a estrela ✦ no ranking.'
+    : `${fmt(s?.price ?? 120)} diamantes: a trilha premium (moedas em dobro por nível, 2 diamantes em cada nível e 10 a cada cinco) e a estrela ✦ no ranking até o fim da temporada.`;
+  info.append(h, p); box.append(info);
+  if (s && !s.premium) {
+    const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.append(sprite('gem'), document.createTextNode(fmt(s.price)));
+    b.disabled = !online.wallet || online.wallet.gems < s.price; b.addEventListener('click', buySeasonPass); box.append(b);
+  }
+  const nf = s ? Math.max(0, s.tier - s.free_claimed) : 0, np = s?.premium ? Math.max(0, s.tier - s.prem_claimed) : 0;
+  $('btnClaimFree').disabled = !nf; $('btnClaimFree').textContent = nf ? `PEGAR GRÁTIS (${nf})` : 'PEGAR GRÁTIS';
+  $('btnClaimPrem').disabled = !np; $('btnClaimPrem').textContent = np ? `PEGAR PREMIUM (${np})` : 'PEGAR PREMIUM';
+  const list = $('tierList'); list.textContent = '';
+  const rw = (kind, amount) => { const e = document.createElement('span'); e.className = 'rw' + (kind === 'coin' ? '' : ' gem'); e.append(sprite(kind), document.createTextNode(fmt(amount))); return e; };
+  for (let n = 1; n <= SEASON_TIERS; n++) {
+    const t = seasonTier(n), row = document.createElement('div');
+    row.className = 'tier' + (n <= tier ? ' reached' : '') + (s?.premium ? ' pass' : '');
+    const num = document.createElement('span'); num.className = 'n'; num.textContent = n;
+    const free = document.createElement('span'); free.className = 'cell' + (n <= (s?.free_claimed || 0) ? ' got' : '');
+    free.append(rw('coin', t.coinsFree)); if (t.gemsFree) free.append(rw('gem', t.gemsFree));
+    const prem = document.createElement('span'); prem.className = 'cell prem' + (n <= (s?.prem_claimed || 0) ? ' got' : s?.premium ? '' : ' lock');
+    prem.append(rw('coin', t.coinsPrem), rw(t.gemsPrem >= 10 ? 'gems' : 'gem', t.gemsPrem));
+    row.append(num, free, prem); list.append(row);
+  }
+}
+async function claimSeason(track, btn) {
+  btn.disabled = true; setMsg($('seasonMsg'), 'Pegando…');
+  const { data, error } = await online.sb.rpc('claim_season', { p_track: track });
+  if (error || !data?.[0]) { setMsg($('seasonMsg'), RPC_ERR[error?.message] || 'Não deu para pegar agora', 'err'); renderSeason(); return; }
+  online.wallet = { ...(online.wallet || { upgrades: {}, heroes: {}, achievements: [] }), coins: data[0].coins, gems: data[0].gems };
+  if (online.season) online.season[track === 'prem' ? 'prem_claimed' : 'free_claimed'] = data[0].claimed_to;
+  Sfx.play('victory'); setMsg($('seasonMsg'), `Níveis até o ${data[0].claimed_to} no cofre`, 'ok'); renderSeason(); renderMenuWallet();
+}
+async function buySeasonPass() {
+  setMsg($('seasonMsg'), 'Comprando…');
+  const { data, error } = await online.sb.rpc('buy_season_pass');
+  if (error || !data?.[0]) { setMsg($('seasonMsg'), error?.message === 'owned' ? 'Você já tem o passe' : RPC_ERR[error?.message] || 'Não deu para comprar agora', 'err'); return; }
+  online.wallet = { ...online.wallet, gems: data[0].gems }; if (online.season) online.season.premium = true;
+  Sfx.play('victory'); setMsg($('seasonMsg'), 'Passe premium ativo até o fim da temporada!', 'ok'); renderSeason(); renderMenuWallet();
+}
+$('btnClaimFree').addEventListener('click', (e) => claimSeason('free', e.currentTarget));
+$('btnClaimPrem').addEventListener('click', (e) => claimSeason('prem', e.currentTarget));
+// ---- weekly ranking prizes: settled by the server on the first call after Monday 00:00 UTC, claimed on the ranking screen ----
+async function loadWeekRewards() {
+  if (!online.sb || !online.user) { online.weekRewards = null; return; }
+  const { data, error } = await online.sb.rpc('get_week_rewards');
+  online.weekRewards = error ? null : data;
+  renderRankTag();
+}
+function renderRankTag() { const n = (online.weekRewards || []).length; $('rankTag').textContent = n ? String(n) : ''; }
+function renderWeekRewards() {
+  const list = $('weekRewards'); list.textContent = '';
+  for (const w of online.weekRewards || []) {
+    const card = document.createElement('div'); card.className = 'mission weekly done';
+    const reward = document.createElement('div'); reward.className = 'reward'; reward.append(sprite(w.rank === 1 ? 'crown' : 'trophy'), document.createTextNode('+' + fmt(w.gems)));
+    const h = document.createElement('h4'); h.textContent = `#${fmt(w.rank)} na ${w.mode === 'march' ? 'marcha' : 'defesa'}`;
+    const p = document.createElement('p'); p.textContent = `Semana ${w.week.slice(6)} de ${w.week.slice(1, 5)} · prêmio do ranking`;
+    const bar = document.createElement('div'); bar.className = 'bar'; const fill = document.createElement('i'); fill.style.width = '100%'; bar.append(fill);
+    const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.textContent = 'PEGAR';
+    b.addEventListener('click', async () => {
+      b.disabled = true; setMsg($('rankMsg'), 'Pegando…');
+      const { data, error } = await online.sb.rpc('claim_week_reward', { p_week: w.week, p_mode: w.mode });
+      if (error || !data?.[0]) { b.disabled = false; setMsg($('rankMsg'), RPC_ERR[error?.message] || 'Não deu para pegar agora', 'err'); return; }
+      online.wallet = { ...(online.wallet || { coins: 0, upgrades: {}, heroes: {}, achievements: [] }), gems: data[0].gems };
+      online.weekRewards = (online.weekRewards || []).filter((x) => x !== w);
+      Sfx.play('victory'); setMsg($('rankMsg'), `+${fmt(w.gems)} diamantes no cofre`, 'ok'); renderWeekRewards(); renderMenuWallet();
+    });
+    card.append(reward, h, p, bar, b); list.append(card);
+  }
+}
 // ---- the Quartel: permanent march upgrades bought with coins (the design in docs/economia.md) ----
 const QUARTEL = {
   recrutas: { name: 'RECRUTAS', max: 10, base: 200, effect: (l) => `+${2 * l} soldados no início` },
@@ -2708,7 +2892,8 @@ const QUARTEL = {
 const quartelPrice = (id, lvl) => Math.round(QUARTEL[id].base * Math.pow(1.15, lvl));
 const qLevel = (id) => online.wallet?.upgrades?.[id] || 0;
 const RPC_ERR = { not_enough_coins: 'Moedas insuficientes', not_enough_gems: 'Diamantes insuficientes', maxed: 'Já está no máximo', owned: 'Você já tem esse herói', not_owned: 'Desbloqueie o herói primeiro', not_authenticated: 'Entre para usar',
-  expired: 'Essa missão já venceu', not_done: 'Ainda não concluída', claimed: 'Já pega', unknown_mission: 'Missão desconhecida' };
+  expired: 'Essa missão já venceu', not_done: 'Ainda não concluída', claimed: 'Já pega', unknown_mission: 'Missão desconhecida',
+  nothing: 'Nada para pegar ainda', no_pass: 'Precisa do passe premium', not_found: 'Prêmio não encontrado' };
 function renderQuartel() {
   const list = $('quartelList'), w = online.wallet; list.textContent = '';
   renderWalletBar($('quartelCoins'), w);
@@ -2765,6 +2950,7 @@ $('btnQuartel').addEventListener('click', () => openScreen('quartelScreen'));
 $('btnHeroes').addEventListener('click', () => openScreen('heroesScreen'));
 $('btnAch').addEventListener('click', () => openScreen('achievementsScreen'));
 $('btnMissions').addEventListener('click', () => openScreen('missionsScreen'));
+$('btnSeason').addEventListener('click', () => openScreen('seasonScreen'));
 $('btnRank').addEventListener('click', () => openScreen('rankScreen'));
 $('btnRankOver').addEventListener('click', () => openScreen('rankScreen'));
 for (const t of document.querySelectorAll('#rankScreen [data-period]')) t.addEventListener('click', () => loadBoard(t.dataset.period));
@@ -4207,7 +4393,7 @@ function showGameOver() {
   const bo = $('bestOver');
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
   bo.classList.toggle('newbest', isBest);
-  $('chestBox').hidden = true; $('overMissions').hidden = true;
+  $('chestBox').hidden = true; $('overMissions').hidden = true; $('overSeason').hidden = true;
   ui.over.hidden = false; ui.bossBar.hidden = true; $('btnAgain').focus();
   onlineRunFinish();
 }

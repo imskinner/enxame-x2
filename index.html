@@ -2108,7 +2108,7 @@ function spawnEnemy(kind, x, z) {
   if (enemies.length >= MAX_ENEMIES) return;
   const e = enemyPool.pop() || {};
   const n = state.wave, lap = state.mode === 'march' ? Math.floor(M.stage / BIOMES.length) : 0, tough = 1 + 0.15 * lap; // each lap of the march hardens the horde by 15% (the bosses are the gate; a tougher horde only fed the arrival waves)
-  e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = e.bites = 0;
+  e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = e.bites = 0; e.shield = false;
   if (kind === 'runner') Object.assign(e, { hp: 1, speed: gruntSpeed(n) * 1.65, r: 0.36, color: COL.runner, scale: 0.85, dmg: 1, score: 15, ult: 1 });
   else if (kind === 'armored') Object.assign(e, { hp: Math.round((2 + Math.floor(n / 5)) * tough), speed: gruntSpeed(n) * 0.9, r: 0.47, color: COL.armored, scale: 1.15, dmg: 2, score: 20, ult: 1.4 });
   else Object.assign(e, { hp: Math.round((1 + Math.floor(n / 7)) * tough), speed: gruntSpeed(n) * rand(0.9, 1.1), r: 0.42, color: COL.grunt, scale: 1, dmg: 1, score: 10, ult: 0.8 });
@@ -2184,9 +2184,13 @@ function killBig(b, fromUlt = false) {
   removeBig(b);
 }
 function summonMinions(b) {
-  const lap = state.mode === 'march' ? Math.floor(M.stage / BIOMES.length) : 0, count = 5 + Math.min(15 + 5 * Math.max(0, lap - 1), Math.floor(state.wave / 2)); // twenty at most on the first two laps (past wave 30 the summons were a horde of their own), five more per lap after
+  const march = state.mode === 'march', lap = march ? Math.floor(M.stage / BIOMES.length) : 0;
+  // on the march the pack grows with the world: 8 at the first boss, 22 from the fifteenth on, five more per lap after
+  // the second (35 at most); in defense twenty at most, past wave 30 the summons were a horde of their own
+  const count = march ? Math.min(35, 8 + Math.min(14, M.stage) + 5 * Math.max(0, lap - 1)) : 5 + Math.min(15, Math.floor(state.wave / 2));
   sparks(b.x, 3, b.z + 1, 0xc86bff, 40, 8, 0.8, 0.6); ring(b.x, b.z + 1, 0xc86bff, 7, 0.5);
-  for (let i = 0; i < count; i++) spawnEnemy(Math.random() < 0.3 ? 'runner' : 'grunt', clamp(b.x + rand(-3, 3), -LANE_HALF + 0.5, LANE_HALF - 0.5), b.z + rand(2, 4));
+  // armor from the seventh world; on the march the pack rises behind the boss, so the bolt wall gets its seconds on it
+  for (let i = 0; i < count; i++) spawnEnemy(Math.random() < 0.3 ? 'runner' : march && M.stage >= 6 && Math.random() < 0.3 ? 'armored' : 'grunt', clamp(b.x + rand(-3, 3), -LANE_HALF + 0.5, LANE_HALF - 0.5), b.z + (march ? rand(-4, 0) : rand(2, 4)));
   Sfx.play('summon');
 }
 function updateEnemies(dt) {
@@ -3183,9 +3187,11 @@ const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6, SQUEEZE_CD_BOSS = 3
 // March bosses: the troop fires as one, so their health follows its own curve (not the defense one): tuned for a 20–30 s
 // fight at the troop a world usually arrives with and scaled with the troop's cap. After the first lap of the eight worlds
 // it grows only a little: from there the patterns get harder, not the number.
-// Past the first lap the bosses keep growing (2500 a world on top of the lap's end): with the weapon stats capped, that is
-// where the Quartel's ceilings and the heroes are meant to pay off.
-const marchBossHp = (theme) => Math.round((M.stage < BIOMES.length ? 7000 + 2000 * M.stage : 41000 + 2500 * (M.stage - BIOMES.length + 1)) * (squadCap() / SQUAD_BASE) * theme.hpMul);
+// The curve: 7000 + 2000 a world + 50 a world squared through the first lap (9k at the first boss, 26k at the ninth, 55k
+// at the lap's end), then 3000 a world (94k at world 31), times the troop's cap and the theme. The weapon caps by 4 km
+// and the troop by the lap's middle, so the second half of the lap bites and the second lap is where the Quartel and
+// the heroes pay off.
+const marchBossHp = (theme) => Math.round((M.stage < BIOMES.length ? 7000 + 2000 * M.stage + 50 * M.stage * M.stage : 55450 + 3000 * (M.stage - BIOMES.length + 1)) * (squadCap() / SQUAD_BASE) * theme.hpMul);
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 // cap: how high one gate counts up when shot; max: the troop's total for the stat, so the weapon can't snowball past it.
 const STATS = {
@@ -3738,6 +3744,19 @@ function enterPortal(p) {
 }
 
 // ---- the road ahead: one segment every ~25 m, harder with distance ----
+// The stampede: from the fourth world, about once a world (more often from the eleventh), a dense wave of shielded imps
+// charges from closer than the horde usually spawns, on one side of the road. Bolts and elements glance off the shields,
+// so the bolt wall is no answer: the ultimate sweeps them, or the troop steers to the other side and pays the bites of
+// the ones it still meets. The horde contract makes it half again as big.
+function stampede() {
+  const lvl = M.dist / 200, scale = 1 + 0.35 * Math.min(lvl, 20) + 0.10 * Math.max(0, lvl - 20);
+  const n = Math.round(rand(2.4, 3.2) * scale * (con('horde') ? 1.5 : 1)), cx = (Math.random() < 0.5 ? -1 : 1) * rand(1.5, 3.5), z0 = MARCH_FAR + 45;
+  for (let i = 0; i < n; i++) {
+    spawnEnemy(Math.random() < 0.25 ? 'runner' : 'armored', clamp(cx + gauss() * 3.2, -LANE_HALF + 0.5, LANE_HALF - 0.5), z0 + rand(-7, 7));
+    const e = enemies[enemies.length - 1]; if (e && Math.abs(e.z - z0) <= 7) { e.shield = true; e.scale *= 1.25; e.r += 0.08; }
+  }
+  showBanner('ESTOURO BLINDADO!', 'Tiros não entram: ultimate, ou desvie para o outro lado', 2.4, 'warn'); Sfx.play('warn'); state.shake = Math.max(state.shake, 0.4);
+}
 function marchSegment() {
   const lvl = M.dist / 200;
   M.segs = (M.segs || 0) + 1;
@@ -3777,7 +3796,7 @@ function marchSegment() {
     const side = Math.random() < 0.5 ? -1 : 1; // off-center, so even the widest troop can go around it; from the third world it sways
     make(Math.random() < 0.6 ? badGate() : goodGate(), side * rand(3.5, 5), rand(5, 6.5), M.stage >= 2 ? rand(1.5, 2.5) : 0);
   } else if (kind === 'enemies') {
-    const n = Math.round(rand(4, 7) * scale * (rush ? 1.2 : 1) * (con('horde') ? 2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3);
+    const n = Math.round(rand(4, 7) * scale * (rush ? 0.6 : 1) * (con('horde') ? 2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3); // the stretch before a boss carries a lighter horde into the arena (a pack arriving with the boss bit a troop in half); the summons carry the arena
     for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
     if (lvl > 1.2 && Math.random() < 0.3 + lvl * 0.05) { spawnBig('brute'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR + rand(-2, 2); b.mesh.position.z = b.z; }
   } else if (kind === 'wall') {
@@ -3805,7 +3824,7 @@ function spawnArenaRelic() {
 // ---- per-frame ----
 function startMarch() {
   Object.assign(M, {
-    speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0,
+    speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0, stampedeAt: 3200,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
     contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0, coinAcc: 0, freed: 0,
@@ -3890,7 +3909,8 @@ function simulateMarch(dt, realDt = dt) {
     if (!boss && !state.bossDown && M.dist >= M.bossAt - BOSS_LEAD) {
       clearWorldHazards(); // the arena opens clean: a roadside tomb or rift left standing next to a halted troop would bleed it for the whole fight
       spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = SQUAD_Z - shotRange() - BOSS_GAP; b.mesh.position.z = b.z; M.bossLive = true; M.fallen = 0;
-    } else if (!boss && M.dist >= M.nextSeg) { marchSegment(); M.nextSeg = M.dist + rand(22, 30) * (M.speed / 10); }
+    } else if (!boss && M.stage >= 3 && M.dist >= M.stampedeAt && M.dist < M.bossAt - BOSS_LEAD - 90) { stampede(); M.stampedeAt = M.dist + rand(700, 1100) * (M.stage >= 10 ? 0.75 : 1); }
+    else if (!boss && M.dist >= M.nextSeg) { marchSegment(); M.nextSeg = M.dist + rand(22, 30) * (M.speed / 10); }
   }
 
   // troop formation (sunflower) and the stragglers running to join it; near a pair of vortices it files into the chosen one
@@ -4358,6 +4378,7 @@ function updatePools(dt, dz) {
 // A creature hit by a bolt (or by a splash, chain or pool), with the held elements' effects.
 function hurt(t, dmg) {
   if (!t.alive) return;
+  if (t.shield) { if (Math.random() < 0.2) sparks(t.x, 0.9, t.z, 0xbfeaff, 3, 4, 0.4, 0.3, 2); return; } // a stampede's shield: bolts and elements glance off; only the ultimate (or a bite) ends it
   t.hp -= dmg * (t.marked > 0 ? 1.25 : 1); t.flash = 1; // the shadow's mark: a hit target takes more for a while
   if (hasEl('shadow')) t.marked = 3;
   if (hasEl('stone')) { if (!t.mesh) t.knock = 0.4; else if (t.kind === 'boss' && Math.random() < 0.03) t.z -= 0.15; } // stone bolts shove the horde and hold the boss back
@@ -4377,7 +4398,7 @@ function updateShots(dt) {
     b.x += b.vx * dt;
     let hit = null, hz = -1e9;
     const consider = (z, r, x, half, obj) => { if (obj !== b.last && Math.abs(b.x - x) <= half && z + r >= b.z && z - r <= z0 && z > hz) { hz = z; hit = obj; } };
-    for (const e of enemies) if (e.alive) consider(e.z, e.r, e.x, e.r + 0.15, e);
+    for (const e of enemies) if (e.alive && !e.shield) consider(e.z, e.r, e.x, e.r + 0.15, e); // bolts pass through a shielded stampede
     for (const g of bigs) if (g.alive && !(g.vanish > 0)) consider(g.z, g.r, g.x, g.r, g); // a faded boss can't be hit
     for (const o of M.walls) if (!o.dead) consider(o.z, 0.5, o.x, o.half, o);
     for (const g of gates) if (g.shootable && !g.dying && !g.used && g.appear > 0.5) consider(g.z, 0.3, g.x, g.half, g);
@@ -4446,7 +4467,7 @@ function updateMarchEnemies(dt, dz) {
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - e.x) ** 2 + (a.z - e.z) ** 2 < (e.r + 0.3) ** 2) {
         if (frozen) { debris(e.x, 0.6, e.z, new THREE.Color(0xd8f6ff), 5, 5, 0.2); killEnemy(e); break; }
         a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1;
-        if (e.hp <= 0 || ++e.bites >= 4) { killEnemy(e); break; }
+        if (e.hp <= 0 || ++e.bites >= (e.shield ? 2 : 4)) { killEnemy(e); break; } // a shielded one falls after two bites: a stampede is a check on the ultimate, not a wipe
       }
     }
     if (e.z > MARCH_BEHIND) e.alive = false;
@@ -4460,7 +4481,7 @@ function updateMarchEnemies(dt, dz) {
       if (b.stun > 0) b.stun -= dt; else b.z = Math.min(SQUAD_Z - 9, b.z + dz + bossPace() * dt); // iron bolts stun it for a moment
       if (!b.rage && b.z >= SQUAD_Z - 9) { b.rage = true; b.rageT = 0; b.rageF = 1.5; floatText('FÚRIA!', b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.6); state.flash = Math.max(state.flash, 0.3); Sfx.play('boss'); }
       if (b.rage) { // and it climbs a step every 20 s (up to 3×), so a fight the troop can't win ends instead of stalling for minutes
-        b.rageT += dt; const f = Math.min(3, 1.5 + Math.floor(b.rageT / 20) * 0.5);
+        b.rageT += dt; const f = Math.min(3, 1.5 + Math.floor(b.rageT / 24) * 0.5);
         if (f !== b.rageF) { b.rageF = f; floatText(`FÚRIA ×${f.toFixed(1).replace('.', ',')}`, b.x, b.scale * 1.8 + 1.2, b.z, 'red'); state.shake = Math.max(state.shake, 0.5); Sfx.play('boss'); }
       }
       b.x += clamp(M.cx - b.x, -1, 1) * 2.6 * dt; // keeps up with a troop dancing between the patterns' gaps
@@ -5429,7 +5450,7 @@ function marchBossPower(b, dt) {
   }
   if (b.abT > 0) return;
   b.patN = (b.patN || 0) + 1;
-  b.abT = PAT.every[t] * Math.max(0.7, 1 - 0.1 * c) / (con('fury') ? 1.5 : 1);
+  b.abT = PAT.every[t] * Math.max(0.7, 1 - 0.1 * c) * Math.max(0.8, 1 - 0.012 * (M.stage % BIOMES.length)) / (con('fury') ? 1.5 : 1); // 1.2% sooner each world of the lap
   const warn = M.stage < 2 ? 1.6 : Math.max(0.9, 1.4 - 0.15 * c); // the first two worlds teach the reading with a longer warning
   // every other blow needs the FILA column, but only when FILA will be back by the impact: using it to focus fire means
   // the next blows are the ones the whole troop sidesteps. The player never faces a gap with no way through.
@@ -5626,11 +5647,11 @@ function drawCrowds() {
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i], w = Math.sin(gt * (e.kind === 'runner' ? 17 : 10) + e.phase);
     writeMatrix(ma, i, e.x, Math.abs(w) * 0.1 * e.scale, e.z, 0, w * 0.07, e.scale);
-    writeColor(ca, i, e.frozen > 0 ? COL_FROZEN : e.color, Math.max(0, e.flash));
+    writeColor(ca, i, e.frozen > 0 ? COL_FROZEN : e.shield ? COL_SHIELD : e.color, Math.max(0, e.flash));
   }
   enemyMesh.count = enemies.length; enemyMesh.instanceMatrix.needsUpdate = true; enemyMesh.instanceColor.needsUpdate = true;
 }
-const COL_FROZEN = new THREE.Color(0xbfeaff);
+const COL_FROZEN = new THREE.Color(0xbfeaff), COL_SHIELD = new THREE.Color(0x7fa8ff);
 const EMBER = new THREE.Color(0xff5c8a), FLAME_A = new THREE.Color(0xffa53a), FLAME_B = new THREE.Color(0xffdf6b), CORE = new THREE.Color(0x9ff6ff);
 function drawAmbient(realDt, dt) {
   worldTime.value = gt;
@@ -5766,14 +5787,14 @@ const marchBot = () => {
     if (full !== null) x = full; else if (narrow !== null) { x = narrow; squeeze(); }
     if (window.botStats) { window.botStats.pat++; if (full === null && narrow === null) window.botStats.noSafe++; }
   }
-  if (state.ult >= ULT_MAX && (M.bossLive || enemies.length > 60)) useUltimate(); // saved for the boss or a thick horde
+  if (state.ult >= ULT_MAX && (M.bossLive || enemies.length > 60 || enemies.some((e) => e.alive && e.shield && e.z > SQUAD_Z - 80))) useUltimate(); // saved for the boss, a thick horde or a stampede
   state.targetX = laneClamp(x);
 };
 if (mh) {
   startGame('march');
   if (+mh[1] > 0) {
     const d = +mh[1]; M.dist = d; M.nextSeg = d + 10; M.segs = 9;
-    M.stage = Math.floor(d / BOSS_EVERY); M.stageStart = M.stage * BOSS_EVERY; M.bossAt = M.stageStart + BOSS_EVERY;
+    M.stage = Math.floor(d / BOSS_EVERY); M.stageStart = M.stage * BOSS_EVERY; M.bossAt = M.stageStart + BOSS_EVERY; M.stampedeAt = d + 250;
     for (let i = Math.max(0, M.stage - 2); i < M.stage; i++) M.elements.push(BIOMES[i % BIOMES.length].id); // the last two bosses' elements
     M.stat.dmg = M.stat.rate = Math.min(STATS.dmg.max, Math.round(d / 50)); addSoldiers(45 + M.stage * 30);
   }

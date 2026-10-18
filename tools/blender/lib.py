@@ -110,3 +110,81 @@ def export(filename, **extra):
                               export_normals=True, export_vertex_color='ACTIVE', export_yup=True, **DRACO, **extra)
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == 'MESH')
     print('WROTE', out, sorted(o.name for o in bpy.data.objects), 'tris:', tris)
+
+
+# ---------------- sprite renders (UI icons, hero portraits) ----------------
+INK = (0.106, 0.086, 0.25)
+
+
+def render_sprites(groups, out_dir, preview_dir=None, size=512, ink=INK, light=(-0.45, -1.0, 0.62), margin=1.12):
+    """Renders each group of objects to <out_dir>/<name>.webp with a transparent background (and a PNG preview
+    when preview_dir is given): EEVEE, a warm key sun and a cool rim light, flat ambient, Freestyle ink outline,
+    orthographic camera from the front-left-above framed on the group's bounds. Materials are left as they are."""
+    os.makedirs(out_dir, exist_ok=True)
+    sc = bpy.context.scene
+    try: sc.render.engine = 'BLENDER_EEVEE'
+    except TypeError: sc.render.engine = 'BLENDER_EEVEE_NEXT'
+    sc.eevee.taa_render_samples = 48
+    world = bpy.data.worlds.new('sprites'); sc.world = world; world.use_nodes = True
+    bg = world.node_tree.nodes['Background']; bg.inputs[0].default_value = (0.85, 0.9, 1.0, 1.0); bg.inputs[1].default_value = 0.45
+
+    def sun(name, direction, energy, color):
+        d = bpy.data.lights.new(name, 'SUN'); d.energy = energy; d.color = color; d.angle = math.radians(12)
+        o = bpy.data.objects.new(name, d); bpy.context.collection.objects.link(o)
+        o.rotation_euler = Vector(direction).normalized().to_track_quat('Z', 'Y').to_euler()
+        return o
+    sun('key', (-0.5, -0.8, 1.0), 3.2, (1.0, 0.96, 0.88))
+    sun('rim', (0.8, 0.7, 0.5), 1.6, (0.75, 0.88, 1.0))
+    sc.render.use_freestyle = True; sc.render.line_thickness_mode = 'ABSOLUTE'; sc.render.line_thickness = 2.4
+    fs = bpy.context.view_layer.freestyle_settings
+    ls = fs.linesets.new('ink') if not len(fs.linesets) else fs.linesets[0]
+    if ls.linestyle is None: ls.linestyle = bpy.data.linestyles.new('ink')
+    ls.select_silhouette = True; ls.select_border = True; ls.select_crease = True; ls.select_edge_mark = False
+    fs.crease_angle = math.radians(70)
+    ls.linestyle.color = ink; ls.linestyle.thickness = 2.4
+    sc.render.film_transparent = True
+    sc.render.resolution_x = sc.render.resolution_y = size; sc.render.resolution_percentage = 100
+    sc.render.image_settings.file_format = 'WEBP'; sc.render.image_settings.color_mode = 'RGBA'; sc.render.image_settings.quality = 92
+    sc.view_settings.view_transform = 'Standard'
+    bpy.ops.object.camera_add(); cam = bpy.context.active_object; cam.data.type = 'ORTHO'; sc.camera = cam
+    view = Vector(light).normalized()
+    cam.rotation_euler = view.to_track_quat('Z', 'Y').to_euler()
+    bpy.context.view_layer.update()
+    for name, obs in groups.items():
+        for o in bpy.data.objects:
+            if o.type == 'MESH': o.hide_render = o not in obs
+        pts = [ob.matrix_world @ Vector(c) for ob in obs for c in ob.bound_box]
+        lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        center = (lo + hi) / 2
+        cam.location = center + view * 10
+        bpy.context.view_layer.update()
+        inv = cam.matrix_world.inverted()
+        cs = [inv @ p for p in pts]
+        w = max(p.x for p in cs) - min(p.x for p in cs); h = max(p.y for p in cs) - min(p.y for p in cs)
+        cam.data.ortho_scale = max(w, h) * margin
+        shift = Vector(((max(p.x for p in cs) + min(p.x for p in cs)) / 2, (max(p.y for p in cs) + min(p.y for p in cs)) / 2, 0))
+        cam.data.shift_x = shift.x / cam.data.ortho_scale; cam.data.shift_y = shift.y / cam.data.ortho_scale
+        sc.render.filepath = os.path.join(out_dir, name + '.webp')
+        bpy.ops.render.render(write_still=True)
+        print('WROTE', sc.render.filepath, len(obs), 'objects')
+        if preview_dir:
+            os.makedirs(preview_dir, exist_ok=True)
+            sc.render.image_settings.file_format = 'PNG'; sc.render.filepath = os.path.join(preview_dir, name + '.png'); bpy.ops.render.render(write_still=True)
+            sc.render.image_settings.file_format = 'WEBP'
+
+
+def principled(ob, rgb, rough=0.5, alpha=1.0, emission=0.0):
+    """Gives an object's first material a Principled BSDF with a plain color (for sprite renders)."""
+    m = ob.data.materials[0]; m.use_nodes = True
+    bsdf = m.node_tree.nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value = (*rgb, 1.0); bsdf.inputs['Roughness'].default_value = rough; bsdf.inputs['Metallic'].default_value = 0.0
+    if emission > 0 and 'Emission Color' in bsdf.inputs:
+        bsdf.inputs['Emission Color'].default_value = (*rgb, 1.0); bsdf.inputs['Emission Strength'].default_value = emission
+    if alpha < 1.0:
+        bsdf.inputs['Alpha'].default_value = alpha
+        for attr, val in (('surface_render_method', 'BLENDED'), ('blend_method', 'BLEND')):
+            try: setattr(m, attr, val)
+            except Exception: pass
+        m.use_backface_culling = True
+    return ob

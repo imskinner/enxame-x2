@@ -75,6 +75,13 @@ body {
 .contracts .ach small { grid-column: 1; font-weight: 600; letter-spacing: 0; }
 .contracts .ach b { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-display); font-weight: 400; font-size: 18px; }
 .contracts .ach.done { color: var(--ink); border-color: var(--gold); background: #fff3c4; }
+.achGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 12px; }
+.achGrid .ach { display: grid; grid-template-columns: 28px 1fr; gap: 1px 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(27, 22, 64, .05); font: 800 12px var(--font-body); color: var(--muted); line-height: 1.2; }
+.achGrid .ach .spr { width: 28px; height: 28px; grid-row: 1 / span 2; filter: none; opacity: .45; }
+.achGrid .ach b { font: 400 13px var(--font-display); color: #1f8fb8; }
+.achGrid .ach small { grid-column: 1 / -1; font-weight: 600; font-size: 10px; line-height: 1.2; }
+.achGrid .ach.done { background: #fff3c4; color: var(--ink); }
+.achGrid .ach.done .spr { opacity: 1; }
 .heroes { display: grid; gap: 10px; margin: 0 0 14px; }
 .hero { display: grid; gap: 6px; border: 2px solid rgba(27, 22, 64, .15); border-radius: 12px; padding: 10px 12px; background: var(--paper); }
 .hero.sel { border-color: var(--gold); background: #fff3c4; }
@@ -242,9 +249,13 @@ body {
 .btn .tag { min-width: 26px; padding: 3px 8px 1px; border-radius: 999px; background: var(--foe); color: #fff; font: 900 13px var(--font-body); text-align: center; box-shadow: 0 2px 0 rgba(27, 22, 64, .3); }
 .btn .tag:empty { display: none; }
 .missions { display: grid; gap: 10px; margin: 0 0 16px; }
-.mission { display: grid; grid-template-columns: 58px 1fr auto; gap: 4px 10px; align-items: center; border: 2px solid rgba(27, 22, 64, .12); border-radius: 14px; padding: 10px 12px; background: var(--paper); }
+.mission { display: grid; grid-template-columns: 46px 1fr auto; gap: 2px 10px; align-items: center; border: 2px solid rgba(27, 22, 64, .12); border-radius: 14px; padding: 8px 10px; background: var(--paper); }
 .mission .reward { grid-row: 1 / span 3; display: grid; justify-items: center; gap: 2px; font-family: var(--font-display); font-size: 17px; color: var(--gold-deep); }
-.mission .reward .spr { width: 40px; height: 40px; }
+.mission .reward .spr { width: 32px; height: 32px; }
+.mission .reward { font-size: 14px; }
+.mission h4 { font-size: 14px; }
+.mission p { font-size: 11px; }
+.mission .bar { height: 8px; }
 .mission.weekly .reward { color: #1f8fb8; }
 .mission h4 { margin: 0; font: 800 15px var(--font-body); color: var(--ink); }
 .mission p { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.3; }
@@ -261,24 +272,27 @@ body {
 .chestInfo .row { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; margin-top: 6px; }
 .chestInfo .row .spr { width: 44px; height: 44px; }
 .chestInfo b { color: var(--ink); }
-.rewards { display: grid; gap: 8px; margin: 0 0 14px; }
+.overHero { display: grid; justify-items: center; }
+.overHero:empty { display: none; }
+.rewards { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px 10px; padding: 4px 16px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.rewards::-webkit-scrollbar { display: none; }
 .rewards:empty { display: none; }
-.rw-card { display: grid; grid-template-columns: 44px 1fr auto; gap: 3px 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(27, 22, 64, .05); animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) both; }
-.rw-card > .spr { width: 44px; height: 44px; grid-column: 1; grid-row: 1 / span 3; }
-.rw-card h4 { margin: 0; grid-column: 2; font: 800 15px var(--font-body); color: var(--ink); line-height: 1.2; }
-.rw-card p { margin: 0; grid-column: 2; font: 700 12px var(--font-body); color: var(--muted); line-height: 1.3; }
-.rw-card .bar { grid-column: 2; height: 10px; border-radius: 5px; background: rgba(27, 22, 64, .1); overflow: hidden; margin-top: 3px; }
-.rw-card .bar i { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--gate), #5ff3ff); transition: width .9s cubic-bezier(.2, .8, .2, 1); }
-.rw-card .big { grid-column: 3; grid-row: 1 / span 3; font-family: var(--font-display); font-size: 22px; color: var(--gold-deep); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rw-card { flex: 0 0 152px; scroll-snap-align: start; display: grid; grid-template-rows: auto auto auto auto; align-content: start; gap: 3px; padding: 10px; border-radius: 14px; background: rgba(27, 22, 64, .05); animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) both; }
+.rw-card > .spr { width: 34px; height: 34px; }
+.rw-card h4 { margin: 0; font: 800 13px var(--font-body); color: var(--ink); line-height: 1.15; }
+.rw-card p { margin: 0; font: 700 11px var(--font-body); color: var(--muted); line-height: 1.25; }
+.rw-card .bar { height: 8px; border-radius: 4px; background: rgba(27, 22, 64, .1); overflow: hidden; margin-top: 2px; }
+.rw-card .bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--gate), #5ff3ff); transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+.rw-card .big { font-family: var(--font-display); font-size: 20px; color: var(--gold-deep); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rw-card .big.gem { color: #1f8fb8; }
 .rw-card.gold { background: #fff3c4; box-shadow: 0 0 0 2px rgba(255, 198, 41, .45); }
 .rw-card.done .bar i { background: linear-gradient(90deg, var(--gold-deep), var(--gold)); }
-.rw-card h4.count { font-family: var(--font-display); font-weight: 400; font-size: 24px; color: var(--gold-deep); }
-.chestBox { position: relative; display: grid; justify-items: center; gap: 6px; margin: 2px 0; padding: 10px 0 6px; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.rw-card h4.count { font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--gold-deep); }
+.chestBox { position: relative; display: grid; justify-items: center; gap: 4px; margin: 0 0 6px; padding: 6px 0 4px; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
 .chestBox::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgba(255, 198, 41, .5), rgba(255, 198, 41, 0) 62%); opacity: 0; transition: opacity .4s; pointer-events: none; }
 .chestBox.open::before { opacity: 1; }
 .chestBtn { position: relative; border: 0; background: none; padding: 0; cursor: pointer; animation: bob 1.6s ease-in-out infinite; }
-.chestBtn img { width: 150px; height: 150px; object-fit: contain; filter: drop-shadow(0 8px 0 rgba(27, 22, 64, .18)); }
+.chestBtn img { width: 124px; height: 124px; object-fit: contain; filter: drop-shadow(0 8px 0 rgba(27, 22, 64, .18)); }
 .chestBtn:focus-visible { outline: 3px solid var(--gold); border-radius: 20px; }
 .chestBox.open .chestBtn { animation: chestPop .5s cubic-bezier(.2, 1.6, .4, 1) both; cursor: default; }
 @keyframes bob { 50% { transform: translateY(-6px) rotate(-2deg); } }
@@ -319,22 +333,31 @@ body {
 #seasonClaims .btn.sm { width: 100%; font-size: 17px; }
 .btn.sm.prem { background: #5a3c9a; color: #fff; box-shadow: 0 5px 0 #2a1f5e; }
 .btn.sm.prem:active { box-shadow: 0 1px 0 #2a1f5e; }
-.tiers { display: grid; gap: 6px; margin: 10px 0 16px; }
-.tier { display: grid; grid-template-columns: 34px 1fr 1.3fr; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 12px; background: rgba(27, 22, 64, .05); }
-.tier .n { font-family: var(--font-display); font-size: 18px; color: var(--muted); }
-.tier .cell { display: flex; flex-wrap: wrap; gap: 4px 10px; }
-.tier .rw { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-display); font-size: 16px; color: var(--gold-deep); white-space: nowrap; }
-.tier .rw.gem { color: #1f8fb8; }
-.tier .rw .spr { width: 24px; height: 24px; filter: none; }
-.tier .cell.prem { opacity: .5; }
-.tier.pass .cell.prem { opacity: 1; }
+/* the season track: one column per tier, swiped sideways, the current tier framed; free above premium */
+.track { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px 12px; padding: 6px 16px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.track::-webkit-scrollbar { display: none; }
+.tier { flex: 0 0 98px; scroll-snap-align: center; display: grid; gap: 6px; padding: 8px 6px; border-radius: 14px; background: rgba(27, 22, 64, .05); text-align: center; }
+.tier .n { font: 400 15px var(--font-display); color: var(--muted); }
+.tier .cell { display: grid; justify-items: center; gap: 1px; padding: 6px 4px 5px; border-radius: 10px; background: rgba(255, 255, 255, .7); font: 400 14px var(--font-display); color: var(--gold-deep); line-height: 1.1; }
+.tier .cell small { font: 900 9px var(--font-body); letter-spacing: .08em; color: var(--muted); }
+.tier .cell .gem { color: #1f8fb8; }
+.tier .cell .spr { width: 26px; height: 26px; filter: none; }
+.tier .cell.prem { background: rgba(90, 60, 154, .12); }
+.tier .cell.prem small { color: #5a3c9a; }
 .tier.reached { background: #fff3c4; }
 .tier.reached .n { color: var(--ink); }
-.tier .cell.got .rw { opacity: .45; }
-.tier .cell.got::after { content: "✓"; align-self: center; font: 900 13px var(--font-body); color: var(--ok); }
-.tier .cell.lock::before { content: "✦"; align-self: center; font-size: 12px; color: #5a3c9a; }
-.prizes { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: center; margin: 0 0 10px; font: 700 12px var(--font-body); color: var(--muted); line-height: 1.35; }
-.prizes .spr { width: 34px; height: 34px; }
+.tier.current { outline: 3px solid var(--gold); outline-offset: -3px; }
+.tier .cell.got { opacity: .5; }
+.tier .cell.got::after { content: "✓ pego"; font: 900 9px var(--font-body); color: #1f8f5a; }
+.tier .cell.lock::after { content: "✦ passe"; font: 900 9px var(--font-body); color: #5a3c9a; }
+.tier .cell.ready::after { content: "pegar"; font: 900 9px var(--font-body); color: var(--gold-deep); }
+.seasonHead { grid-template-columns: 48px 1fr auto; }
+.seasonHead .spr.big { width: 48px; height: 48px; }
+.seasonHead .wallet { margin: 0; gap: 6px; }
+.seasonHead .wchip { font-size: 15px; padding: 2px 8px 2px 4px; }
+.seasonHead .wchip .spr { width: 22px; height: 22px; }
+.prizes { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: center; margin: 0 0 8px; font: 700 11px var(--font-body); color: var(--muted); line-height: 1.3; }
+.prizes .spr { width: 28px; height: 28px; }
 .prizes b { color: var(--ink); }
 .board .nick.top1 { color: var(--gold-deep); }
 .board .nick.top10 { color: #1f8fb8; }
@@ -342,7 +365,49 @@ body {
 .board .nick .pass { color: #5a3c9a; margin-left: 4px; }
 .board li.me .nick.top1, .board li.me .nick.top10, .board li.me .nick .pass { color: var(--ink); }
 
-@media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready, .chestBtn, .chestBox, .loot .wchip, .spark, .mission .btn.sm, .rw-card { animation: none; } .btn, .rw-card .bar i { transition: none; } }
+/* Phones: sub-screens are bottom sheets (the close button and the main action sit in the thumb zone), the type is
+   tighter and the lists are tabbed or swiped sideways so a screen fits without scrolling */
+@keyframes sheetUp { from { transform: translateY(48px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 520px) {
+  .screen.sub, #overScreen { place-items: end center; padding: 0; }
+  .screen.sub .card, #overScreen .card {
+    width: 100%; max-height: calc(100% - env(safe-area-inset-top, 0px) - 28px); border-radius: 24px 24px 0 0;
+    padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 40px rgba(0, 0, 0, .25); animation: sheetUp .28s cubic-bezier(.2, .9, .3, 1) both;
+  }
+  .screen.sub .card::before, #overScreen .card::before { content: ""; display: block; width: 40px; height: 5px; margin: 0 auto 8px; border-radius: 3px; background: rgba(27, 22, 64, .18); }
+  .title.sub { font-size: 30px; }
+  .title.sub + * { margin-top: 10px; }
+  .title.over { font-size: 30px; }
+  .note.center { padding: 6px 0; margin-bottom: 6px; }
+  .chestBtn img { width: 108px; height: 108px; }
+  .chestBox { padding: 2px 0 2px; margin-bottom: 4px; }
+  .loot .wchip { font-size: 20px; }
+  .overOnline .field input { padding: 8px 10px; }
+  .overOnline .msg { min-height: 0; }
+  .rewards { margin-bottom: 6px; }
+  .note { font-size: 12px; margin-bottom: 8px; line-height: 1.35; }
+  .wallet { margin-bottom: 10px; }
+  .stats { gap: 8px; margin: 8px 0 10px; }
+  .stat { padding: 6px 10px; }
+  .stat .v { font-size: 22px; }
+  .contracts { gap: 6px; margin-bottom: 10px; }
+  .contracts button, .contracts .ach { padding: 8px 10px; font-size: 13px; }
+  .hero { padding: 8px 10px; gap: 4px; }
+  .hero p { font-size: 12px; }
+  .btn { padding: 12px 16px 10px; font-size: 22px; }
+  .btn.alt { font-size: 18px; }
+  .row2 { margin-top: 8px; }
+  .tabs { margin-bottom: 8px; }
+  .tabs button { padding: 7px; }
+  .passBox { padding: 8px 10px; margin-bottom: 8px; }
+  .passBox p { font-size: 11px; }
+  .seasonBar { margin-bottom: 8px; }
+  #seasonClaims .btn.sm { font-size: 15px; padding: 9px 8px 7px; }
+  .chestInfo { margin-bottom: 10px; font-size: 12px; }
+  .overOnline { margin: 0 0 10px; }
+  .best { margin-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready, .chestBtn, .chestBox, .loot .wchip, .spark, .mission .btn.sm, .rw-card, .screen.sub .card, #overScreen .card { animation: none; } .btn, .rw-card .bar i { transition: none; } }
 </style>
 </head>
 <body>
@@ -469,7 +534,7 @@ body {
     <h2 class="title sub">CONQUISTAS</h2>
     <p class="note">Cada conquista paga diamantes uma vez. O servidor confere ao fim de cada partida válida.</p>
     <div class="wallet" id="achCoins"></div>
-    <div class="contracts" id="achList"></div>
+    <div class="achGrid" id="achList"></div>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
@@ -492,10 +557,12 @@ body {
   <div class="card">
     <h2 class="title sub">MISSÕES</h2>
     <div class="wallet" id="missionsWallet"></div>
-    <p class="label">DIÁRIAS · RENOVAM EM <span id="dailyLeft"></span></p>
-    <div class="missions" id="dailyList"></div>
-    <p class="label">SEMANAIS · RENOVAM EM <span id="weeklyLeft"></span></p>
-    <div class="missions" id="weeklyList"></div>
+    <div class="tabs" role="tablist" aria-label="Período">
+      <button type="button" role="tab" data-mtab="d" aria-selected="true">DIÁRIAS</button>
+      <button type="button" role="tab" data-mtab="w" aria-selected="false">SEMANAIS</button>
+    </div>
+    <p class="label" id="missionsLeft"></p>
+    <div class="missions" id="missionList"></div>
     <p class="msg" id="missionsMsg"></p>
     <details class="chestInfo">
       <summary>BAÚS DE FIM DE PARTIDA</summary>
@@ -514,17 +581,17 @@ body {
     <div class="seasonHead">
       <img class="spr big" src="assets/ui/ticket.webp" alt="">
       <div><h3 id="seasonName">TEMPORADA</h3><p id="seasonDays">Carregando…</p></div>
+      <div class="wallet" id="seasonWallet"></div>
     </div>
-    <div class="wallet" id="seasonWallet"></div>
     <div class="seasonBar"><div class="bar"><i id="seasonFill"></i></div><p class="label" id="seasonLevel">NÍVEL 0</p></div>
-    <p class="note">Pontos por partida válida: 10, mais 1 por 100 m na marcha ou 2 por onda na defesa (até 60), e 25 por missão concluída. São 30 níveis de 150 pontos em 30 dias.</p>
+    <p class="note">Pontos por partida válida (10, mais a distância ou as ondas, até 60) e 25 por missão concluída. 30 níveis de 150 pontos.</p>
     <div class="passBox" id="passBox"></div>
     <div class="row2" id="seasonClaims">
       <button class="btn sm" id="btnClaimFree" type="button" disabled>PEGAR GRÁTIS</button>
       <button class="btn sm prem" id="btnClaimPrem" type="button" disabled>PEGAR PREMIUM</button>
     </div>
     <p class="msg" id="seasonMsg"></p>
-    <div class="tiers" id="tierList"></div>
+    <div class="track" id="tierList"></div>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
 </div>
@@ -550,7 +617,7 @@ body {
       <button type="button" role="tab" data-period="week" aria-selected="true">SEMANA</button>
       <button type="button" role="tab" data-period="all" aria-selected="false">GERAL</button>
     </div>
-    <p class="prizes"><img class="spr" src="assets/ui/trophy.webp" alt=""><span>Toda segunda, diamantes pela semana que passou, por modo: <b>#1 25</b> · top 10 <b>12</b> · top 100 <b>5</b> · top 1000 <b>2</b>. O top 10 leva a cor do nome na semana seguinte.</span></p>
+    <p class="prizes"><img class="spr" src="assets/ui/trophy.webp" alt=""><span>Toda segunda, diamantes pela semana, por modo: <b>#1 25</b> · top 10 <b>12</b> · top 100 <b>5</b> · top 1000 <b>2</b>. O top 10 leva a cor do nome.</span></p>
     <div class="missions" id="weekRewards"></div>
     <p class="msg" id="rankMsg"></p>
     <ol class="board" id="board"></ol>
@@ -606,6 +673,7 @@ body {
       <div class="stat"><div class="k">MAIOR TROPA</div><div class="v" id="stPeak">0</div></div>
     </div>
     <p class="note center" id="overContracts" hidden></p>
+    <div class="overHero" id="overHero"></div>
     <div class="rewards" id="rewards"></div>
     <div class="overOnline" id="overOnline" hidden>
       <form class="field" id="overNickForm" hidden>
@@ -2581,12 +2649,15 @@ async function onlineRunFinish() {
 }
 // ---- the game-over rewards: cards with the economy's sprites, revealed one every 420 ms ----
 const rewardQueue = []; let rewardTimer = 0;
-function clearRewards() { rewardQueue.length = 0; clearTimeout(rewardTimer); rewardTimer = 0; $('rewards').textContent = ''; }
+function clearRewards() { rewardQueue.length = 0; clearTimeout(rewardTimer); rewardTimer = 0; $('rewards').textContent = ''; $('overHero').textContent = ''; }
 function queueReward(build) { rewardQueue.push(build); if (!rewardTimer) pumpRewards(); }
 function pumpRewards() {
   const build = rewardQueue.shift();
   if (!build) { rewardTimer = 0; return; }
-  $('rewards').append(build()); rewardTimer = setTimeout(pumpRewards, 420);
+  const el = build(), strip = $('rewards');
+  if (el.classList.contains('chestBox')) $('overHero').append(el); // the chest is the hero above the strip
+  else { strip.append(el); requestAnimationFrame(() => strip.scrollTo({ left: strip.scrollWidth, behavior: 'smooth' })); }
+  rewardTimer = setTimeout(pumpRewards, 420);
 }
 function rewardCard(icon, title, sub, extra = {}, cls = '') {
   const c = document.createElement('div'); c.className = 'rw-card' + (cls ? ' ' + cls : '');
@@ -2745,7 +2816,7 @@ function renderAchievements() {
   for (const [key, a] of Object.entries(ACHIEVEMENTS)) {
     const b = document.createElement('div'); b.className = 'ach' + (done.has(key) ? ' done' : '');
     const name = document.createElement('span'), gems = document.createElement('b'), desc = document.createElement('small');
-    name.textContent = (done.has(key) ? '✓ ' : '') + a.name; gems.textContent = `${a.gems} 💎`; desc.textContent = a.desc; b.append(name, gems, desc); list.append(b);
+    name.textContent = a.name; gems.textContent = `+${a.gems}`; desc.textContent = (done.has(key) ? '✓ ' : '') + a.desc; b.append(sprite('gem'), name, gems, desc); list.append(b);
   }
 }
 // ---- missions: three a day (coins) and three a week (gems), the same for everyone, judged by the server at the end of
@@ -2785,26 +2856,27 @@ function periodLeft(kind) { // until the UTC day turns, or the ISO week (Monday 
 }
 function renderMissions() {
   renderWalletBar($('missionsWallet'), online.wallet);
-  $('dailyLeft').textContent = periodLeft('d'); $('weeklyLeft').textContent = periodLeft('w');
-  for (const [kind, id] of [['d', 'dailyList'], ['w', 'weeklyList']]) {
-    const list = $(id); list.textContent = '';
-    const rows = (online.missions || []).filter((m) => m.period.startsWith(kind));
-    if (!rows.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = online.missions ? 'Nenhuma missão agora.' : 'Carregando…'; list.append(p); continue; }
-    for (const m of rows) {
-      const t = MISSIONS[m.key] || { name: m.key, desc: '' }, done = m.progress >= m.target;
-      const card = document.createElement('div'); card.className = 'mission' + (kind === 'w' ? ' weekly' : '') + (m.claimed ? ' claimed' : done ? ' done' : '');
-      const reward = document.createElement('div'); reward.className = 'reward'; reward.append(sprite(m.gems ? 'gem' : 'coin'), document.createTextNode('+' + fmt(m.gems || m.coins)));
-      const h = document.createElement('h4'); h.textContent = t.name; const p = document.createElement('p'); p.textContent = t.desc;
-      const bar = document.createElement('div'); bar.className = 'bar'; const fill = document.createElement('i'); fill.style.width = Math.min(100, (100 * m.progress) / m.target) + '%'; bar.append(fill);
-      card.append(reward, h, p, bar);
-      if (m.claimed) { const n = document.createElement('span'); n.className = 'n'; n.textContent = '✓ PEGO'; card.append(n); }
-      else if (done) { const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.textContent = 'PEGAR'; b.addEventListener('click', () => claimMission(m, b)); card.append(b); }
-      else { const n = document.createElement('span'); n.className = 'n'; n.textContent = `${fmt(m.progress)}/${fmt(m.target)}`; card.append(n); }
-      list.append(card);
-    }
+  const kind = online.missionTab || 'd';
+  for (const b of document.querySelectorAll('#missionsScreen [data-mtab]')) b.setAttribute('aria-selected', String(b.dataset.mtab === kind));
+  $('missionsLeft').textContent = `${kind === 'd' ? 'TRÊS POR DIA · PAGAM MOEDAS' : 'TRÊS POR SEMANA · PAGAM DIAMANTES'} · RENOVAM EM ${periodLeft(kind)}`;
+  const list = $('missionList'); list.textContent = '';
+  const rows = (online.missions || []).filter((m) => m.period.startsWith(kind));
+  if (!rows.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = online.missions ? 'Nenhuma missão agora.' : 'Carregando…'; list.append(p); }
+  for (const m of rows) {
+    const t = MISSIONS[m.key] || { name: m.key, desc: '' }, done = m.progress >= m.target;
+    const card = document.createElement('div'); card.className = 'mission' + (kind === 'w' ? ' weekly' : '') + (m.claimed ? ' claimed' : done ? ' done' : '');
+    const reward = document.createElement('div'); reward.className = 'reward'; reward.append(sprite(m.gems ? 'gem' : 'coin'), document.createTextNode('+' + fmt(m.gems || m.coins)));
+    const h = document.createElement('h4'); h.textContent = t.name; const p = document.createElement('p'); p.textContent = t.desc;
+    const bar = document.createElement('div'); bar.className = 'bar'; const fill = document.createElement('i'); fill.style.width = Math.min(100, (100 * m.progress) / m.target) + '%'; bar.append(fill);
+    card.append(reward, h, p, bar);
+    if (m.claimed) { const n = document.createElement('span'); n.className = 'n'; n.textContent = '✓ PEGO'; card.append(n); }
+    else if (done) { const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.textContent = 'PEGAR'; b.addEventListener('click', () => claimMission(m, b)); card.append(b); }
+    else { const n = document.createElement('span'); n.className = 'n'; n.textContent = `${fmt(m.progress)}/${fmt(m.target)}`; card.append(n); }
+    list.append(card);
   }
   renderMissionsTag();
 }
+for (const b of document.querySelectorAll('#missionsScreen [data-mtab]')) b.addEventListener('click', () => { online.missionTab = b.dataset.mtab; renderMissions(); });
 async function claimMission(m, btn) {
   btn.disabled = true; setMsg($('missionsMsg'), 'Pegando…');
   const { data, error } = await online.sb.rpc('claim_mission', { p_period: m.period, p_key: m.key });
@@ -2855,17 +2927,15 @@ function renderSeasonTag() {
 }
 function renderSeason() {
   const s = online.season; renderWalletBar($('seasonWallet'), online.wallet);
-  $('seasonName').textContent = s ? `TEMPORADA ${s.season}` + (SEASONS[s.season] ? ` · ${SEASONS[s.season].name}` : '') : 'TEMPORADA';
-  $('seasonDays').textContent = s ? `termina em ${daysLeft(s.ends_at)}` : 'Carregando…';
+  $('seasonName').textContent = s ? (SEASONS[s.season]?.name || `TEMPORADA ${s.season}`) : 'TEMPORADA';
+  $('seasonDays').textContent = s ? `Temporada ${s.season} · termina em ${daysLeft(s.ends_at)}` : 'Carregando…';
   const pts = s?.points || 0, tier = s?.tier || 0;
   $('seasonFill').style.width = (100 * Math.min(1, pts / (SEASON_TIERS * SEASON_STEP))) + '%';
   $('seasonLevel').textContent = tier >= SEASON_TIERS ? `NÍVEL ${SEASON_TIERS} · PASSE COMPLETO` : `NÍVEL ${tier} · ${fmt(pts)} / ${fmt((tier + 1) * SEASON_STEP)} PONTOS`;
   const box = $('passBox'); box.textContent = ''; box.classList.toggle('on', !!s?.premium);
   const info = document.createElement('div'), h = document.createElement('h4'), p = document.createElement('p');
   h.textContent = s?.premium ? '✦ PASSE PREMIUM ATIVO' : 'PASSE PREMIUM';
-  p.textContent = s?.premium
-    ? 'Trilha premium liberada: moedas em dobro por nível, 2 diamantes em cada nível e 10 a cada cinco, e a estrela ✦ no ranking.'
-    : `${fmt(s?.price ?? 120)} diamantes: a trilha premium (moedas em dobro por nível, 2 diamantes em cada nível e 10 a cada cinco) e a estrela ✦ no ranking até o fim da temporada.`;
+  p.textContent = s?.premium ? 'Trilha premium liberada e a estrela ✦ no ranking até o fim da temporada.' : `${fmt(s?.price ?? 120)} diamantes: moedas em dobro por nível, 2 diamantes em cada e 10 a cada cinco, mais a estrela ✦ no ranking.`;
   info.append(h, p); box.append(info);
   if (s && !s.premium) {
     const b = document.createElement('button'); b.className = 'btn sm'; b.type = 'button'; b.append(sprite('gem'), document.createTextNode(fmt(s.price)));
@@ -2874,18 +2944,26 @@ function renderSeason() {
   const nf = s ? Math.max(0, s.tier - s.free_claimed) : 0, np = s?.premium ? Math.max(0, s.tier - s.prem_claimed) : 0;
   $('btnClaimFree').disabled = !nf; $('btnClaimFree').textContent = nf ? `PEGAR GRÁTIS (${nf})` : 'PEGAR GRÁTIS';
   $('btnClaimPrem').disabled = !np; $('btnClaimPrem').textContent = np ? `PEGAR PREMIUM (${np})` : 'PEGAR PREMIUM';
-  const list = $('tierList'); list.textContent = '';
-  const rw = (kind, amount) => { const e = document.createElement('span'); e.className = 'rw' + (kind === 'coin' ? '' : ' gem'); e.append(sprite(kind), document.createTextNode(fmt(amount))); return e; };
+  // one column per tier, swiped sideways; the next tier to reach is framed and scrolled into view
+  const track = $('tierList'); track.textContent = '';
+  const cell = (label, coins, gems, cls) => {
+    const e = document.createElement('div'); e.className = 'cell' + (cls ? ' ' + cls : '');
+    const sm = document.createElement('small'); sm.textContent = label; e.append(sm, sprite('coin'), document.createTextNode(fmt(coins)));
+    if (gems) { const g = document.createElement('span'); g.className = 'gem'; g.append(sprite(gems >= 10 ? 'gems' : 'gem'), document.createTextNode(fmt(gems))); e.append(g); }
+    return e;
+  };
+  let focus = null;
   for (let n = 1; n <= SEASON_TIERS; n++) {
-    const t = seasonTier(n), row = document.createElement('div');
-    row.className = 'tier' + (n <= tier ? ' reached' : '') + (s?.premium ? ' pass' : '');
-    const num = document.createElement('span'); num.className = 'n'; num.textContent = n;
-    const free = document.createElement('span'); free.className = 'cell' + (n <= (s?.free_claimed || 0) ? ' got' : '');
-    free.append(rw('coin', t.coinsFree)); if (t.gemsFree) free.append(rw('gem', t.gemsFree));
-    const prem = document.createElement('span'); prem.className = 'cell prem' + (n <= (s?.prem_claimed || 0) ? ' got' : s?.premium ? '' : ' lock');
-    prem.append(rw('coin', t.coinsPrem), rw(t.gemsPrem >= 10 ? 'gems' : 'gem', t.gemsPrem));
-    row.append(num, free, prem); list.append(row);
+    const t = seasonTier(n), col = document.createElement('div');
+    const reached = n <= tier, current = n === Math.min(SEASON_TIERS, tier + 1);
+    col.className = 'tier' + (reached ? ' reached' : '') + (current ? ' current' : '');
+    const num = document.createElement('span'); num.className = 'n'; num.textContent = `NÍVEL ${n}`;
+    col.append(num,
+      cell('GRÁTIS', t.coinsFree, t.gemsFree, n <= (s?.free_claimed || 0) ? 'got' : reached ? 'ready' : ''),
+      cell('PREMIUM', t.coinsPrem, t.gemsPrem, 'prem' + (n <= (s?.prem_claimed || 0) ? ' got' : !s?.premium ? ' lock' : reached ? ' ready' : '')));
+    track.append(col); if (current) focus = col;
   }
+  if (focus) requestAnimationFrame(() => { track.scrollLeft = focus.offsetLeft - track.clientWidth / 2 + focus.clientWidth / 2; });
 }
 async function claimSeason(track, btn) {
   btn.disabled = true; setMsg($('seasonMsg'), 'Pegando…');
@@ -2997,6 +3075,7 @@ function closeScreen(el) {
   (screenBack || ui.menu).hidden = false; screenBack = null;
 }
 for (const b of document.querySelectorAll('[data-back]')) b.addEventListener('click', () => closeScreen(b.closest('.screen')));
+for (const s of document.querySelectorAll('.screen.sub')) s.addEventListener('click', (e) => { if (e.target === s) closeScreen(s); }); // tapping the dim backdrop closes the sheet
 $('btnHow').addEventListener('click', () => openScreen('howScreen'));
 $('btnContracts').addEventListener('click', () => openScreen('contractsScreen'));
 $('btnQuartel').addEventListener('click', () => openScreen('quartelScreen'));

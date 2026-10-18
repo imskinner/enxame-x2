@@ -32,7 +32,7 @@ O que a pesquisa diz e que sustenta isso:
 | Sumidouros | Quartel; heróis (caminho lento); skins baratas | heróis (caminho rápido); skins e rastros; passe premium; cor do nome no ranking; slot extra de contrato |
 | Aperto | retorno decrescente: 3 primeiras runs do dia em dobro, depois normal | escassez: 20 a 40 por semana jogando; pacotes de 100 a 1.500 |
 
-Moedas por run (calculadas pelo servidor em `finish_run`): `pontuação / 100`, com piso de 20 e teto diário de 5.000 fora das três runs em dobro. Moedas caídas na pista são contadas no cliente e validadas contra abates e metros, como a pontuação.
+Moedas por run (calculadas pelo servidor em `finish_run`): `pontuação / 400`, com piso de 20, mais as moedas caídas na pista (contadas no cliente e validadas contra abates e chefões, como a pontuação). A primeira partida do dia paga em dobro e o teto é de 10.000 moedas por dia, contando a dobrada. Com isso o Quartel inteiro (uns 19.400) leva alguns dias de jogo forte, não uma partida.
 
 ## Quartel (meta, só moedas)
 

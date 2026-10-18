@@ -293,7 +293,9 @@ body {
 .missionLine { margin: 0 0 10px; text-align: center; font-weight: 800; font-size: 13px; line-height: 1.4; color: var(--gate); }
 
 /* Season pass and the weekly ranking prizes */
-.row2.icons .btn.missions { margin-top: 0; padding-inline: 10px; font-size: 19px; }
+.row2.icons .btn.missions { margin-top: 0; padding-inline: 8px; font-size: 16px; grid-template-columns: 36px 1fr auto; gap: 8px; }
+.row2.icons .btn.missions .spr { width: 36px; height: 36px; }
+.row2.icons .btn.missions .lbl { min-width: 0; }
 .btn.missions .lbl { display: grid; line-height: 1; }
 .btn.missions .lbl small { font: 800 11px var(--font-body); letter-spacing: 0; color: var(--muted); margin-top: 3px; }
 .btn .tag { display: inline-block; margin-left: 6px; vertical-align: 2px; }
@@ -4447,7 +4449,7 @@ function showGameOver() {
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
   bo.classList.toggle('newbest', isBest);
   clearRewards();
-  ui.over.hidden = false; ui.bossBar.hidden = true; $('btnAgain').focus();
+  ui.over.hidden = false; ui.bossBar.hidden = true; $('btnAgain').focus({ preventScroll: true }); ui.over.querySelector('.card').scrollTop = 0; // the card starts at the stats, not scrolled to the button
   onlineRunFinish();
 }
 function setPaused(p) {

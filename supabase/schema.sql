@@ -612,13 +612,14 @@ begin
   end if;
 
   -- A valid run pays coins: the road's (capped by what the run could have dropped) plus the score's bonus, doubled on
-  -- the day's first three runs, then limited to 5000 a day.
+  -- the day's first run, 10000 a day at most (the Quartel costs about 19400: days of strong play, not one run).
   if ok then
     select * into wal from public.wallets where user_id = auth.uid() for update;
     if not found then insert into public.wallets (user_id) values (auth.uid()) returning * into wal; end if;
     if wal.day <> current_date then wal.runs_today := 0; wal.earned_today := 0; wal.chests_today := 0; end if;
-    won := greatest(20, p_score / 200) + least(greatest(coalesce(p_coins, 0), 0), 2 * (p_kills + 150 * bosses::int + 50)); -- x2: the Thief's share
-    if wal.runs_today < 3 then won := won * 2; else won := least(won, greatest(0, 5000 - wal.earned_today)); end if;
+    won := greatest(20, p_score / 400) + least(greatest(coalesce(p_coins, 0), 0), p_kills + 150 * bosses::int + 50);
+    if wal.runs_today < 1 then won := won * 2; end if;
+    won := least(won, greatest(0, 10000 - wal.earned_today));
     -- The run's chest: the tier comes from how far it went, the contents are rolled here, five chests a day at most.
     -- bronze 20-50 coins (4%: 1 gem), silver 60-150 (12%: 1-3 gems), gold 180-400 (30%: 3-8 gems).
     if r.mode = 'march' then

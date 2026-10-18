@@ -2006,11 +2006,11 @@ const gruntSpeed = (n) => Math.min(7.5, 4.3 + n * 0.22);
 function spawnEnemy(kind, x, z) {
   if (enemies.length >= MAX_ENEMIES) return;
   const e = enemyPool.pop() || {};
-  const n = state.wave;
+  const n = state.wave, lap = state.mode === 'march' ? Math.floor(M.stage / BIOMES.length) : 0, tough = 1 + 0.15 * lap; // each lap of the march hardens the horde by 15% (the bosses are the gate; a tougher horde only fed the arrival waves)
   e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = e.bites = 0;
   if (kind === 'runner') Object.assign(e, { hp: 1, speed: gruntSpeed(n) * 1.65, r: 0.36, color: COL.runner, scale: 0.85, dmg: 1, score: 15, ult: 1 });
-  else if (kind === 'armored') Object.assign(e, { hp: 2 + Math.floor(n / 5), speed: gruntSpeed(n) * 0.9, r: 0.47, color: COL.armored, scale: 1.15, dmg: 2, score: 20, ult: 1.4 });
-  else Object.assign(e, { hp: 1 + Math.floor(n / 7), speed: gruntSpeed(n) * rand(0.9, 1.1), r: 0.42, color: COL.grunt, scale: 1, dmg: 1, score: 10, ult: 0.8 });
+  else if (kind === 'armored') Object.assign(e, { hp: Math.round((2 + Math.floor(n / 5)) * tough), speed: gruntSpeed(n) * 0.9, r: 0.47, color: COL.armored, scale: 1.15, dmg: 2, score: 20, ult: 1.4 });
+  else Object.assign(e, { hp: Math.round((1 + Math.floor(n / 7)) * tough), speed: gruntSpeed(n) * rand(0.9, 1.1), r: 0.42, color: COL.grunt, scale: 1, dmg: 1, score: 10, ult: 0.8 });
   enemies.push(e);
 }
 function makeLabel() {
@@ -2083,7 +2083,7 @@ function killBig(b, fromUlt = false) {
   removeBig(b);
 }
 function summonMinions(b) {
-  const count = 5 + Math.min(15, Math.floor(state.wave / 2)); // twenty at most: past wave 30 the summons were a horde of their own
+  const lap = state.mode === 'march' ? Math.floor(M.stage / BIOMES.length) : 0, count = 5 + Math.min(15 + 5 * Math.max(0, lap - 1), Math.floor(state.wave / 2)); // twenty at most on the first two laps (past wave 30 the summons were a horde of their own), five more per lap after
   sparks(b.x, 3, b.z + 1, 0xc86bff, 40, 8, 0.8, 0.6); ring(b.x, b.z + 1, 0xc86bff, 7, 0.5);
   for (let i = 0; i < count; i++) spawnEnemy(Math.random() < 0.3 ? 'runner' : 'grunt', clamp(b.x + rand(-3, 3), -LANE_HALF + 0.5, LANE_HALF - 0.5), b.z + rand(2, 4));
   Sfx.play('summon');
@@ -3069,7 +3069,9 @@ const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6, SQUEEZE_CD_BOSS = 3
 // March bosses: the troop fires as one, so their health follows its own curve (not the defense one): tuned for a 20–30 s
 // fight at the troop a world usually arrives with and scaled with the troop's cap. After the first lap of the eight worlds
 // it grows only a little: from there the patterns get harder, not the number.
-const marchBossHp = (theme) => Math.round((M.stage < BIOMES.length ? 7000 + 2000 * M.stage : 21000 + 600 * (M.stage - BIOMES.length + 1)) * (squadCap() / SQUAD_BASE) * theme.hpMul);
+// Past the first lap the bosses keep growing (2500 a world on top of the lap's end): with the weapon stats capped, that is
+// where the Quartel's ceilings and the heroes are meant to pay off.
+const marchBossHp = (theme) => Math.round((M.stage < BIOMES.length ? 7000 + 2000 * M.stage : 41000 + 2500 * (M.stage - BIOMES.length + 1)) * (squadCap() / SQUAD_BASE) * theme.hpMul);
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 // cap: how high one gate counts up when shot; max: the troop's total for the stat, so the weapon can't snowball past it.
 const STATS = {
@@ -3634,7 +3636,7 @@ function marchSegment() {
   ]).k;
   // the horde grows fast over the first 4 km and slowly after: past that the pressure comes from the bosses' patterns,
   // not from packs the bolt wall can't keep up with
-  const scale = 1 + 0.35 * Math.min(lvl, 20) + 0.08 * Math.max(0, lvl - 20);
+  const scale = 1 + 0.35 * Math.min(lvl, 20) + 0.10 * Math.max(0, lvl - 20);
   const stat = () => weighted([{ w: 40, k: 'rate' }, { w: 40, k: 'dmg' }, { w: 20, k: 'range' }]).k;
   const goodGate = () => {
     const s = stat();

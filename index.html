@@ -261,7 +261,20 @@ body {
 .chestInfo .row { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: center; margin-top: 6px; }
 .chestInfo .row .spr { width: 44px; height: 44px; }
 .chestInfo b { color: var(--ink); }
-.chestBox { position: relative; display: grid; justify-items: center; gap: 6px; margin: -6px 0 14px; padding: 10px 0 6px; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.rewards { display: grid; gap: 8px; margin: 0 0 14px; }
+.rewards:empty { display: none; }
+.rw-card { display: grid; grid-template-columns: 44px 1fr auto; gap: 3px 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: rgba(27, 22, 64, .05); animation: pop .45s cubic-bezier(.2, 1.6, .4, 1) both; }
+.rw-card > .spr { width: 44px; height: 44px; grid-column: 1; grid-row: 1 / span 3; }
+.rw-card h4 { margin: 0; grid-column: 2; font: 800 15px var(--font-body); color: var(--ink); line-height: 1.2; }
+.rw-card p { margin: 0; grid-column: 2; font: 700 12px var(--font-body); color: var(--muted); line-height: 1.3; }
+.rw-card .bar { grid-column: 2; height: 10px; border-radius: 5px; background: rgba(27, 22, 64, .1); overflow: hidden; margin-top: 3px; }
+.rw-card .bar i { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--gate), #5ff3ff); transition: width .9s cubic-bezier(.2, .8, .2, 1); }
+.rw-card .big { grid-column: 3; grid-row: 1 / span 3; font-family: var(--font-display); font-size: 22px; color: var(--gold-deep); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rw-card .big.gem { color: #1f8fb8; }
+.rw-card.gold { background: #fff3c4; box-shadow: 0 0 0 2px rgba(255, 198, 41, .45); }
+.rw-card.done .bar i { background: linear-gradient(90deg, var(--gold-deep), var(--gold)); }
+.rw-card h4.count { font-family: var(--font-display); font-weight: 400; font-size: 24px; color: var(--gold-deep); }
+.chestBox { position: relative; display: grid; justify-items: center; gap: 6px; margin: 2px 0; padding: 10px 0 6px; animation: pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
 .chestBox::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgba(255, 198, 41, .5), rgba(255, 198, 41, 0) 62%); opacity: 0; transition: opacity .4s; pointer-events: none; }
 .chestBox.open::before { opacity: 1; }
 .chestBtn { position: relative; border: 0; background: none; padding: 0; cursor: pointer; animation: bob 1.6s ease-in-out infinite; }
@@ -327,7 +340,7 @@ body {
 .board .nick .pass { color: #5a3c9a; margin-left: 4px; }
 .board li.me .nick.top1, .board li.me .nick.top10, .board li.me .nick .pass { color: var(--ink); }
 
-@media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready, .chestBtn, .chestBox, .loot .wchip, .spark, .mission .btn.sm { animation: none; } .btn { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #banner.show, .ult.ready, .chestBtn, .chestBox, .loot .wchip, .spark, .mission .btn.sm, .rw-card { animation: none; } .btn, .rw-card .bar i { transition: none; } }
 </style>
 </head>
 <body>
@@ -590,18 +603,9 @@ body {
       <div class="stat"><div class="k">ABATES</div><div class="v" id="stKills">0</div></div>
       <div class="stat"><div class="k">MAIOR TROPA</div><div class="v" id="stPeak">0</div></div>
     </div>
-    <div class="chestBox" id="chestBox" hidden>
-      <button class="chestBtn" id="chestBtn" type="button" aria-label="Abrir o baú"><img id="chestImg" src="" alt="" draggable="false"></button>
-      <p class="chestLabel" id="chestLabel"></p>
-      <div class="loot" id="chestLoot" hidden></div>
-    </div>
-    <p class="missionLine" id="overMissions" hidden></p>
-    <p class="missionLine" id="overSeason" hidden></p>
     <p class="note center" id="overContracts" hidden></p>
+    <div class="rewards" id="rewards"></div>
     <div class="overOnline" id="overOnline" hidden>
-      <p class="rankline" id="overRank"></p>
-      <p class="rankline" id="overCoins" hidden></p>
-      <p class="rankline" id="overAch" hidden></p>
       <form class="field" id="overNickForm" hidden>
         <input id="overNick" maxlength="16" autocomplete="nickname" placeholder="Apelido para o ranking" aria-label="Apelido no ranking" required>
         <button class="btn sm" type="submit">SALVAR</button>
@@ -2335,7 +2339,7 @@ const ui = {
   banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'), floaters: $('floaters'), hurt: $('hurt'),
   menu: $('menu'), pause: $('pauseScreen'), over: $('overScreen'), icoSound: $('icoSound'),
   ult: $('btnUlt'), ultRing: $('ultRing'), ultPct: $('ultPct'), fila: $('btnFila'), filaRing: $('filaRing'), flash: $('flash'),
-  nextText: $('nextText'), nextDot: $('nextDot'), bossName: $('bossName'), coinsChip: $('coinsChip'), coinsV: $('coinsV'), overCoins: $('overCoins'),
+  nextText: $('nextText'), nextDot: $('nextDot'), bossName: $('bossName'), coinsChip: $('coinsChip'), coinsV: $('coinsV'),
 };
 const floaters = [], floaterPool = [];
 function floatText(text, x, y, z, cls = '') {
@@ -2512,6 +2516,9 @@ async function loginEmail(email) {
 // ---- Runs ----
 function onlineRunStart() {
   online.run = null;
+  // where the missions and the season stood before this run: the game-over card animates from there
+  online.missionsBefore = Object.fromEntries((online.missions || []).map((m) => [m.period + '/' + m.key, m.progress]));
+  online.seasonBefore = online.season?.points ?? 0;
   if (!online.sb || location.hash) return; // test shortcuts (#w13t20, #autoplay) never rank
   online.run = ensureSession()
     .then(() => online.sb.rpc('start_run', { p_mode: state.mode }))
@@ -2520,41 +2527,81 @@ function onlineRunStart() {
 }
 async function onlineRunFinish() {
   const pending = online.run; online.run = null;
-  const box = $('overOnline'), line = $('overRank'), msg = $('overMsg'), form = $('overNickForm');
-  box.hidden = !pending; form.hidden = true; setMsg(msg, '');
+  const box = $('overOnline'), msg = $('overMsg'), form = $('overNickForm');
+  box.hidden = !pending; form.hidden = true; setMsg(msg, ''); clearRewards();
   if (!pending) return;
-  line.textContent = 'Enviando pontuação…';
+  setMsg(msg, 'Enviando pontuação…');
   // The march reports meters marched in the wave slot (the server validates them against the run time).
   const stats = { p_score: state.score, p_wave: state.mode === 'march' ? Math.floor(M.dist) : state.wave, p_kills: state.kills, p_peak: state.peak, p_coins: state.mode === 'march' ? M.coins : 0, p_relics: state.mode === 'march' ? M.freed : 0 };
-  if (state.mode === 'march' && M.contracts.size) stats.p_contracts = [...M.contracts].join(','); // only sent when used: the old finish_run still takes a plain run
+  if (state.mode === 'march' && M.contracts.size) stats.p_contracts = [...M.contracts].join(','); // only sent when used
   const runId = await pending;
   const { data, error } = runId ? await online.sb.rpc('finish_run', { p_run: runId, ...stats }) : { error: true };
   const r = data?.[0];
-  if (error || !r) { line.textContent = 'Ranking indisponível agora'; return; }
-  if (!r.accepted) { line.textContent = 'Partida fora do ranking'; return; }
-  line.textContent = r.week_rank != null ? `#${fmt(r.week_rank)} na semana · #${fmt(r.all_rank)} geral` : `#${fmt(r.all_rank)} no ranking geral`;
-  if (r.coins_won != null) { // the server pays the run's coins: the road's plus the score's bonus, doubled on the day's first three runs
-    const oc = $('overCoins'); oc.hidden = false; oc.textContent = `+${fmt(r.coins_won)} moedas · ${fmt(r.coins_total)} no cofre`;
+  if (error || !r) { setMsg(msg, 'Ranking indisponível agora'); return; }
+  if (!r.accepted) { setMsg(msg, 'Partida fora do ranking'); return; }
+  setMsg(msg, '');
+  // The rewards land one card at a time: rank, coins, the chest, each achievement, each mission that moved, the season.
+  queueReward(() => rewardCard('trophy', r.week_rank != null ? `#${fmt(r.week_rank)} na semana · #${fmt(r.all_rank)} geral` : `#${fmt(r.all_rank)} no ranking geral`, 'RANKING', {}, 'gold'));
+  if (r.coins_won != null) { // the server pays the run's coins: the road's plus the score's bonus
+    queueReward(() => { const c = rewardCard('coins', '', `MOEDAS DA PARTIDA · ${fmt(r.coins_total)} no cofre`); c.querySelector('h4').classList.add('count'); countUp(c.querySelector('h4'), r.coins_won, '+', ' moedas'); Sfx.play('pickup'); return c; });
     online.wallet = { ...(online.wallet || { gems: 0, upgrades: {}, heroes: {}, achievements: [] }), coins: r.coins_total, gems: r.gems_total ?? online.wallet?.gems ?? 0 };
   }
-  if (r.unlocked) { // achievements the server just granted, with their gems
-    const keys = r.unlocked.split(',').filter((k) => ACHIEVEMENTS[k]), oa = $('overAch');
-    oa.hidden = !keys.length; oa.textContent = keys.map((k) => `Conquista: ${ACHIEVEMENTS[k].name} · +${ACHIEVEMENTS[k].gems} diamantes`).join(' · ');
-    if (online.wallet) { online.wallet.gems = r.gems_total ?? online.wallet.gems; online.wallet.achievements = [...new Set([...(online.wallet.achievements || []), ...keys])]; }
-    if (keys.length) Sfx.play('victory');
+  if (r.chest) queueReward(() => chestCard(r.chest, r.chest_coins, r.chest_gems)); // already credited by the server
+  const unlocked = (r.unlocked || '').split(',').filter((k) => ACHIEVEMENTS[k]);
+  for (const k of unlocked) queueReward(() => { Sfx.play('victory'); return rewardCard('gem', ACHIEVEMENTS[k].name, 'CONQUISTA · ' + ACHIEVEMENTS[k].desc, { big: '+' + fmt(ACHIEVEMENTS[k].gems), gem: true }, 'gold'); });
+  if (online.wallet && unlocked.length) online.wallet.achievements = [...new Set([...(online.wallet.achievements || []), ...unlocked])];
+  // missions that moved this run, each with its bar filling from where it stood
+  const before = online.missionsBefore || {};
+  await loadMissions().catch(() => {});
+  for (const m of online.missions || []) {
+    const was = before[m.period + '/' + m.key] ?? 0; if (m.progress <= was) continue;
+    const done = m.progress >= m.target, tx = MISSIONS[m.key] || { name: m.key, desc: '' };
+    queueReward(() => rewardCard(m.gems ? 'gem' : 'coin', tx.name, done ? 'MISSÃO CONCLUÍDA · pegue a recompensa em MISSÕES' : 'MISSÃO · ' + tx.desc, { bar: [was / m.target, m.progress / m.target], big: `${fmt(m.progress)}/${fmt(m.target)}` }, done ? 'gold done' : ''));
   }
-  if (r.chest) showChest(r.chest, r.chest_coins, r.chest_gems); // the run's chest, already credited by the server
-  if (r.missions) { // missions this run completed: the reward waits on the MISSÕES screen
-    const keys = r.missions.split(',').filter((k) => MISSIONS[k]), om = $('overMissions');
-    om.hidden = !keys.length; om.textContent = keys.map((k) => `Missão concluída: ${MISSIONS[k].name}`).join(' · ') + ' · pegue a recompensa em MISSÕES';
+  // season points: the level's bar fills from where it was; a new level gets its own fanfare
+  if (r.season_add) {
+    const was = online.seasonBefore ?? 0, now = r.season_total ?? was + r.season_add;
+    const tier = (p) => Math.min(SEASON_TIERS, Math.floor(p / SEASON_STEP)), tWas = tier(was), tNow = tier(now), up = tNow > tWas;
+    const frac = (p, tr) => (tr >= SEASON_TIERS ? 1 : (p - tr * SEASON_STEP) / SEASON_STEP);
+    queueReward(() => {
+      if (up) Sfx.play('victory');
+      return rewardCard('ticket', up ? `NÍVEL ${tNow} DA TEMPORADA!` : `+${fmt(r.season_add)} pontos de temporada`,
+        up ? `+${fmt(r.season_add)} pontos · a recompensa do nível espera em TEMPORADA` : `TEMPORADA · nível ${tNow} · ${fmt(now)} / ${fmt((tNow + 1) * SEASON_STEP)} pontos`,
+        { bar: [up ? 0 : frac(was, tWas), frac(now, tNow)] }, up ? 'gold done' : '');
+    });
+    loadSeason().then(renderMenuWallet).catch(() => {});
   }
-  if (r.season_add) { const os = $('overSeason'); os.hidden = false; os.textContent = `+${fmt(r.season_add)} pontos de temporada · nível ${Math.min(SEASON_TIERS, Math.floor((r.season_total || 0) / SEASON_STEP))}`; }
-  Promise.all([loadMissions(), loadSeason()]).then(renderMenuWallet).catch(() => {});
   renderMenuWallet();
   if (!online.nickname) {
     form.hidden = false;
     setMsg(msg, 'Escolha um apelido para aparecer no ranking.');
   }
+}
+// ---- the game-over rewards: cards with the economy's sprites, revealed one every 420 ms ----
+const rewardQueue = []; let rewardTimer = 0;
+function clearRewards() { rewardQueue.length = 0; clearTimeout(rewardTimer); rewardTimer = 0; $('rewards').textContent = ''; }
+function queueReward(build) { rewardQueue.push(build); if (!rewardTimer) pumpRewards(); }
+function pumpRewards() {
+  const build = rewardQueue.shift();
+  if (!build) { rewardTimer = 0; return; }
+  $('rewards').append(build()); rewardTimer = setTimeout(pumpRewards, 420);
+}
+function rewardCard(icon, title, sub, extra = {}, cls = '') {
+  const c = document.createElement('div'); c.className = 'rw-card' + (cls ? ' ' + cls : '');
+  const h = document.createElement('h4'); h.textContent = title; const p = document.createElement('p'); p.textContent = sub;
+  c.append(sprite(icon), h, p);
+  if (extra.bar) {
+    const bar = document.createElement('div'); bar.className = 'bar'; const i = document.createElement('i');
+    i.style.width = (100 * clamp(extra.bar[0], 0, 1)) + '%'; bar.append(i); c.append(bar);
+    requestAnimationFrame(() => requestAnimationFrame(() => { i.style.width = (100 * clamp(extra.bar[1], 0, 1)) + '%'; }));
+  }
+  if (extra.big) { const b = document.createElement('span'); b.className = 'big' + (extra.gem ? ' gem' : ''); b.textContent = extra.big; c.append(b); }
+  return c;
+}
+function countUp(el, to, prefix = '', suffix = '', ms = 900) { // the number rolls up to its value
+  const t0 = performance.now();
+  const tick = () => { const u = Math.min(1, (performance.now() - t0) / ms), k = 1 - (1 - u) * (1 - u); el.textContent = prefix + fmt(Math.round(to * k)) + suffix; if (u < 1) requestAnimationFrame(tick); };
+  tick();
 }
 
 // ---- Leaderboard ----
@@ -2764,12 +2811,15 @@ async function claimMission(m, btn) {
   Sfx.play(m.gems ? 'victory' : 'pickup'); setMsg($('missionsMsg'), `+${fmt(m.gems || m.coins)} ${m.gems ? 'diamantes' : 'moedas'} no cofre`, 'ok');
   renderMissions(); renderMenuWallet();
 }
-// The run's chest (tier and contents come from the server): it waits closed on the game-over card until tapped.
-function showChest(tier, coins, gems) {
-  const box = $('chestBox'), img = $('chestImg'), btn = $('chestBtn'), loot = $('chestLoot'), label = $('chestLabel');
-  box.hidden = false; box.classList.remove('open'); loot.hidden = true; loot.textContent = ''; btn.disabled = false;
-  img.src = SPR('chest_' + tier); label.textContent = `BAÚ DE ${{ bronze: 'BRONZE', silver: 'PRATA', gold: 'OURO' }[tier]} · TOQUE PARA ABRIR`;
-  btn.onclick = () => {
+// The run's chest (tier and contents come from the server): a card that waits closed until tapped, then opens with sparks.
+function chestCard(tier, coins, gems) {
+  const box = document.createElement('div'); box.className = 'chestBox';
+  const btn = document.createElement('button'); btn.className = 'chestBtn'; btn.type = 'button'; btn.setAttribute('aria-label', 'Abrir o baú');
+  const img = document.createElement('img'); img.src = SPR('chest_' + tier); img.alt = ''; img.draggable = false; btn.append(img);
+  const label = document.createElement('p'); label.className = 'chestLabel'; label.textContent = `BAÚ DE ${{ bronze: 'BRONZE', silver: 'PRATA', gold: 'OURO' }[tier]} · TOQUE PARA ABRIR`;
+  const loot = document.createElement('div'); loot.className = 'loot'; loot.hidden = true;
+  box.append(btn, label, loot);
+  btn.addEventListener('click', () => {
     btn.disabled = true; box.classList.add('open'); img.src = SPR('chest_' + tier + '_open'); label.textContent = 'JÁ ESTÁ NO COFRE';
     loot.hidden = false; loot.append(walletChip('coin', coins, '+')); if (gems) loot.append(walletChip('gem', gems, '+'));
     for (let i = 0; i < 16; i++) {
@@ -2778,7 +2828,8 @@ function showChest(tier, coins, gems) {
       if (Math.random() < 0.4) s.style.background = '#5ff3ff'; box.append(s); setTimeout(() => s.remove(), 1000);
     }
     Sfx.play(gems ? 'victory' : 'pickup');
-  };
+  });
+  return box;
 }
 // ---- the season: 30 days from 2026-10-17 UTC, 30 tiers of 150 points, a free track for everyone and a premium pass
 // bought with gems (120). Points come from valid runs and completed missions; the server holds the rules
@@ -4393,7 +4444,7 @@ function showGameOver() {
   const bo = $('bestOver');
   bo.textContent = isBest ? 'NOVO RECORDE!' : 'RECORDE ' + state.best.toLocaleString('pt-BR');
   bo.classList.toggle('newbest', isBest);
-  $('chestBox').hidden = true; $('overMissions').hidden = true; $('overSeason').hidden = true;
+  clearRewards();
   ui.over.hidden = false; ui.bossBar.hidden = true; $('btnAgain').focus();
   onlineRunFinish();
 }

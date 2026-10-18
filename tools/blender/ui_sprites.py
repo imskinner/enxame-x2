@@ -6,7 +6,7 @@
 import bpy, math, os, random, sys
 from mathutils import Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import reset, Part, ASSETS, euler
+from lib import reset, Part, ASSETS, euler, render_sprites
 
 reset(21)
 OUT = os.path.abspath(os.path.join(ASSETS, 'ui'))
@@ -222,65 +222,15 @@ for tier in ('bronze', 'silver', 'gold'):
     chest(tier, False); chest(tier, True)
 coin(); coins(); bag(); gem(); gems(); trophy(); ticket(); crown()
 
-# ---------- render: EEVEE, a warm sun plus a cool rim light, flat ambient, Freestyle ink outline ----------
-sc = bpy.context.scene
-try: sc.render.engine = 'BLENDER_EEVEE'
-except TypeError: sc.render.engine = 'BLENDER_EEVEE_NEXT'
-sc.eevee.taa_render_samples = 48
-for m in bpy.data.materials:  # the Part colors become Principled materials
+# ---------- render (lib.render_sprites: EEVEE, key + rim suns, Freestyle ink outline, transparent WebP) ----------
+for m in bpy.data.materials:  # the Part colors become Principled materials; the gems glow a little
     rgb, rough = m.diffuse_color[:3], m.roughness
     m.use_nodes = True
     bsdf = m.node_tree.nodes.get('Principled BSDF')
     bsdf.inputs['Base Color'].default_value = (*rgb, 1.0)
     bsdf.inputs['Roughness'].default_value = rough
     bsdf.inputs['Metallic'].default_value = 0.0
-    if 'Emission Color' in bsdf.inputs and max(rgb) > 0.6 and rgb[2] > 0.7:  # the gems glow a little
+    if 'Emission Color' in bsdf.inputs and max(rgb) > 0.6 and rgb[2] > 0.7:
         bsdf.inputs['Emission Color'].default_value = (*rgb, 1.0); bsdf.inputs['Emission Strength'].default_value = 0.06
-world = bpy.data.worlds.new('ui'); sc.world = world; world.use_nodes = True
-bg = world.node_tree.nodes['Background']; bg.inputs[0].default_value = (0.85, 0.9, 1.0, 1.0); bg.inputs[1].default_value = 0.45
-def sun(name, direction, energy, color):
-    d = bpy.data.lights.new(name, 'SUN'); d.energy = energy; d.color = color; d.angle = math.radians(12)
-    o = bpy.data.objects.new(name, d); bpy.context.collection.objects.link(o)
-    o.rotation_euler = Vector(direction).normalized().to_track_quat('Z', 'Y').to_euler()
-    return o
-sun('key', (-0.5, -0.8, 1.0), 3.2, (1.0, 0.96, 0.88))
-sun('rim', (0.8, 0.7, 0.5), 1.6, (0.75, 0.88, 1.0))
-sc.render.use_freestyle = True; sc.render.line_thickness_mode = 'ABSOLUTE'; sc.render.line_thickness = 2.4
-fs = bpy.context.view_layer.freestyle_settings
-ls = fs.linesets.new('ink') if not len(fs.linesets) else fs.linesets[0]
-if ls.linestyle is None: ls.linestyle = bpy.data.linestyles.new('ink')
-ls.select_silhouette = True; ls.select_border = True; ls.select_crease = True; ls.select_edge_mark = False
-fs.crease_angle = math.radians(70)  # low enough to ink the gem facets and the chest planks
-ls.linestyle.color = INK; ls.linestyle.thickness = 2.4
-sc.render.film_transparent = True
-sc.render.resolution_x = sc.render.resolution_y = 512; sc.render.resolution_percentage = 100
-sc.render.image_settings.file_format = 'WEBP'; sc.render.image_settings.color_mode = 'RGBA'; sc.render.image_settings.quality = 92
 PREVIEW = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else None
-sc.view_settings.view_transform = 'Standard'
-bpy.ops.object.camera_add(); cam = bpy.context.active_object; cam.data.type = 'ORTHO'; sc.camera = cam
-light = Vector((-0.45, -1.0, 0.62)).normalized()  # from the front-left, above
-cam.rotation_euler = light.to_track_quat('Z', 'Y').to_euler()
-
-bpy.context.view_layer.update()
-for name, obs in SPRITES.items():
-    for o in bpy.data.objects:
-        if o.type == 'MESH': o.hide_render = o not in obs
-    pts = [ob.matrix_world @ Vector(c) for ob in obs for c in ob.bound_box]
-    lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
-    hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
-    center = (lo + hi) / 2
-    cam.location = center + light * 10
-    bpy.context.view_layer.update()
-    # frame the bounding box in camera space with a small margin
-    inv = cam.matrix_world.inverted()
-    cs = [inv @ p for p in pts]
-    w = max(p.x for p in cs) - min(p.x for p in cs); h = max(p.y for p in cs) - min(p.y for p in cs)
-    cam.data.ortho_scale = max(w, h) * 1.12
-    shift = Vector(((max(p.x for p in cs) + min(p.x for p in cs)) / 2, (max(p.y for p in cs) + min(p.y for p in cs)) / 2, 0))
-    cam.data.shift_x = shift.x / cam.data.ortho_scale; cam.data.shift_y = shift.y / cam.data.ortho_scale
-    sc.render.filepath = os.path.join(OUT, name + '.webp')
-    bpy.ops.render.render(write_still=True)
-    if PREVIEW:
-        sc.render.image_settings.file_format = 'PNG'; sc.render.filepath = os.path.join(PREVIEW, name + '.png'); bpy.ops.render.render(write_still=True)
-        sc.render.image_settings.file_format = 'WEBP'
-    print('WROTE', sc.render.filepath, len(obs), 'objects')
+render_sprites(SPRITES, OUT, PREVIEW)

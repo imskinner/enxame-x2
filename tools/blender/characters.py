@@ -9,7 +9,8 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import reset, euler, ASSETS, export
 
-reset(2)
+if __name__ == '__main__':
+    reset(2)
 
 
 def lin(hexv):
@@ -20,13 +21,14 @@ def lin(hexv):
 
 
 class Char:
-    def __init__(self, name):
-        self.name, self.bm = name, bmesh.new()
+    def __init__(self, name, team=None):
+        """team: a hex color to bake into the tinted parts (renders outside the crowd shader); None leaves them white."""
+        self.name, self.bm, self.team = name, bmesh.new(), team
         self.col = self.bm.loops.layers.float_color.new('Col')
         self.meta = self.bm.loops.layers.float_color.new('Meta')
 
     def _tag(self, verts, hexv, tint, swing, pivot, shade):
-        c = (1.0, 1.0, 1.0) if tint else lin(hexv)
+        c = (lin(self.team) if self.team is not None else (1.0, 1.0, 1.0)) if tint else lin(hexv)
         c = tuple(x * shade for x in c)
         for f in {f for v in verts for f in v.link_faces}:
             for l in f.loops:
@@ -91,69 +93,77 @@ class Char:
 TEAM, SKIN, INK, GOLD = 0xffffff, 0xffd2b0, 0x1b1640, 0xffc629
 
 # ---------------- Soldier (runs away from the camera: back gear faces it) ----------------
-s = Char('soldier')
-for k in (-1, 1):
-    leg = dict(swing=k, pivot=0.42)
-    arm = dict(swing=-k, pivot=0.84)
-    s.caps((k * 0.13, 0.22, 0), 0.1, 0.2, 0x27306e, **leg)
-    s.ball((k * 0.13, 0.07, 0.03), 0.12, 0x3b2a20, scale=(1, 0.6, 1.4), **leg)
-    s.box((k * 0.13, 0.15, 0.03), (0.22, 0.05, 0.26), 0x2a1d16, **leg)  # boot cuff
-    s.caps((k * 0.36, 0.64, 0), 0.085, 0.24, TEAM, rot=(0, -k * 0.22, 0), tint=1, shade=0.85, **arm)
-    s.ball((k * 0.39, 0.45, 0), 0.085, SKIN, **arm)
-    s.ball((k * 0.31, 0.86, 0), 0.13, TEAM, scale=(1.1, 0.75, 1.1), tint=1, shade=0.7, half=True)  # shoulder pad
-    s.ball((k * 0.09, 1.08, 0.23), 0.045, INK, segs=6, rings=4)
-    s.ball((k * 0.25, 1.06, 0.0), 0.06, SKIN, scale=(0.6, 1, 1), segs=6, rings=4)  # ears
-s.caps((0, 0.66, 0), 0.27, 0.26, TEAM, segs=12, tint=1)
-s.torus((0, 0.5, 0), 0.268, 0.045, GOLD, segs=18)
-s.box((0, 0.5, 0.29), (0.11, 0.09, 0.04), 0xfff0a0)
-for k in (-1, 1): s.box((k * 0.2, 0.47, -0.18), (0.1, 0.12, 0.08), 0x6b4a30, rot=(0, 0, k * 0.5))  # pouches
-s.ball((0, 1.1, 0), 0.25, SKIN, segs=12, rings=9)
-s.ball((0, 1.04, 0.24), 0.04, 0xf2b08a, segs=6, rings=4)  # nose
-s.ball((0, 1.12, -0.01), 0.285, TEAM, segs=14, rings=9, tint=1, shade=0.78, half=True)  # helmet
-s.cone((0, 1.085, 0), 0.32, 0.3, 0.05, TEAM, segs=16, tint=1, shade=0.6)  # brim
-for k in (-1, 1): s.box((k * 0.24, 0.98, 0.02), (0.05, 0.16, 0.14), TEAM, tint=1, shade=0.65)  # cheek guards
-s.box((0, 1.44, -0.03), (0.05, 0.12, 0.32), GOLD, bevel=0.01)  # crest
-s.ball((0, 1.47, -0.2), 0.07, 0xff4a5a, scale=(0.8, 1, 1.6), segs=6, rings=4)  # plume tail
-s.box((0, 0.72, -0.3), (0.36, 0.38, 0.18), 0x7d5a3c, bevel=0.02)  # backpack
-s.box((0, 0.84, -0.4), (0.36, 0.14, 0.04), 0x6b4a30)  # flap
-s.cone((0, 0.95, -0.32), 0.085, 0.085, 0.42, 0x5b8c4a, rot=(0, math.pi / 2, 0), segs=8)  # bedroll
-for k in (-1, 1): s.cone((k * 0.21, 0.95, -0.32), 0.09, 0.09, 0.02, 0x8a6a40, rot=(0, math.pi / 2, 0), segs=8)
-s.build()
+def soldier(s):
+    """Adds the soldier's parts to Char `s` (game units, origin at the feet)."""
+    for k in (-1, 1):
+        leg = dict(swing=k, pivot=0.42)
+        arm = dict(swing=-k, pivot=0.84)
+        s.caps((k * 0.13, 0.22, 0), 0.1, 0.2, 0x27306e, **leg)
+        s.ball((k * 0.13, 0.07, 0.03), 0.12, 0x3b2a20, scale=(1, 0.6, 1.4), **leg)
+        s.box((k * 0.13, 0.15, 0.03), (0.22, 0.05, 0.26), 0x2a1d16, **leg)  # boot cuff
+        s.caps((k * 0.36, 0.64, 0), 0.085, 0.24, TEAM, rot=(0, -k * 0.22, 0), tint=1, shade=0.85, **arm)
+        s.ball((k * 0.39, 0.45, 0), 0.085, SKIN, **arm)
+        s.ball((k * 0.31, 0.86, 0), 0.13, TEAM, scale=(1.1, 0.75, 1.1), tint=1, shade=0.7, half=True)  # shoulder pad
+        s.ball((k * 0.09, 1.08, 0.23), 0.045, INK, segs=6, rings=4)
+        s.ball((k * 0.25, 1.06, 0.0), 0.06, SKIN, scale=(0.6, 1, 1), segs=6, rings=4)  # ears
+    s.caps((0, 0.66, 0), 0.27, 0.26, TEAM, segs=12, tint=1)
+    s.torus((0, 0.5, 0), 0.268, 0.045, GOLD, segs=18)
+    s.box((0, 0.5, 0.29), (0.11, 0.09, 0.04), 0xfff0a0)
+    for k in (-1, 1): s.box((k * 0.2, 0.47, -0.18), (0.1, 0.12, 0.08), 0x6b4a30, rot=(0, 0, k * 0.5))  # pouches
+    s.ball((0, 1.1, 0), 0.25, SKIN, segs=12, rings=9)
+    s.ball((0, 1.04, 0.24), 0.04, 0xf2b08a, segs=6, rings=4)  # nose
+    s.ball((0, 1.12, -0.01), 0.285, TEAM, segs=14, rings=9, tint=1, shade=0.78, half=True)  # helmet
+    s.cone((0, 1.085, 0), 0.32, 0.3, 0.05, TEAM, segs=16, tint=1, shade=0.6)  # brim
+    for k in (-1, 1): s.box((k * 0.24, 0.98, 0.02), (0.05, 0.16, 0.14), TEAM, tint=1, shade=0.65)  # cheek guards
+    s.box((0, 1.44, -0.03), (0.05, 0.12, 0.32), GOLD, bevel=0.01)  # crest
+    s.ball((0, 1.47, -0.2), 0.07, 0xff4a5a, scale=(0.8, 1, 1.6), segs=6, rings=4)  # plume tail
+    s.box((0, 0.72, -0.3), (0.36, 0.38, 0.18), 0x7d5a3c, bevel=0.02)  # backpack
+    s.box((0, 0.84, -0.4), (0.36, 0.14, 0.04), 0x6b4a30)  # flap
+    s.cone((0, 0.95, -0.32), 0.085, 0.085, 0.42, 0x5b8c4a, rot=(0, math.pi / 2, 0), segs=8)  # bedroll
+    for k in (-1, 1): s.cone((k * 0.21, 0.95, -0.32), 0.09, 0.09, 0.02, 0x8a6a40, rot=(0, math.pi / 2, 0), segs=8)
+
 
 # ---------------- Imp (charges at the camera: face and club toward it) ----------------
-RED = TEAM
-i = Char('imp')
-for k in (-1, 1):
-    leg = dict(swing=k, pivot=0.4, tint=1)
-    arm = dict(swing=-k, pivot=0.86, tint=1)
-    i.caps((k * 0.14, 0.2, 0), 0.1, 0.18, RED, shade=0.7, **leg)
-    i.ball((k * 0.14, 0.06, 0.05), 0.12, RED, scale=(1.1, 0.55, 1.4), shade=0.5, **leg)
-    for t in (-1, 0, 1): i.cone((k * 0.14 + t * 0.06, 0.05, 0.2), 0.03, 0.0, 0.08, 0xfff1d6, rot=(-math.pi / 2, 0, 0), segs=4, swing=k, pivot=0.4)  # toe claws
-    i.caps((k * 0.37, 0.66, 0), 0.085, 0.28, RED, rot=(0, -k * 0.35, 0), shade=0.85, **arm)
-    i.ball((k * 0.44, 0.46, 0), 0.09, RED, shade=0.7, **arm)
-    i.cone((k * 0.15, 1.36, -0.02), 0.065, 0.0, 0.26, 0xfff1d6, rot=(0.25, k * 0.45, 0), segs=6)  # horns
-    i.cone((k * 0.34, 1.12, -0.02), 0.085, 0.0, 0.26, RED, rot=(0, k * 1.25, 0), segs=5, tint=1, shade=0.8)  # ears
-    i.ball((k * 0.11, 1.13, 0.21), 0.09, 0xffffff, segs=8, rings=6)
-    i.ball((k * 0.105, 1.12, 0.295), 0.047, 0x140f30, segs=6, rings=4)
-    i.ball((k * 0.09, 1.145, 0.325), 0.015, 0xffffff, segs=4, rings=3)  # eye glint
-    i.box((k * 0.11, 1.235, 0.265), (0.15, 0.04, 0.045), 0x140f30, rot=(0, k * 0.45, 0))
-    i.cone((k * 0.055, 0.955, 0.28), 0.028, 0.0, 0.08, 0xffffff, rot=(math.pi / 2, 0, 0), segs=4)  # fangs
-i.caps((0, 0.66, 0), 0.3, 0.3, RED, segs=12, tint=1)
-i.ball((0, 0.62, 0.17), 0.22, 0xffd6b8, scale=(1, 1.1, 0.5))
-i.ball((0, 1.08, 0), 0.3, RED, segs=12, rings=9, tint=1)
-i.box((0, 0.975, 0.275), (0.2, 0.05, 0.03), 0x3a0d1a)
-for t in range(3):  # back spikes
-    i.cone((0, 1.0 - t * 0.2, -0.3 + t * 0.02), 0.06, 0.0, 0.16, RED, rot=(math.pi / 2 + 0.6, 0, 0), segs=4, tint=1, shade=0.6)
-# tail: a curve of shrinking segments ending in a spade
-for t in range(5):
-    a = t / 5
-    i.ball((0.05 * t, 0.42 - a * 0.1 + a * a * 0.5, -0.32 - t * 0.09), 0.05 - t * 0.006, RED, segs=6, rings=4, tint=1, shade=0.75)
-i.cone((0.27, 0.66, -0.78), 0.08, 0.0, 0.14, RED, rot=(0.9, 0, 0), segs=4, tint=1, shade=0.6)
-club = dict(swing=-1, pivot=0.86)
-i.cone((0.45, 0.58, 0.14), 0.04, 0.07, 0.55, 0x7a4b2a, rot=(-0.5, 0, 0), segs=6, **club)
-i.ball((0.45, 0.83, 0.28), 0.11, 0x5a3418, segs=8, rings=6, **club)
-for (dx, dy, dz) in ((0.1, 0, 0), (-0.1, 0, 0), (0, 0.1, 0), (0, 0, 0.1), (0, -0.07, 0.07)):
-    i.cone((0.45 + dx, 0.83 + dy, 0.28 + dz), 0.025, 0.0, 0.08, 0xd8d0c0, rot=(math.atan2(dz, dy) if dy or dz else 0, 0, -math.atan2(dx, dy) if dx else 0), segs=4, **club)
-i.build()
+def imp(i):
+    RED = TEAM
+    for k in (-1, 1):
+        leg = dict(swing=k, pivot=0.4, tint=1)
+        arm = dict(swing=-k, pivot=0.86, tint=1)
+        i.caps((k * 0.14, 0.2, 0), 0.1, 0.18, RED, shade=0.7, **leg)
+        i.ball((k * 0.14, 0.06, 0.05), 0.12, RED, scale=(1.1, 0.55, 1.4), shade=0.5, **leg)
+        for t in (-1, 0, 1): i.cone((k * 0.14 + t * 0.06, 0.05, 0.2), 0.03, 0.0, 0.08, 0xfff1d6, rot=(-math.pi / 2, 0, 0), segs=4, swing=k, pivot=0.4)  # toe claws
+        i.caps((k * 0.37, 0.66, 0), 0.085, 0.28, RED, rot=(0, -k * 0.35, 0), shade=0.85, **arm)
+        i.ball((k * 0.44, 0.46, 0), 0.09, RED, shade=0.7, **arm)
+        i.cone((k * 0.15, 1.36, -0.02), 0.065, 0.0, 0.26, 0xfff1d6, rot=(0.25, k * 0.45, 0), segs=6)  # horns
+        i.cone((k * 0.34, 1.12, -0.02), 0.085, 0.0, 0.26, RED, rot=(0, k * 1.25, 0), segs=5, tint=1, shade=0.8)  # ears
+        i.ball((k * 0.11, 1.13, 0.21), 0.09, 0xffffff, segs=8, rings=6)
+        i.ball((k * 0.105, 1.12, 0.295), 0.047, 0x140f30, segs=6, rings=4)
+        i.ball((k * 0.09, 1.145, 0.325), 0.015, 0xffffff, segs=4, rings=3)  # eye glint
+        i.box((k * 0.11, 1.235, 0.265), (0.15, 0.04, 0.045), 0x140f30, rot=(0, k * 0.45, 0))
+        i.cone((k * 0.055, 0.955, 0.28), 0.028, 0.0, 0.08, 0xffffff, rot=(math.pi / 2, 0, 0), segs=4)  # fangs
+    i.caps((0, 0.66, 0), 0.3, 0.3, RED, segs=12, tint=1)
+    i.ball((0, 0.62, 0.17), 0.22, 0xffd6b8, scale=(1, 1.1, 0.5))
+    i.ball((0, 1.08, 0), 0.3, RED, segs=12, rings=9, tint=1)
+    i.box((0, 0.975, 0.275), (0.2, 0.05, 0.03), 0x3a0d1a)
+    for t in range(3):  # back spikes
+        i.cone((0, 1.0 - t * 0.2, -0.3 + t * 0.02), 0.06, 0.0, 0.16, RED, rot=(math.pi / 2 + 0.6, 0, 0), segs=4, tint=1, shade=0.6)
+    # tail: a curve of shrinking segments ending in a spade
+    for t in range(5):
+        a = t / 5
+        i.ball((0.05 * t, 0.42 - a * 0.1 + a * a * 0.5, -0.32 - t * 0.09), 0.05 - t * 0.006, RED, segs=6, rings=4, tint=1, shade=0.75)
+    i.cone((0.27, 0.66, -0.78), 0.08, 0.0, 0.14, RED, rot=(0.9, 0, 0), segs=4, tint=1, shade=0.6)
+    club = dict(swing=-1, pivot=0.86)
+    i.cone((0.45, 0.58, 0.14), 0.04, 0.07, 0.55, 0x7a4b2a, rot=(-0.5, 0, 0), segs=6, **club)
+    i.ball((0.45, 0.83, 0.28), 0.11, 0x5a3418, segs=8, rings=6, **club)
+    for (dx, dy, dz) in ((0.1, 0, 0), (-0.1, 0, 0), (0, 0.1, 0), (0, 0, 0.1), (0, -0.07, 0.07)):
+        i.cone((0.45 + dx, 0.83 + dy, 0.28 + dz), 0.025, 0.0, 0.08, 0xd8d0c0, rot=(math.atan2(dz, dy) if dy or dz else 0, 0, -math.atan2(dx, dy) if dx else 0), segs=4, **club)
 
-export('characters.glb', export_all_vertex_colors=True)
+
+def main():
+    s = Char('soldier'); soldier(s); s.build()
+    i = Char('imp'); imp(i); i.build()
+    export('characters.glb', export_all_vertex_colors=True)
+
+
+if __name__ == '__main__':
+    main()

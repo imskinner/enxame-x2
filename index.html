@@ -3402,7 +3402,7 @@ const heroActive = (id) => !!M.hero && M.hero.id === id && M.hero.act > 0;
 // Muralha's passive and active: a soldier inside her dome, or any soldier during her FILA, survives a blow or a hazard.
 const allyShielded = (a) => !!M.hero && M.hero.id === 'muralha' && (M.hero.act > 0 || (a.x - M.hero.x) ** 2 + (a.z - M.hero.z) ** 2 < M.hero.r2);
 function updateHero(dt, R) {
-  const h = M.hero; heroMesh.visible = heroDome.visible = !!h && state.phase !== 'over';
+  const h = M.hero; heroMesh.visible = heroDome.visible = !!h && state.mode === 'march' && state.phase !== 'over';
   if (!h) return;
   h.act = Math.max(0, h.act - dt);
   const tx = M.cx, tz = SQUAD_Z - R * 0.45, k = Math.min(1, dt * 8);
@@ -4518,6 +4518,7 @@ function updateMarchEnemies(dt, dz) {
 // ================= Game flow =================
 function clearWorld() {
   clearHazards(); state.bossDown = false;
+  M.hero = null; heroMesh.visible = heroDome.visible = false; // the hero belongs to the march: a defense game never inherits the last march's
   sparkSys.n = 0; smokeSys.n = 0; sparkSys.geo.setDrawRange(0, 0); smokeSys.geo.setDrawRange(0, 0);
   for (const a of allies) allyPool.push(a); allies.length = 0;
   for (const e of enemies) enemyPool.push(e); enemies.length = 0;
@@ -5744,7 +5745,7 @@ if (location.hash === '#autoplay') startGame('defense');
 // holds the elements of the bosses before).
 // Add t<seconds> (#march0t60) to play that long instantly with a bot that takes the best gate, dodges crate walls and
 // fires the ultimate at bosses; it logs the troop, weapon and elements every 10 s.
-window.dbg = { M, state, allies, enemies, bigs, online, frame, loadMissions, renderMissions }; // console handle for testing real runs
+window.dbg = { M, state, allies, enemies, bigs, online, frame, heroMesh, loadMissions, renderMissions }; // console handle for testing real runs
 const mh = /^#march(\d+)?(?:t(\d+))?$/.exec(location.hash);
 const marchBot = () => {
   const ahead = (o) => o.z < SQUAD_Z - 1 && o.z > SQUAD_Z - 45;

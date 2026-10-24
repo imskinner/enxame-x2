@@ -69,6 +69,8 @@ body {
 .contracts button small { grid-column: 1; font-weight: 600; letter-spacing: 0; color: var(--muted); }
 .contracts button b { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-display); font-weight: 400; font-size: 22px; color: var(--muted); }
 .contracts button[aria-pressed="true"] { border-color: var(--gold); background: #fff3c4; }
+.contracts button.locked { opacity: .55; cursor: default; }
+.contracts button.locked b { color: rgba(27, 22, 64, .3); }
 .contracts button[aria-pressed="true"] b { color: var(--ink); }
 .contracts button:focus-visible { outline: 3px solid var(--gold); }
 .contracts .ach { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; border: 2px solid rgba(27, 22, 64, .12); border-radius: 12px; padding: 10px 12px; background: var(--paper); font: 800 14px var(--font-body); color: var(--muted); letter-spacing: .04em; }
@@ -2758,7 +2760,7 @@ function openScreen(id) {
     if (online.user) loadWeekRewards().then(renderWeekRewards).catch(() => {}).finally(go); else go();
   }
   if (id === 'accountScreen') { setMsg($('nickMsg'), ''); setMsg($('loginMsg'), ''); renderAccount(); }
-  if (id === 'contractsScreen') renderContracts();
+  if (id === 'contractsScreen') { renderContracts(); if (online.sb) ensureSession().then(loadWallet).then(renderContracts).catch(() => {}); }
   if (id === 'quartelScreen') { renderQuartel(); ensureSession().then(loadWallet).then(renderQuartel).catch(() => {}); }
   if (id === 'heroesScreen') { renderHeroes(); ensureSession().then(loadWallet).then(renderHeroes).catch(() => {}); }
   if (id === 'achievementsScreen') { renderAchievements(); ensureSession().then(loadWallet).then(renderAchievements).catch(() => {}); }
@@ -3050,8 +3052,8 @@ function renderWeekRewards() {
 // ---- the Quartel: permanent march upgrades bought with coins (the design in docs/economia.md) ----
 const QUARTEL = {
   recrutas: { name: 'RECRUTAS', max: 10, base: 200, effect: (l) => `+${2 * l} soldados no início` },
-  alojamento: { name: 'ALOJAMENTO', max: 6, base: 400, effect: (l) => `+${10 * l} no teto da tropa` },
-  arsenal: { name: 'ARSENAL', max: 6, base: 500, effect: (l) => `+${10 * l}% no teto de cadência e dano` },
+  alojamento: { name: 'ALOJAMENTO', max: 8, base: 400, effect: (l) => `+${15 * l} no teto da tropa` },
+  arsenal: { name: 'ARSENAL', max: 8, base: 500, effect: (l) => `+${15 * l}% no teto de cadência e dano` },
   disciplina: { name: 'DISCIPLINA', max: 4, base: 300, effect: (l) => `FILA dura +${(0.3 * l).toFixed(1).replace('.', ',')} s` },
   cornetas: { name: 'CORNETAS', max: 4, base: 300, effect: (l) => `FILA recarrega ${(0.5 * l).toFixed(1).replace('.', ',')} s antes` },
   bateria: { name: 'BATERIA', max: 4, base: 300, effect: (l) => `ultimate começa com ${10 * l}%` },
@@ -3090,10 +3092,12 @@ $('btnRefund').addEventListener('click', async () => {
 });
 function renderContracts() {
   const list = $('contractList'); list.textContent = '';
+  contractsPick = contractsPick.filter(contractOpen); // a contract the player has not earned yet cannot stay picked
   for (const [id, c] of Object.entries(CONTRACTS)) {
-    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(contractsPick.includes(id)));
+    const open = contractOpen(id);
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(contractsPick.includes(id))); b.disabled = !open; b.classList.toggle('locked', !open);
     const name = document.createElement('span'), mul = document.createElement('b'), hint = document.createElement('small');
-    name.textContent = c.name; mul.textContent = '×' + fmtMul(c.mul); hint.textContent = c.hint; b.append(name, mul, hint);
+    name.textContent = c.name; mul.textContent = '×' + fmtMul(c.mul); hint.textContent = open ? c.hint : `Abre quando você ${c.unlockText}`; b.append(name, mul, hint);
     b.addEventListener('click', () => {
       if (contractsPick.includes(id)) contractsPick = contractsPick.filter((x) => x !== id);
       else if (contractsPick.length < MAX_CONTRACTS) contractsPick.push(id);
@@ -3164,21 +3168,24 @@ async function initOnline() {
 // a buff once shot free. Every 1000 m a boss blocks the road; beating it opens a vortex that hands its element to the
 // troop's shots and leads into the next boss's world. The world is a treadmill: the troop stays at SQUAD_Z and
 // everything slides toward it.
-const SQUAD_Z = 15, SQUAD_BASE = 150, SQUAD_MAX = 300, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
+const SQUAD_Z = 15, SQUAD_BASE = 150, SQUAD_MAX = 240, MARCH_FAR = -150, MARCH_BEHIND = SQUAD_Z + 14, BOSS_EVERY = 1000, BOSS_LEAD = 140;
 // The boss appears out of the fog just beyond the troop's range, the road halts at once and it walks at one steady
 // pace. The moment the troop can hit it, it starts using its powers (first one within a second): no free hits either way.
 const BOSS_GAP = 8, PORTAL_Z = SQUAD_Z - 50;
 const bossPace = () => 1.5 + 0.05 * Math.min(M.stage, 10);
 // FILA: the troop squeezes into a narrow column for a moment, to pick a gate, slip through a crate wall or dodge.
 // Contracts: optional handicaps picked before a march that multiply its score. Skill turned into points, never sold.
+// Contracts are earned by distance: each opens with an achievement the server already grants (finish_run strips the
+// ones the player has not unlocked, so the multiplier is never free).
 const CONTRACTS = {
-  nofila: { name: 'SEM FILA', hint: 'A habilidade some', mul: 1.4 },
   noref: { name: 'SEM REFORÇOS', hint: 'O portal de reforços não aparece', mul: 1.2 },
-  fury: { name: 'FÚRIA DESDE O INÍCIO', hint: 'Golpes do chefão 1,5× mais rápidos a luta toda', mul: 1.3 },
-  narrow: { name: 'BRECHAS ESTREITAS', hint: 'Brechas de muros e padrões 25% menores', mul: 1.25 },
-  horde: { name: 'HORDA DOBRADA', hint: 'O dobro de inimigos por trecho', mul: 1.2 },
-  lean: { name: 'TROPA ENXUTA', hint: 'Teto da tropa pela metade', mul: 1.5 },
+  nofila: { name: 'SEM FILA', hint: 'A habilidade some', mul: 1.4, unlock: 'km2', unlockText: 'passar dos 2.000 m' },
+  narrow: { name: 'BRECHAS ESTREITAS', hint: 'Brechas de muros e padrões 25% menores', mul: 1.25, unlock: 'km5', unlockText: 'passar dos 5.000 m' },
+  fury: { name: 'FÚRIA DESDE O INÍCIO', hint: 'Golpes do chefão 1,5× mais rápidos a luta toda', mul: 1.3, unlock: 'km5', unlockText: 'passar dos 5.000 m' },
+  horde: { name: 'HORDA DOBRADA', hint: 'O dobro de inimigos por trecho', mul: 1.2, unlock: 'km8', unlockText: 'passar dos 8.000 m' },
+  lean: { name: 'TROPA ENXUTA', hint: 'Teto da tropa pela metade', mul: 1.5, unlock: 'km12', unlockText: 'passar dos 12.000 m' },
 };
+const contractOpen = (id) => !CONTRACTS[id].unlock || (online.wallet?.achievements || []).includes(CONTRACTS[id].unlock);
 const CONTRACT_KEY = 'enxame-x2-contracts', MAX_CONTRACTS = 3;
 let contractsPick = (() => { try { return JSON.parse(localStorage.getItem(CONTRACT_KEY)) || []; } catch { return []; } })().filter((id) => CONTRACTS[id]).slice(0, MAX_CONTRACTS);
 const contractMul = (ids) => { let m = 1; for (const id of ids) m *= CONTRACTS[id].mul; return Math.round(m * 100) / 100; };
@@ -3191,12 +3198,22 @@ const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6, SQUEEZE_CD_BOSS = 3
 // at the lap's end), then 3000 a world (94k at world 31), times the troop's cap and the theme. The weapon caps by 4 km
 // and the troop by the lap's middle, so the second half of the lap bites and the second lap is where the Quartel and
 // the heroes pay off.
-const marchBossHp = (theme) => Math.round((M.stage < BIOMES.length ? 7000 + 2000 * M.stage + 50 * M.stage * M.stage : 55450 + 3000 * (M.stage - BIOMES.length + 1)) * (squadCap() / SQUAD_BASE) * theme.hpMul);
+// The boss is sized for the troop the lane alone grows (the base cap), never for the player's own: a bigger troop from the
+// Quartel makes the fight shorter, which is what the Quartel is for. From the fourth world on the health compounds 15% a
+// world, and keeps compounding into the next laps. Against bosses the base troop (240 soldiers, weapon at +100%, two
+// elements) lands about 4.5k damage a second and a full Quartel (360, +220%) about 12k; a fight past 80 s is the one the
+// troop loses, so the base hits its wall around the twelfth to fourteenth world and the full Quartel closes the lap and
+// falls around the twentieth to twenty-second (the second lap's narrower gaps take the rest).
+const marchBossHp = (theme) => {
+  const s = M.stage, s1 = Math.min(s, BIOMES.length - 1);
+  const lane = Math.min(SQUAD_MAX, SQUAD_BASE + 15 * s1) / SQUAD_BASE;
+  return Math.round((7000 + 2000 * s1 + 50 * s1 * s1) * lane * Math.pow(1.15, Math.max(0, s - 3)) * theme.hpMul);
+};
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 // cap: how high one gate counts up when shot; max: the troop's total for the stat, so the weapon can't snowball past it.
 const STATS = {
-  rate: { name: 'CADÊNCIA', unit: '%', cap: 30, max: 150 },
-  dmg: { name: 'DANO', unit: '%', cap: 30, max: 150 },
+  rate: { name: 'CADÊNCIA', unit: '%', cap: 30, max: 100 }, // the gates alone stop at +100%; the Arsenal raises the ceiling to +220%
+  dmg: { name: 'DANO', unit: '%', cap: 30, max: 100 },
   range: { name: 'ALCANCE', unit: 'm', cap: 10, max: 30 },
 };
 // The power each boss leaves behind, keyed by biome id. The troop holds two at most.
@@ -3237,7 +3254,9 @@ const hasEl = (id) => M.elements.includes(id);
 // The troop wears its elements' colors, split half and half when it holds two.
 const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.elements.length]].tintC : COL.ally);
 const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul' && a.role !== 'statue') n++; return n; };
-const squadCap = () => Math.round(Math.min(SQUAD_MAX + M.q.cap, SQUAD_BASE + M.q.cap + 25 * M.stage) * (con('lean') ? 0.5 : 1)); // the cap climbs 25 a world, so every world has room to grow into
+// The cap climbs 15 a world to 240 on its own; the Alojamento adds up to 120 on top (360). The second half of the lap is
+// meant to outgrow a troop that never visited the Quartel.
+const squadCap = () => Math.round(Math.min(SQUAD_MAX + M.q.cap, SQUAD_BASE + M.q.cap + 15 * M.stage) * (con('lean') ? 0.5 : 1));
 const statMax = (stat) => STATS[stat].max + (stat === 'range' ? M.q.statMax / 5 : M.q.statMax); // the Arsenal raises the ceilings
 
 // ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
@@ -3827,10 +3846,10 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0, stampedeAt: 3200,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
-    contracts: new Set(contractsPick), cMul: contractMul(contractsPick), coins: 0, coinAcc: 0, freed: 0,
+    contracts: new Set(contractsPick.filter(contractOpen)), cMul: contractMul(contractsPick.filter(contractOpen)), coins: 0, coinAcc: 0, freed: 0,
     hero: heroPick && heroLevel(heroPick) ? { id: heroPick, lvl: heroLevel(heroPick), x: 0, z: SQUAD_Z, act: 0, r: 3 + 0.5 * (heroLevel(heroPick) - 1), r2: (3 + 0.5 * (heroLevel(heroPick) - 1)) ** 2 } : null,
     // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
-    q: { start: 10 + 2 * qLevel('recrutas'), cap: 10 * qLevel('alojamento'), statMax: 10 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
+    q: { start: 10 + 2 * qLevel('recrutas'), cap: 15 * qLevel('alojamento'), statMax: 15 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
   });
   for (const c of coins) coinPool.push(c); coins.length = 0; coinMesh.count = 0;
   for (const o of M.walls) removeObstacle(o); M.walls.length = 0; M.bolts.length = 0;
@@ -5430,8 +5449,11 @@ function zoneSpikes(q, color, emissive) {
 }
 function marchBossPower(b, dt) {
   const t = b.theme.id, c = marchCycle();
-  if (t === 'water') { b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.004 * dt); if ((b.shT = (b.shT ?? 5) - dt) <= 0) { b.shT = 6.5; b.shield = 2.6; Sfx.play('bubble'); } }
-  if (t === 'zombie') b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.003 * dt);
+  // Healing runs on the clock, not on the rage, and caps in absolute terms: a boss with hundreds of thousands of health
+  // healing a fixed share a second would stall the fight for good.
+  const rdt = dt / (b.rage ? b.rageF : 1);
+  if (t === 'water') { b.hp = Math.min(b.maxHp, b.hp + Math.min(600, b.maxHp * 0.004) * rdt); if ((b.shT = (b.shT ?? 5) - dt) <= 0) { b.shT = 6.5; b.shield = 2.6; Sfx.play('bubble'); } }
+  if (t === 'zombie') b.hp = Math.min(b.maxHp, b.hp + Math.min(450, b.maxHp * 0.003) * rdt);
   if (t === 'void') vortex(b, dt);
   if (t === 'clock') rewind(b, dt); // the Chronomancer turns its own clock back
   if (t === 'ghost') { // it phases out of reach every 6 s, and every 8 s it takes six soldiers for itself
@@ -5759,7 +5781,7 @@ const marchBot = () => {
   const prize = M.walls.find((o) => o.type !== 'wall' && !o.dead && ahead(o)); // line up with a cage or relic to shoot it open
   if (prize && (!best || best.z < SQUAD_Z - 28)) x = prize.x;
   for (const o of M.walls) if (o.type === 'wall' && ahead(o) && Math.abs(x - o.x) < o.half + M.R) x = o.x + Math.sign(-o.x || 1) * (o.half + M.R + 0.5);
-  for (const h of M.hz) { // steer around the hazards that hurt (water and void just shove)
+  for (const h of [...M.hz, ...toxic]) { // steer around the hazards that hurt (water and void just shove), the poison pools too
     const r = (h.r || (h.w || 0) / 2) + M.R * 0.8;
     if (r > M.R * 0.8 && h.z < SQUAD_Z + 2 && h.z > SQUAD_Z - 20 && Math.abs(x - h.x) < r) {
       x = h.x + (x >= h.x ? 1 : -1) * (r + 0.5);
@@ -5788,7 +5810,10 @@ const marchBot = () => {
     if (full !== null) x = full; else if (narrow !== null) { x = narrow; squeeze(); }
     if (window.botStats) { window.botStats.pat++; if (full === null && narrow === null) window.botStats.noSafe++; }
   }
-  if (state.ult >= ULT_MAX && (M.bossLive || enemies.length > 60 || enemies.some((e) => e.alive && e.shield && e.z > SQUAD_Z - 80))) useUltimate(); // saved for the boss, a thick horde or a stampede
+  // The ultimate is kept for the stampede (the one thing bolts cannot solve) and a thick horde; the boss only gets it when the
+  // fight is going badly (rage past the first step, or half the troop gone), the way a player who learned the lane spends it.
+  const boss = M.bossLive && bigs.find((b) => b.kind === 'boss' && b.alive), bossBad = boss && ((boss.rageF || 0) >= 2 || squadCount() < squadCap() * 0.5);
+  if (state.ult >= ULT_MAX && (bossBad || enemies.length > 60 || enemies.some((e) => e.alive && e.shield && e.z > SQUAD_Z - 80))) useUltimate();
   state.targetX = laneClamp(x);
 };
 if (mh) {
@@ -5815,7 +5840,7 @@ if (mh) {
     console.log('MARCH', JSON.stringify(log), JSON.stringify(end));
     return end;
   };
-  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, frame, online };
+  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, addSoldiers, frame, online };
   if (mh[2]) run(+mh[2]);
 }
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.

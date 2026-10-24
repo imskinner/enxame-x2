@@ -32,7 +32,7 @@ O que a pesquisa diz e que sustenta isso:
 | Sumidouros | Quartel; heróis (caminho lento); skins baratas | heróis (caminho rápido); skins e rastros; passe premium; cor do nome no ranking; slot extra de contrato |
 | Aperto | retorno decrescente: 3 primeiras runs do dia em dobro, depois normal | escassez: 20 a 40 por semana jogando; pacotes de 100 a 1.500 |
 
-Moedas por run (calculadas pelo servidor em `finish_run`): `pontuação / 400`, com piso de 20, mais as moedas caídas na pista (contadas no cliente e validadas contra abates e chefões, como a pontuação). A primeira partida do dia paga em dobro e o teto é de 10.000 moedas por dia, contando a dobrada. Com isso o Quartel inteiro (uns 19.400) leva alguns dias de jogo forte, não uma partida.
+Moedas por run (calculadas pelo servidor em `finish_run`): `pontuação / 600`, com piso de 20, mais as moedas caídas na pista (teto de abates/2 + 100 por chefão + 50, validadas como a pontuação). A primeira partida do dia paga em dobro e o teto é de 5.000 moedas por dia, contando a dobrada. Uma corrida de 5 km rende uns 1.500. Contratos abrem por distância (conquistas km2, km5, km8, km12) e o servidor descarta os que o jogador ainda não abriu.
 
 ## Quartel (meta, só moedas)
 
@@ -41,14 +41,14 @@ Melhorias permanentes com preço que cresce 15% por nível e reembolso total a q
 | Melhoria | Níveis | Efeito por nível |
 |---|---|---|
 | Recrutas | 10 | +2 soldados iniciais |
-| Alojamento | 6 | +10 no teto da tropa |
-| Arsenal | 6 | +10% no teto de cadência e dano |
+| Alojamento | 8 | +15 no teto da tropa (base 240, até 360) |
+| Arsenal | 8 | +15% no teto de cadência e dano (base +100%, até +220%) |
 | Disciplina | 4 | FILA +0,3 s de duração |
 | Cornetas | 4 | FILA −0,5 s de recarga |
 | Bateria | 4 | ultimate começa com +10% |
 | Alquimia | 1 | terceiro slot de elemento |
 
-É aqui que a meta vira "necessária eventualmente": o segundo ciclo de mundos é balanceado para um Quartel maduro mais um herói, não para uma conta nova.
+É aqui que a meta vira necessária: os portões sozinhos param a arma em +100% e a tropa em 240, a segunda metade da primeira volta já pede Alojamento e Arsenal, e o segundo ciclo de mundos é balanceado para um Quartel maduro mais um herói, não para uma conta nova. O Quartel inteiro custa uns 24 mil: uma semana de jogo forte, duas de jogo casual. A vida do chefão não depende do teto do jogador e compõe 15% por mundo a partir do quarto: a tropa base (240, +100%) bate no muro por volta do décimo segundo ao décimo quarto mundo, o Quartel cheio (360, +220%) fecha a volta e cai perto do vigésimo.
 
 ## Heróis
 

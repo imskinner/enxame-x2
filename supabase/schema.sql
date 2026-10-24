@@ -73,7 +73,7 @@ create policy "le o proprio quartel" on public.quartel for select to authenticat
 revoke insert, update, delete on public.quartel from anon, authenticated;
 
 create or replace function public.quartel_max(p_upgrade text) returns int language sql immutable as $$
-  select case p_upgrade when 'recrutas' then 10 when 'alojamento' then 6 when 'arsenal' then 6 when 'disciplina' then 4
+  select case p_upgrade when 'recrutas' then 10 when 'alojamento' then 8 when 'arsenal' then 8 when 'disciplina' then 4
                         when 'cornetas' then 4 when 'bateria' then 4 when 'alquimia' then 1 else 0 end;
 $$;
 create or replace function public.quartel_price(p_upgrade text, p_level int) returns int language sql immutable as $$
@@ -568,6 +568,7 @@ declare
   max_kills numeric;
   bosses numeric := 0;
   ncon int := 0;
+  con_ok text := '';
   ok boolean;
   wal public.wallets;
   won int := 0;
@@ -590,9 +591,17 @@ begin
   secs := extract(epoch from now() - r.started_at);
   if r.mode = 'march' then
     bosses := floor((p_wave + 140) / 1000.0);
-    -- contracts multiply the score (up to x2.73 with three); the client reports which ones it ran under
-    ncon := least(3, coalesce(array_length(string_to_array(coalesce(p_contracts, ''), ','), 1), 0));
-    if p_contracts = '' then ncon := 0; end if;
+    -- contracts multiply the score (up to x2.73 with three); the client reports which ones it ran under, and the ones the
+    -- player has not earned by distance yet are stripped (each opens with an achievement already granted)
+    select coalesce(string_agg(c, ','), '') into con_ok
+      from unnest(string_to_array(coalesce(p_contracts, ''), ',')) c
+      where c = 'noref'
+         or (c = 'nofila' and exists (select 1 from public.achievements a where a.user_id = auth.uid() and a.key = 'km2'))
+         or (c in ('narrow', 'fury') and exists (select 1 from public.achievements a where a.user_id = auth.uid() and a.key = 'km5'))
+         or (c = 'horde' and exists (select 1 from public.achievements a where a.user_id = auth.uid() and a.key = 'km8'))
+         or (c = 'lean' and exists (select 1 from public.achievements a where a.user_id = auth.uid() and a.key = 'km12'));
+    ncon := least(3, coalesce(array_length(string_to_array(con_ok, ','), 1), 0));
+    if con_ok = '' then ncon := 0; end if;
     ok := p_wave between 0 and secs * 16 + 60
       and p_kills between 0 and secs * 30 + 50
       and p_score between 0 and (p_wave * 12 + p_kills * 60 + 450 * bosses * (bosses + 1) + 500) * (1 + 0.65 * ncon)
@@ -612,14 +621,14 @@ begin
   end if;
 
   -- A valid run pays coins: the road's (capped by what the run could have dropped) plus the score's bonus, doubled on
-  -- the day's first run, 10000 a day at most (the Quartel costs about 19400: days of strong play, not one run).
+  -- the day's first run, 5000 a day at most (the Quartel costs about 24000: a week of strong play, two of casual play).
   if ok then
     select * into wal from public.wallets where user_id = auth.uid() for update;
     if not found then insert into public.wallets (user_id) values (auth.uid()) returning * into wal; end if;
     if wal.day <> current_date then wal.runs_today := 0; wal.earned_today := 0; wal.chests_today := 0; end if;
-    won := greatest(20, p_score / 400) + least(greatest(coalesce(p_coins, 0), 0), p_kills + 150 * bosses::int + 50);
+    won := greatest(20, p_score / 600) + least(greatest(coalesce(p_coins, 0), 0), p_kills / 2 + 100 * bosses::int + 50);
     if wal.runs_today < 1 then won := won * 2; end if;
-    won := least(won, greatest(0, 10000 - wal.earned_today));
+    won := least(won, greatest(0, 5000 - wal.earned_today));
     -- The run's chest: the tier comes from how far it went, the contents are rolled here, five chests a day at most.
     -- bronze 20-50 coins (4%: 1 gem), silver 60-150 (12%: 1-3 gems), gold 180-400 (30%: 3-8 gems).
     if r.mode = 'march' then
@@ -660,7 +669,7 @@ begin
   end if;
 
   update public.runs
-    set finished_at = now(), score = p_score, wave = p_wave, kills = p_kills, peak = p_peak, valid = ok, contracts = nullif(p_contracts, '')
+    set finished_at = now(), score = p_score, wave = p_wave, kills = p_kills, peak = p_peak, valid = ok, contracts = nullif(con_ok, '')
     where id = p_run;
 
   if not ok then

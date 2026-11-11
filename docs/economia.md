@@ -48,7 +48,7 @@ Melhorias permanentes com preço que cresce 15% por nível e reembolso total a q
 | Bateria | 4 | ultimate começa com +10% |
 | Alquimia | 1 | terceiro slot de elemento |
 
-É aqui que a meta vira necessária: os portões sozinhos param a arma em +100% e a tropa em 240, a segunda metade da primeira volta já pede Alojamento e Arsenal, e o segundo ciclo de mundos é balanceado para um Quartel maduro mais um herói, não para uma conta nova. O Quartel inteiro custa uns 24 mil: uma semana de jogo forte, duas de jogo casual. A vida do chefão não depende do teto do jogador e compõe 15% por mundo a partir do quarto: a tropa base (240, +100%) bate no muro por volta do décimo segundo ao décimo quarto mundo, o Quartel cheio (360, +220%) fecha a volta e cai perto do vigésimo.
+É aqui que a meta vira necessária: os portões sozinhos param a arma em +100% e a tropa em 240, a segunda metade da primeira volta já pede Alojamento e Arsenal, e o segundo ciclo de mundos é balanceado para um Quartel maduro mais um herói, não para uma conta nova. O Quartel inteiro custa uns 24 mil: uma semana de jogo forte, duas de jogo casual. A vida do chefão não depende do teto do jogador e compõe 17% por mundo a partir do quarto (as cartas de melhoria, uma por chefão, somam cerca de um terço ao fogo da tropa até o décimo mundo, para qualquer conta): a tropa base (240, +100%) bate no muro por volta do nono ao décimo quarto mundo, o Quartel cheio (360, +220%) fecha a volta e cai perto do vigésimo quarto.
 
 ## Heróis
 

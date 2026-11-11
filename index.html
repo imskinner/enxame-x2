@@ -59,6 +59,15 @@ body {
   text-shadow: 0 3px 0 var(--ink), 2px 0 0 var(--ink), -2px 0 0 var(--ink), 0 -2px 0 var(--ink); font-variant-numeric: tabular-nums; }
 .hp .bar { width: clamp(64px, 16vw, 150px); height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .18); overflow: hidden; }
 .hp .bar i { display: block; height: 100%; width: 100%; background: var(--ok); border-radius: 6px; transition: width .2s; }
+.cardlist { display: grid; gap: 10px; }
+.cardopt { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: center; text-align: left; padding: 12px 14px; border: 2px solid rgba(27, 22, 64, .14);
+  border-left: 8px solid var(--gold); border-radius: 14px; background: #fff; color: var(--ink); cursor: pointer; font: inherit; pointer-events: auto; }
+.cardopt b { font-family: var(--font-display); font-size: 20px; font-weight: 400; letter-spacing: .02em; }
+.cardopt i { font-style: normal; font-weight: 900; font-size: 11px; letter-spacing: .1em; opacity: .6; }
+.cardopt small { grid-column: 1 / -1; font-weight: 800; font-size: 13px; line-height: 1.3; opacity: .75; }
+.cardopt.atk { border-left-color: var(--foe); }
+.cardopt.troop { border-left-color: var(--ally); }
+.cardopt:hover, .cardopt:focus-visible { border-color: var(--gold); border-left-color: var(--gold); background: #fff8dc; outline: none; }
 .chip.rapid { background: #0f8ea8; }
 .chip.combo { background: #b9770e; }
 .chip.contracts { background: #5a3c9a; }
@@ -721,6 +730,14 @@ body {
     <button class="btn alt" id="btnAudioPause" type="button">SOM: SOM E MÚSICA</button>
     <button class="btn alt" id="btnHaptic" type="button">VIBRAÇÃO: LIGADA</button>
     <button class="btn alt" id="btnMenuPause" type="button">MENU</button>
+  </div>
+</div>
+
+<div class="screen" id="cardScreen" hidden>
+  <div class="card stack">
+    <h2 class="title sub">MELHORIA</h2>
+    <p class="note center">O chefão caiu. Escolha uma: ela vale até o fim da partida.</p>
+    <div class="cardlist" id="cardList"></div>
   </div>
 </div>
 
@@ -2547,7 +2564,7 @@ const ultWall = new THREE.Group();
 }
 // Later waves have far more kills, so each kill charges less. On the march the charge follows the world instead, so the
 // ultimate comes about once per world: spend it on the rush or save it for the boss, who refunds half when it falls.
-const ultGainScale = () => (state.mode === 'march' ? (0.5 / (1 + 0.3 * M.stage)) * (hasEl('clock') ? 2 : 1) : 4 / (3 + state.wave)); // the clock element charges it twice as fast
+const ultGainScale = () => (state.mode === 'march' ? (0.5 / (1 + 0.3 * M.stage)) * (hasEl('clock') ? 2 : 1) * (1 + 0.2 * perk('ult')) : 4 / (3 + state.wave)); // the clock element charges it twice as fast
 function addUlt(v) {
   if (state.phase !== 'playing' && state.phase !== 'break') return;
   const was = state.ult >= ULT_MAX;
@@ -3365,15 +3382,16 @@ const SQUEEZE_T = 2.2, SQUEEZE_BOSS_T = 3.2, SQUEEZE_CD = 6, SQUEEZE_CD_BOSS = 3
 // and the troop by the lap's middle, so the second half of the lap bites and the second lap is where the Quartel and
 // the heroes pay off.
 // The boss is sized for the troop the lane alone grows (the base cap), never for the player's own: a bigger troop from the
-// Quartel makes the fight shorter, which is what the Quartel is for. From the fourth world on the health compounds 15% a
-// world, and keeps compounding into the next laps. Against bosses the base troop (240 soldiers, weapon at +100%, two
+// Quartel makes the fight shorter, which is what the Quartel is for. From the fourth world on the health compounds 17% a
+// world (15% before the upgrade cards, which add about a third to the troop's fire by the tenth world), and keeps
+// compounding into the next laps. Against bosses the base troop (240 soldiers, weapon at +100%, two
 // elements) lands about 4.5k damage a second and a full Quartel (360, +220%) about 12k; a fight past 80 s is the one the
 // troop loses, so the base hits its wall around the twelfth to fourteenth world and the full Quartel closes the lap and
 // falls around the twentieth to twenty-second (the second lap's narrower gaps take the rest).
 const marchBossHp = (theme) => {
   const s = M.stage, s1 = Math.min(s, BIOMES.length - 1);
   const lane = Math.min(SQUAD_MAX, SQUAD_BASE + 15 * s1) / SQUAD_BASE;
-  return Math.round((7000 + 2000 * s1 + 50 * s1 * s1) * lane * Math.pow(1.15, Math.max(0, s - 3)) * theme.hpMul);
+  return Math.round((7000 + 2000 * s1 + 50 * s1 * s1) * lane * Math.pow(1.17, Math.max(0, s - 3)) * theme.hpMul);
 };
 const WEAPON = { dmg: 1.2, rate: 1.7, speed: 40, range: 40, size: 0.1, len: 3, shotC: new THREE.Color(0xffe066) };
 // cap: how high one gate counts up when shot; max: the troop's total for the stat, so the weapon can't snowball past it.
@@ -3412,7 +3430,47 @@ const M = {
   coins: 0, coinAcc: 0, freed: 0, q: { start: 10, cap: 0, statMax: 0, fila: 0, cd: 0, ult: 0, elMax: 2 }, hero: null,
 };
 const con = (id) => M.contracts.has(id);
-const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4);
+// ---- upgrade cards: after every boss the troop takes one of three, and it lasts the run ----
+// What a run is built from besides the gates: a card is a small, permanent step (most can be taken several times), so
+// two runs to the same world need not be the same troop. kind only picks the card's color.
+const PERKS = {
+  dmg: { name: 'PÓLVORA', kind: 'atk', max: 4, desc: '+6% de dano, por cima do teto dos portões' },
+  rate: { name: 'TAMBORES', kind: 'atk', max: 4, desc: '+5% de cadência, por cima do teto dos portões' },
+  giant: { name: 'MATA-GIGANTES', kind: 'atk', max: 3, desc: '+8% de dano em chefões e brutos' },
+  crit: { name: 'MIRA', kind: 'atk', max: 3, desc: '4% dos tiros acertam em cheio (dano ×2,5)' },
+  pierce: { name: 'PONTA DE AÇO', kind: 'atk', max: 1, desc: 'Os tiros atravessam mais um inimigo' },
+  cap: { name: 'ALISTAMENTO', kind: 'troop', max: 3, desc: '+15 no teto da tropa, e 15 soldados agora' },
+  medic: { name: 'RECRUTADORES', kind: 'troop', max: 2, desc: '+3 soldados a cada 100 m' },
+  armor: { name: 'COURAÇA', kind: 'troop', max: 1, desc: 'Cada inimigo morde 3 soldados no máximo, não 4' },
+  ult: { name: 'CORNETA DE GUERRA', kind: 'util', max: 2, desc: 'O ultimate carrega 20% mais rápido' },
+  fila: { name: 'PASSO CERRADO', kind: 'util', max: 2, desc: 'FILA dura 0,3 s a mais e recarrega 0,4 s antes' },
+  coin: { name: 'SAQUE', kind: 'util', max: 3, desc: '+30% de moedas na pista' },
+};
+const perk = (id) => (state.mode === 'march' && M.perk ? M.perk[id] || 0 : 0);
+function takePerk(id) {
+  M.perk[id] = perk(id) + 1; const p = PERKS[id];
+  floatText(p.name + (p.max > 1 ? ' ' + M.perk[id] : ''), M.cx, 4.2, SQUAD_Z, 'gold'); Sfx.play('pickup'); Haptics.buzz(15);
+  if (id === 'cap') addSoldiers(15);
+}
+// Three cards the troop can still take, after the portal. The game stands still until one is picked (1, 2, 3 or a tap);
+// the test bot takes the first without the screen.
+function offerCards() {
+  const pool = Object.keys(PERKS).filter((id) => perk(id) < PERKS[id].max && !(id === 'fila' && con('nofila')));
+  if (!pool.length) return;
+  const picks = pool.sort(() => Math.random() - 0.5).slice(0, 3);
+  if ((mh || window.botDrive) && !window.showCards) { takePerk(picks[0]); return; }
+  state.choosing = true; state.paused = true;
+  const list = $('cardList'); list.textContent = '';
+  picks.forEach((id, i) => {
+    const p = PERKS[id], b = document.createElement('button'), name = document.createElement('b'), lvl = document.createElement('i'), desc = document.createElement('small');
+    b.type = 'button'; b.className = 'cardopt ' + p.kind;
+    name.textContent = `${i + 1}. ${p.name}`; lvl.textContent = p.max > 1 ? `NÍVEL ${perk(id) + 1} DE ${p.max}` : 'ÚNICA'; desc.textContent = p.desc;
+    b.append(name, lvl, desc); b.addEventListener('click', () => { closeCards(); takePerk(id); }); list.append(b);
+  });
+  $('cardScreen').hidden = false; list.firstChild.focus();
+}
+function closeCards() { state.choosing = false; state.paused = false; $('cardScreen').hidden = true; canvas.focus(); }
+const statMul = (k) => clamp(1 + M.stat[k] / 100, 0.5, 4) * (k === 'dmg' ? 1 + 0.06 * perk('dmg') : k === 'rate' ? 1 + 0.05 * perk('rate') : 1);
 const heroRange = () => (M.hero?.id === 'arqueira' ? 8 + 2 * (M.hero.lvl - 1) : 0); // the Archer sees farther
 const windRange = () => (hasEl('wind') ? 6 : 0), boltSpeed = () => WEAPON.speed * (hasEl('wind') ? 1.3 : 1); // the wind carries the bolts
 const shotRange = () => clamp(WEAPON.range + M.stat.range + heroRange() + windRange(), 32, 70 + heroRange() + windRange());
@@ -3422,7 +3480,7 @@ const troopColor = (i) => (M.elements.length ? ELEMENTS[M.elements[i % M.element
 const squadCount = () => { let n = 0; for (const a of allies) if (a.alive && a.role !== 'caged' && a.role !== 'ghoul' && a.role !== 'statue') n++; return n; };
 // The cap climbs 15 a world to 240 on its own; the Alojamento adds up to 120 on top (360). The second half of the lap is
 // meant to outgrow a troop that never visited the Quartel.
-const squadCap = () => Math.round(Math.min(SQUAD_MAX + M.q.cap, SQUAD_BASE + M.q.cap + 15 * M.stage) * (con('lean') ? 0.5 : 1));
+const squadCap = () => Math.round((Math.min(SQUAD_MAX + M.q.cap, SQUAD_BASE + M.q.cap + 15 * M.stage) + 15 * perk('cap')) * (con('lean') ? 0.5 : 1));
 const statMax = (stat) => STATS[stat].max + (stat === 'range' ? M.q.statMax / 5 : M.q.statMax); // the Arsenal raises the ceilings
 
 // ---- the road: a treadmill world whose shapes never change along z, so scrolling textures and recycled props sell motion ----
@@ -3675,7 +3733,7 @@ function updateCoins(dt, dz, active) {
     const dx = cx - c.x, dzz = SQUAD_Z - c.z, d = Math.hypot(dx, dzz);
     if (active && d < R + (heroActive('ladrao') ? 14 : 4)) { const k = Math.min(1, dt * 6); c.x += dx * k; c.z += dzz * k; } // the magnet (the Thief's FILA widens it)
     if (active && d < R * 0.9 + 0.6) {
-      M.coinAcc += c.value * (M.hero?.id === 'ladrao' ? 1.5 + 0.1 * (M.hero.lvl - 1) : 1); const add = Math.floor(M.coinAcc); M.coinAcc -= add; M.coins += add; got += c.value;
+      M.coinAcc += c.value * (M.hero?.id === 'ladrao' ? 1.5 + 0.1 * (M.hero.lvl - 1) : 1) * (1 + 0.3 * perk('coin')); const add = Math.floor(M.coinAcc); M.coinAcc -= add; M.coins += add; got += c.value;
       if (c.value > 1 || Math.random() < 0.3) sparks(c.x, 0.7, c.z, 0xffc629, c.value > 1 ? 8 : 3, 3, 0.4, 0.3, 2);
       coinPool.push(c); coins.splice(i, 1); continue;
     }
@@ -3706,7 +3764,7 @@ function fireVolley() {
   const troop = allies.filter((a) => a.alive && a.role === 'squad');
   if (!troop.length) return;
   const n = Math.min(troop.length, 22), each = (WEAPON.dmg * statMul('dmg') * troop.length) / n;
-  const life = shotRange() / boltSpeed(), fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (hasEl('crystal') ? 2 : 0) + (heroActive('arqueira') ? 2 : 0);
+  const life = shotRange() / boltSpeed(), fan = M.triple > 0 ? [0, -4.5, 4.5] : [0], els = M.elements, homing = hasEl('void'), pierce = (hasEl('water') ? 1 : 0) + (hasEl('crystal') ? 2 : 0) + (heroActive('arqueira') ? 2 : 0) + perk('pierce');
   // FILA focuses the fire: while squeezed the bolts converge on the boss (or on the column's center line), so the shots
   // from the edges of the troop land too instead of passing beside it.
   // (a third of that focus is always on during a fight, so sidestepping the patterns doesn't throw the whole volley wide)
@@ -3848,18 +3906,18 @@ function passGate(g) {
 }
 // A stat tops out at STATS.max; returns how much was actually applied (nothing once it's maxed).
 function addStat(stat, v) {
-  const was = M.stat[stat];
-  M.stat[stat] = Math.min(statMax(stat), was + v);
+  const was = M.stat[stat], floor = stat === 'range' ? -Infinity : Math.min(was, 5 * M.stage); // a bad gate never takes cadence or damage under +5% per world beaten
+  M.stat[stat] = Math.max(floor, Math.min(statMax(stat), was + v));
   return M.stat[stat] - was;
 }
 function upgrade(stat, v) {
   const got = addStat(stat, v), S = STATS[stat];
-  floatText(got || v < 0 ? `${got >= 0 ? '+' : ''}${got}${S.unit} ${S.name}` : `${S.name} NO MÁXIMO`, M.cx, 3.4, SQUAD_Z, v >= 0 ? 'gold' : 'red');
+  floatText(v < 0 && !got ? `${S.name} NO PISO` : got ? `${got >= 0 ? '+' : ''}${got}${S.unit} ${S.name}` : `${S.name} NO MÁXIMO`, M.cx, 3.4, SQUAD_Z, v >= 0 ? 'gold' : 'red');
   if (v < 0) Sfx.play('cut');
 }
 function squeeze() {
   if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0 || con('nofila')) return;
-  M.sqT = M.sqMax = (M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T) + M.q.fila; Sfx.play('whoosh'); Haptics.buzz(8); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
+  M.sqT = M.sqMax = (M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T) + M.q.fila + 0.3 * perk('fila'); Sfx.play('whoosh'); Haptics.buzz(8); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
   if (M.hero) { M.hero.act = M.hero.id === 'muralha' ? 2 : M.sqMax; ring(M.hero.x, M.hero.z, HEROES[M.hero.id].color, 5, 0.5); } // the hero's active rides the FILA
 }
 function addSoldiers(k, x = null, text = null) {
@@ -3980,6 +4038,7 @@ function enterPortal(p) {
   sparks(M.cx, 1.5, SQUAD_Z, tint, 90, 10, 0.9, 0.8, 3, 0.3); ring(M.cx, SQUAD_Z, tint, 12, 0.8);
   // the element portal frees the boss's prisoners (a fifth of the cap, which just grew); the reinforcements fill the troop
   if (el) recruit(Math.round(squadCap() * 0.2), M.cx, 'REFÉNS DO CHEFÃO'); else recruit(squadCap() - squadCount(), M.cx, 'REFORÇOS');
+  offerCards();
 }
 
 // ---- the road ahead: one segment every ~25 m, harder with distance ----
@@ -4061,12 +4120,18 @@ function marchSegment() {
   // not from packs the bolt wall can't keep up with
   const scale = 1 + 0.35 * Math.min(lvl, 20) + 0.10 * Math.max(0, lvl - 20);
   const stat = () => weighted([{ w: 40, k: 'rate' }, { w: 40, k: 'dmg' }, { w: 20, k: 'range' }]).k;
+  // Gate luck has a floor: three good weapon gates in a row without cadence (or without damage) and the next one is it.
+  // A run used to reach the ninth world anywhere between +34% and +220% of cadence on the draw alone.
+  const goodStat = () => {
+    const s = ['rate', 'dmg'].find((k) => (M.dry[k] || 0) >= 3) || stat();
+    for (const k of ['rate', 'dmg']) M.dry[k] = k === s ? 0 : (M.dry[k] || 0) + 1;
+    return s;
+  };
   const goodGate = () => {
-    const s = stat();
-    return weighted([
-      { w: 40, v: ['stat', s === 'range' ? randInt(2, 4) : randInt(4, 8 + Math.floor(lvl / 2)), s] },
-      { w: M.segs <= 3 ? 30 : 16, v: ['mul', 2] }, { w: lvl > 3 ? 6 : 0, v: ['mul', 3] },
-    ]).v;
+    const kind = weighted([{ w: 40, k: 'stat' }, { w: M.segs <= 3 ? 30 : 16, k: 'mul2' }, { w: lvl > 3 ? 6 : 0, k: 'mul3' }]).k;
+    if (kind !== 'stat') return ['mul', kind === 'mul2' ? 2 : 3];
+    const s = goodStat();
+    return ['stat', s === 'range' ? randInt(2, 4) : randInt(4, 8 + Math.floor(lvl / 2)), s];
   };
   const badGate = (statOnly = false) => {
     const s = stat();
@@ -4118,7 +4183,7 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0, stampedeAt: 3200,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
-    seen: new Set(), contracts: new Set(contractsPick.filter(contractOpen)), cMul: contractMul(contractsPick.filter(contractOpen)), coins: 0, coinAcc: 0, freed: 0,
+    seen: new Set(), perk: {}, medicAt: 100, dry: {}, contracts: new Set(contractsPick.filter(contractOpen)), cMul: contractMul(contractsPick.filter(contractOpen)), coins: 0, coinAcc: 0, freed: 0,
     hero: heroPick && heroLevel(heroPick) ? { id: heroPick, lvl: heroLevel(heroPick), x: 0, z: SQUAD_Z, act: 0, r: 3 + 0.5 * (heroLevel(heroPick) - 1), r2: (3 + 0.5 * (heroLevel(heroPick) - 1)) ** 2 } : null,
     // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
     q: { start: 10 + 2 * qLevel('recrutas'), cap: 15 * qLevel('alojamento'), statMax: 15 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
@@ -4164,7 +4229,7 @@ function simulateMarch(dt, realDt = dt) {
   }
   // squeeze: a column about a third as wide (never under 1.4 m half-width) and deeper to hold everyone, or thinner
   // still to fit the crate-wall gap just ahead
-  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = M.sqCdMax = Math.max(1.5, (M.bossLive ? SQUEEZE_CD_BOSS : SQUEEZE_CD) - M.q.cd);
+  if (M.sqT > 0 && (M.sqT -= dt) <= 0) M.sqCd = M.sqCdMax = Math.max(1.5, (M.bossLive ? SQUEEZE_CD_BOSS : SQUEEZE_CD) - M.q.cd - 0.4 * perk('fila'));
   else if (M.sqCd > 0) M.sqCd = Math.max(0, M.sqCd - dt);
   M.sq += ((M.sqT > 0 ? 1 : 0) - M.sq) * Math.min(1, dt * 7);
   let sqHalf = Math.max(1.4, R * 0.33);
@@ -4194,6 +4259,7 @@ function simulateMarch(dt, realDt = dt) {
   // five waves of look per stage; the boss closes the fifth and the world holds there until the vortex
   const wave = 1 + M.stage * 5 + Math.floor(clamp(M.dist - M.stageStart, 0, BOSS_EVERY - 1) / 200);
   if (wave !== state.wave) { state.wave = wave; if (wave % 5 !== 0) state.bossDown = false; }
+  if (active && perk('medic') && M.dist >= M.medicAt) { M.medicAt = M.dist + 100; addSoldiers(3 * perk('medic')); } // the recruiters' card
 
   // spawn the road ahead; the boss comes just before each 1000 m mark
   if (active && !M.portals.length) {
@@ -4675,6 +4741,7 @@ function updatePools(dt, dz) {
 function hurt(t, dmg) {
   if (!t.alive) return;
   if (t.shield) { if (Math.random() < 0.2) sparks(t.x, 0.9, t.z, 0xbfeaff, 3, 4, 0.4, 0.3, 2); return; } // a stampede's shield: bolts and elements glance off; only the ultimate (or a bite) ends it
+  if (t.mesh) dmg *= 1 + 0.08 * perk('giant');
   t.hp -= dmg * (t.marked > 0 ? 1.25 : 1); t.flash = 1; // the shadow's mark: a hit target takes more for a while
   if (hasEl('shadow')) t.marked = 3;
   if (hasEl('stone')) { if (!t.mesh) t.knock = 0.4; else if (t.kind === 'boss' && Math.random() < 0.03) t.z -= 0.15; } // stone bolts shove the horde and hold the boss back
@@ -4712,7 +4779,7 @@ function updateShots(dt) {
         continue;
       }
       if (!(hit.shield > 0) || iron) { // crystal: one shot in five lands square (×2.5); iron bolts ignore shields and the Colossus's plates
-        const crit = crystal && Math.random() < 0.2, armor = hit.theme?.id === 'iron' && !(hit.vent > 0) && !iron ? 0.5 : 1;
+        const crit = (crystal && Math.random() < 0.2) || Math.random() < 0.04 * perk('crit'), armor = hit.theme?.id === 'iron' && !(hit.vent > 0) && !iron ? 0.5 : 1;
         hurt(hit, b.dmg * (crit ? 2.5 : 1) * armor);
         if (crit) sparks(b.x, b.y, hz, 0xe0d0ff, 6, 6, 0.4, 0.3, 2);
       }
@@ -4781,7 +4848,7 @@ function updateMarchEnemies(dt, dz) {
         if (frozen) { debris(e.x, 0.6, e.z, new THREE.Color(0xd8f6ff), 5, 5, 0.2); killEnemy(e); break; }
         if (e.kind === 'bomber') { killEnemy(e); break; } // it does not bite: it goes off where it touches the troop
         a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1; Sfx.play('bite'); Haptics.buzz(12, 140);
-        if (e.hp <= 0 || ++e.bites >= (e.shield ? 2 : 4)) { killEnemy(e); break; } // a shielded one falls after two bites: a stampede is a check on the ultimate, not a wipe
+        if (e.hp <= 0 || ++e.bites >= (e.shield ? 2 : perk('armor') ? 3 : 4)) { killEnemy(e); break; } // a shielded one falls after two bites: a stampede is a check on the ultimate, not a wipe
       }
     }
     if (e.z > MARCH_BEHIND) e.alive = false;
@@ -4831,7 +4898,7 @@ function updateMarchEnemies(dt, dz) {
 
 // ================= Game flow =================
 function clearWorld() {
-  clearHazards(); state.bossDown = false; cineReset();
+  clearHazards(); state.bossDown = false; cineReset(); state.choosing = false; $('cardScreen').hidden = true;
   M.hero = null; heroMesh.visible = heroDome.visible = false; // the hero belongs to the march: a defense game never inherits the last march's
   sparkSys.n = 0; smokeSys.n = 0; sparkSys.geo.setDrawRange(0, 0); smokeSys.geo.setDrawRange(0, 0);
   for (const a of allies) allyPool.push(a); allies.length = 0;
@@ -4915,7 +4982,7 @@ function showGameOver() {
   onlineRunFinish();
 }
 function setPaused(p) {
-  if (state.phase !== 'playing' && state.phase !== 'break') return;
+  if (state.choosing || (state.phase !== 'playing' && state.phase !== 'break')) return; // the card screen holds the game by itself
   state.paused = p; ui.pause.hidden = !p;
   if (p) $('btnResume').focus(); else canvas.focus();
 }
@@ -4956,6 +5023,7 @@ addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 'escape' && openSub()) { closeScreen(openSub()); return; }
   if (['arrowleft', 'arrowright', 'a', 'd'].includes(k)) { keys.add(k); e.preventDefault(); }
+  if (state.choosing) { const i = ['1', '2', '3'].indexOf(k); if (i >= 0) $('cardList').children[i]?.click(); return; }
   if (k === 'p' || k === 'escape') setPaused(!state.paused);
   if (k === 'm') { Sfx.init(); toggleMute(); }
   if ((k === ' ' || k === 'q' || k === 'e') && (state.phase === 'playing' || state.phase === 'break')) { e.preventDefault(); useUltimate(); }
@@ -6202,7 +6270,7 @@ if (mh) {
     console.log('MARCH', JSON.stringify(log), JSON.stringify(end));
     return end;
   };
-  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, addSoldiers, spawnEnemy, spawnSpecials, frame, online };
+  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, addSoldiers, spawnEnemy, spawnSpecials, offerCards, frame, online };
   if (mh[2]) run(+mh[2]);
 }
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.

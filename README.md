@@ -32,6 +32,10 @@ A câmera ajustada à tela só tremia; agora alguns momentos a pegam emprestada 
 
 Nenhum arquivo de áudio: efeitos e música são sintetizados com Web Audio. A música é um sequenciador de dezesseis passos; cada mundo tem tom, modo, andamento e progressão próprios, e a melodia sai do nome do mundo (igual em toda visita). O arranjo acompanha o jogo: pad e arpejo lento no menu, baixo, bateria e melodia na pista, e um arranjo mais rápido e denso sobre um bordão grave enquanto o chefão está vivo; na pausa a música abafa e na derrota some. O estalo dos abates sobe de tom com o combo da marcha. Onde o navegador permite (Android), o celular vibra nos golpes, mordidas, portões, FILA, ultimate, chegada e queda de chefão; a pausa tem o botão para desligar. As escolhas ficam salvas no aparelho.
 
+## Instalar e jogar sem rede
+
+O jogo é um PWA: `manifest.webmanifest`, ícones em `assets/icon-*.png` (renderizados por `tools/blender/app_icon.py`) e o service worker `sw.js`. No Android o menu mostra "Instalar o jogo" quando o navegador oferece; no iPhone é pelo Compartilhar, "Adicionar à Tela de Início". Depois da primeira visita o jogo abre sem rede: a página vem da rede quando há conexão (então uma versão nova aparece na visita seguinte) e do cache quando não há; modelos, sprites, three.js e fontes saem do cache na hora e se atualizam por trás. Ranking, moedas e loja continuam precisando de rede. O service worker não é registrado em servidor local, onde uma cópia em cache só atrapalha; para testar ali, abra com `?sw`.
+
 ## Rodar localmente
 
 É um único `index.html` sem build. Sirva a pasta com qualquer servidor estático:

@@ -842,6 +842,7 @@ scene.add(sun, sun.target);
 const COL = {
   ally: new THREE.Color(0x2f7bff), allyClone: new THREE.Color(0x3fc4ff), caged: new THREE.Color(0x8a8aa0),
   grunt: new THREE.Color(0xff4a3d), runner: new THREE.Color(0xff9a1f), armored: new THREE.Color(0x9e1030),
+  archer: new THREE.Color(0x25b888), bomber: new THREE.Color(0x3a3344), shielder: new THREE.Color(0x4f6aa8), flanker: new THREE.Color(0xb04aff),
   brute: 0xb0306a, boss: 0x6a1b9a, white: new THREE.Color(0xffffff), gold: new THREE.Color(0xffc629),
 };
 
@@ -1392,6 +1393,18 @@ function makeInstanced(geo, mat, max, shadow) {
 const allyStride = { value: 1 }; // the march troop stops swinging its legs when the road halts
 const allyMesh = makeInstanced(makeSoldierGeometry(), crowdMaterial(15, allyStride), MAX_ALLIES, true);
 const enemyMesh = makeInstanced(makeImpGeometry(), crowdMaterial(10), MAX_ENEMIES, true);
+// What tells the horde's specialists apart from above: a ranger's hat, a lit bomb overhead, a tower shield held in front.
+// Each rides its imp's own matrix (the shapes are already placed around a 1.5 m imp facing +z).
+const ACC_MAX = 96;
+const ACC = Object.fromEntries([
+  ['archer', new THREE.ConeGeometry(0.34, 0.8, 6).translate(0, 1.75, 0), new THREE.MeshLambertMaterial({ color: 0x157a55, flatShading: true })],
+  ['bomber', new THREE.SphereGeometry(0.36, 10, 8).translate(0, 1.95, 0), new THREE.MeshLambertMaterial({ color: 0x1c1a22, emissive: 0xff5a1f, emissiveIntensity: 0.9 })],
+  ['shielder', new THREE.BoxGeometry(1.9, 1.3, 0.16).translate(0, 0.75, 0.62), new THREE.MeshLambertMaterial({ color: 0x8fa6d8, emissive: 0x24366a, emissiveIntensity: 0.5, flatShading: true })],
+].map(([kind, geo, mat]) => {
+  const mesh = new THREE.InstancedMesh(geo, mat, ACC_MAX);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.count = 0; mesh.frustumCulled = false; mesh.castShadow = true; scene.add(mesh);
+  return [kind, { mesh, n: 0 }];
+}));
 const partMesh = makeInstanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial(), MAX_PARTICLES, false);
 
 // Writes T * Ry(yaw) * Rz(roll) * S into an instance matrix slot.
@@ -1789,7 +1802,7 @@ const Haptics = {
 };
 const Sfx = {
   ctx: null, master: null, muted: audioPref.mode === 2, last: {}, noiseBuf: null, pitch: 1, // pitch: the kill pop climbs with the march's combo
-  gaps: { shoot: 0.08, pop: 0.035, gate: 0.07, thud: 0.06, hurt: 0.15, cut: 0.1, summon: 0.3, thunder: 0.25, boom: 0.12, whoosh: 0.2, bite: 0.07, stampede: 1 },
+  gaps: { shoot: 0.08, pop: 0.035, gate: 0.07, thud: 0.06, hurt: 0.15, cut: 0.1, summon: 0.3, thunder: 0.25, boom: 0.12, whoosh: 0.2, bite: 0.07, stampede: 1, twang: 0.12 },
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
@@ -1855,6 +1868,7 @@ const Sfx = {
       case 'bubble': [400, 600, 800, 1000].forEach((f, i) => this.tone(f, 0.08, 'sine', 0.06, f * 1.6, i * 0.06)); break;
       case 'warp': this.tone(1400, 0.45, 'sine', 0.08, 120); this.tone(120, 0.45, 'sawtooth', 0.05, 900); break;
       case 'gas': this.noise(0.6, 0.1, 900); this.tone(180, 0.5, 'triangle', 0.04, 120); break;
+      case 'twang': this.tone(900, 0.14, 'triangle', 0.06, 260); break;
       case 'summon': this.tone(260, 0.4, 'sawtooth', 0.07, 520); this.noise(0.3, 0.08, 900); break;
     }
   },
@@ -2224,9 +2238,14 @@ function spawnEnemy(kind, x, z) {
   if (enemies.length >= MAX_ENEMIES) return;
   const e = enemyPool.pop() || {};
   const n = state.wave, lap = state.mode === 'march' ? Math.floor(M.stage / BIOMES.length) : 0, tough = 1 + 0.15 * lap; // each lap of the march hardens the horde by 15% (the bosses are the gate; a tougher horde only fed the arrival waves)
-  e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = e.bites = 0; e.shield = false;
+  e.kind = kind; e.x = x; e.z = z; e.phase = Math.random() * 6.28; e.flash = 0; e.alive = true; e.frozen = e.burn = e.bites = 0; e.shield = false; e.guard = 0; e.boomed = e.cut = false;
   if (kind === 'runner') Object.assign(e, { hp: 1, speed: gruntSpeed(n) * 1.65, r: 0.36, color: COL.runner, scale: 0.85, dmg: 1, score: 15, ult: 1 });
   else if (kind === 'armored') Object.assign(e, { hp: Math.round((2 + Math.floor(n / 5)) * tough), speed: gruntSpeed(n) * 0.9, r: 0.47, color: COL.armored, scale: 1.15, dmg: 2, score: 20, ult: 1.4 });
+  // the march's specialists (see SPECIALS): an archer holds its distance for `hold` seconds, a shield-bearer's shield eats `guard` bolts
+  else if (kind === 'archer') Object.assign(e, { hp: Math.round((2 + Math.floor(n / 6)) * tough), speed: gruntSpeed(n) * 1.1, r: 0.42, color: COL.archer, scale: 1.05, dmg: 1, score: 20, ult: 1.2, hold: 9, shotT: rand(1, 2) });
+  else if (kind === 'bomber') Object.assign(e, { hp: Math.round((1 + Math.floor(n / 8)) * tough), speed: gruntSpeed(n) * 1.45, r: 0.45, color: COL.bomber, scale: 1.1, dmg: 1, score: 15, ult: 1.2 });
+  else if (kind === 'shielder') Object.assign(e, { hp: Math.round((2 + Math.floor(n / 5)) * tough), speed: gruntSpeed(n) * 0.85, r: 1.15, color: COL.shielder, scale: 1.45, dmg: 2, score: 20, ult: 1.6, guard: Math.round((150 + 8 * n) * tough) });
+  else if (kind === 'flanker') Object.assign(e, { hp: Math.round((1 + Math.floor(n / 7)) * tough), speed: gruntSpeed(n) * 1.9, r: 0.38, color: COL.flanker, scale: 0.9, dmg: 1, score: 15, ult: 1 });
   else Object.assign(e, { hp: Math.round((1 + Math.floor(n / 7)) * tough), speed: gruntSpeed(n) * rand(0.9, 1.1), r: 0.42, color: COL.grunt, scale: 1, dmg: 1, score: 10, ult: 0.8 });
   enemies.push(e);
 }
@@ -2275,6 +2294,7 @@ function killEnemy(e, fromUlt = false) {
   const march = state.mode === 'march';
   e.alive = false; state.score += march ? Math.round(e.score * M.combo * M.cMul) : e.score; state.kills++;
   if (march && !fromUlt) M.comboK += hasEl('gold') ? 2 : 1; // the ultimate's kills don't build the combo; gold counts double
+  if (e.kind === 'bomber' && !e.boomed && march) explodeBomber(e, fromUlt);
   debris(e.x, 0.7, e.z, e.color, fromUlt ? 2 : 4, 5, 0.2);
   sparks(e.x, 0.8, e.z, e.color, fromUlt ? 3 : 6, 5, 0.5, 0.4, 2);
   Sfx.play('pop');
@@ -3891,6 +3911,54 @@ function stampede() {
   }
   showBanner('ESTOURO BLINDADO!', 'Tiros não entram: ultimate, ou desvie para o outro lado', 2.4, 'warn'); Sfx.play('stampede'); Haptics.buzz([40, 80, 40, 80, 40], 60, true); state.shake = Math.max(state.shake, 0.4);
 }
+// The horde's specialists: one new kind a world from the second on. Each asks for something the bolt wall alone does not
+// give, and all of them are answered by where the troop stands (bolts only fly straight ahead):
+// archers stop at the edge of the troop's reach and drop arrows on it until they are lined up with (or run dry and charge);
+// bombers go off when they die, taking the pack around them if shot early and a bite of the troop if they arrive;
+// shield-bearers march in front of a pack and their shield eats every bolt of its column until it breaks (step aside, or FILA);
+// flankers come down the lane's edge, out of the column, and cut in at the last moment.
+const SPECIALS = [
+  { kind: 'archer', from: 1, title: 'ARQUEIROS', hint: 'Atiram de longe: alinhe a tropa com eles, ou saia do círculo', n: (s) => Math.min(4, 1 + Math.floor(s / 5)) },
+  { kind: 'bomber', from: 2, title: 'BOMBARDEIROS', hint: 'Explodem ao cair: derrube longe, no meio da horda', n: (s) => Math.min(6, 2 + Math.floor(s / 4)) },
+  { kind: 'shielder', from: 3, title: 'ESCUDEIROS', hint: 'O escudo segura os tiros da coluna: vá para o lado, ou FILA nele', n: (s) => Math.min(3, 1 + Math.floor(s / 6)) },
+  { kind: 'flanker', from: 4, title: 'FLANQUEADORES', hint: 'Descem pela beira e cortam para dentro: vá até a beira e atire', n: (s) => Math.min(5, 2 + Math.floor(s / 5)) },
+];
+function spawnSpecials(cx) {
+  const s = M.stage % BIOMES.length + (M.stage >= BIOMES.length ? BIOMES.length : 0), open = SPECIALS.filter((k) => s >= k.from);
+  if (!open.length || Math.random() > 0.75) return;
+  const fresh = open.find((k) => !M.seen.has(k.kind)); // a kind the run has not met yet comes first, alone, with its name
+  const picks = fresh ? [fresh] : [...open].sort(() => Math.random() - 0.5).slice(0, s >= 8 ? 2 : 1);
+  for (const k of picks) {
+    if (!M.seen.has(k.kind)) { M.seen.add(k.kind); showBanner(k.title, k.hint, 3, 'warn'); }
+    const n = k.n(s) + (con('horde') ? 1 : 0), side = Math.random() < 0.5 ? -1 : 1;
+    for (let i = 0; i < n; i++) {
+      if (k.kind === 'archer') spawnEnemy('archer', rand(-LANE_HALF + 1.5, LANE_HALF - 1.5), MARCH_FAR + rand(-2, 2));
+      else if (k.kind === 'bomber') spawnEnemy('bomber', clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 1));
+      else if (k.kind === 'shielder') spawnEnemy('shielder', clamp(cx + (i - (n - 1) / 2) * 2.6, -LANE_HALF + 1.3, LANE_HALF - 1.3), MARCH_FAR + rand(5, 6.5));
+      else spawnEnemy('flanker', side * (LANE_HALF - 0.8), MARCH_FAR + rand(-4, 4));
+    }
+  }
+}
+// The arrow lands where the road will have carried its mark by then: on the troop, unless the troop has moved aside.
+function archerShot(e) {
+  const T = 1.1, x = clamp(M.cx + rand(-1.2, 1.2), -LANE_HALF + 1, LANE_HALF - 1), z = SQUAD_Z - M.speed * T + rand(-0.8, 0.8);
+  sparks(e.x, 1.7, e.z, 0x7fffc8, 6, 5, 0.4, 0.3, 6); Sfx.play('twang');
+  markBlast(x, z, 1.5, T, 0x3fe0a0, (bx, bz, r) => {
+    sparks(bx, 0.4, bz, 0x7fffc8, 14, 6, 0.5, 0.4, 3);
+    const n = killAlliesNear(bx, bz, r, COL.archer, 6);
+    if (n) { floatText('-' + n, bx, 2.6, bz, 'red'); Haptics.buzz(20, 120); Sfx.play('thud'); }
+  });
+}
+function explodeBomber(e, fromUlt = false) {
+  e.boomed = true;
+  ring(e.x, e.z, 0xff7a1a, 6, 0.45); sparks(e.x, 0.8, e.z, 0xffa53a, 40, 9, 0.8, 0.5, 4, 0.3); smoke(e.x, 0.6, e.z, 3, 1.4, 0x4a3a3a, 0.9);
+  Sfx.play('boom'); state.shake = Math.max(state.shake, 0.2);
+  for (const o of enemies) if (o.alive && o !== e && !o.shield && (o.x - e.x) ** 2 + (o.z - e.z) ** 2 < 9) { o.guard = 0; hurt(o, 4 + state.wave / 6); }
+  if (!fromUlt && state.phase === 'playing' && Math.abs(e.z - SQUAD_Z) < M.R + 3.5) { // the ultimate's sweep never turns a bomb on the troop
+    const n = killAlliesNear(e.x, e.z, 2.6, COL.bomber, 10);
+    if (n) { floatText('-' + n, e.x, 2.6, e.z, 'red'); Haptics.buzz([25, 30, 25], 120); }
+  }
+}
 function marchSegment() {
   const lvl = M.dist / 200;
   M.segs = (M.segs || 0) + 1;
@@ -3933,6 +4001,7 @@ function marchSegment() {
     const n = Math.round(rand(4, 7) * scale * (rush ? 0.6 : 1) * (con('horde') ? 2 : 1)), cx = rand(-LANE_HALF + 3, LANE_HALF - 3); // the stretch before a boss carries a lighter horde into the arena (a pack arriving with the boss bit a troop in half); the summons carry the arena
     for (let i = 0; i < n; i++) spawnEnemy(pickKind(Math.ceil(lvl) + 1), clamp(cx + gauss() * 2.4, -LANE_HALF + 0.5, LANE_HALF - 0.5), MARCH_FAR + rand(-3, 3));
     if (lvl > 1.2 && Math.random() < 0.3 + lvl * 0.05) { spawnBig('brute'); const b = bigs[bigs.length - 1]; b.z = MARCH_FAR + rand(-2, 2); b.mesh.position.z = b.z; }
+    if (!rush) spawnSpecials(cx);
   } else if (kind === 'wall') {
     // the gap narrows with distance (never under 3.2 m): later on, FILA is the clean way through, and the column thins to fit
     const gap = Math.max(3.2, rand(3, 5) - lvl * 0.12) * (con('narrow') ? 0.75 : 1), gx = rand(-LANE_HALF + gap / 2 + 1, LANE_HALF - gap / 2 - 1), hp = Math.round(rand(8, 14) * scale);
@@ -3961,7 +4030,7 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0, stampedeAt: 3200,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
-    contracts: new Set(contractsPick.filter(contractOpen)), cMul: contractMul(contractsPick.filter(contractOpen)), coins: 0, coinAcc: 0, freed: 0,
+    seen: new Set(), contracts: new Set(contractsPick.filter(contractOpen)), cMul: contractMul(contractsPick.filter(contractOpen)), coins: 0, coinAcc: 0, freed: 0,
     hero: heroPick && heroLevel(heroPick) ? { id: heroPick, lvl: heroLevel(heroPick), x: 0, z: SQUAD_Z, act: 0, r: 3 + 0.5 * (heroLevel(heroPick) - 1), r2: (3 + 0.5 * (heroLevel(heroPick) - 1)) ** 2 } : null,
     // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
     q: { start: 10 + 2 * qLevel('recrutas'), cap: 15 * qLevel('alojamento'), statMax: 15 * qLevel('arsenal'), fila: 0.3 * qLevel('disciplina'), cd: 0.5 * qLevel('cornetas'), ult: 10 * qLevel('bateria'), elMax: qLevel('alquimia') ? 3 : 2 },
@@ -4543,6 +4612,12 @@ function updateShots(dt) {
       if (inc) { hit.acc -= inc; if (hit.n < cap) setGateNumber(hit, Math.min(cap, hit.n + inc)); }
     } else if (hit.grp) { b.life = 0; hit.hp -= b.dmg * (fire ? 1.5 : 1); hit.flash = 1; if (hit.hp <= 0 && !hit.dead) breakObstacle(hit); } // crates and chains burn fast
     else {
+      if (hit.guard > 0 && !iron) { // a shield-bearer's shield eats the bolt whole (no damage, no pierce) until it has taken its count; iron goes through
+        b.life = 0; hit.flash = 0.45;
+        if (--hit.guard <= 0) { sparks(hit.x, 0.9, hit.z + 0.6, 0xbfd0ff, 30, 8, 0.7, 0.5, 3); debris(hit.x, 0.9, hit.z + 0.6, new THREE.Color(0x8fa6d8), 8, 6, 0.3); Sfx.play('cut'); hit.r = 0.5; }
+        else if (Math.random() < 0.25) sparks(b.x, b.y, hit.z + 0.7, 0xdfe8ff, 2, 4, 0.35, 0.25, 2);
+        continue;
+      }
       if (!(hit.shield > 0) || iron) { // crystal: one shot in five lands square (×2.5); iron bolts ignore shields and the Colossus's plates
         const crit = crystal && Math.random() < 0.2, armor = hit.theme?.id === 'iron' && !(hit.vent > 0) && !iron ? 0.5 : 1;
         hurt(hit, b.dmg * (crit ? 2.5 : 1) * armor);
@@ -4592,14 +4667,26 @@ function updateMarchEnemies(dt, dz) {
     // the horde walks slowly on top of the scrolling road, and charges at full speed once the road halts for a boss
     const frozen = e.frozen > 0;
     if (e.knock > 0) { e.knock -= dt; e.z -= 4 * dt; } // shoved back by a stone bolt
-    e.z += dz + (frozen || e.knock > 0 ? 0 : e.speed * (1 - 0.75 * clamp(M.speed / 8, 0, 1)) * (M.tempo || 1) * dt);
-    if (!frozen) e.x = clamp(e.x + Math.sin(gt * 1.7 + e.phase) * 0.35 * dt, -LANE_HALF + 0.4, LANE_HALF - 0.4);
+    let step = dz + (frozen || e.knock > 0 ? 0 : e.speed * (1 - 0.75 * clamp(M.speed / 8, 0, 1)) * (M.tempo || 1) * dt);
+    if (e.kind === 'archer' && e.hold > 0) { // an archer stops just inside the troop's reach, walks back as fast as the road comes, and looses an arrow every few seconds
+      const stand = SQUAD_Z - Math.min(shotRange() - 3, 27);
+      if (e.z + step >= stand) {
+        step = Math.max(0, stand - e.z);
+        if (active && !frozen) { e.hold -= dt; if ((e.shotT -= dt) <= 0) { e.shotT = 2.8; archerShot(e); } }
+      }
+    }
+    e.z += step;
+    if (e.kind === 'flanker') { // down the edge, then across: it cuts in on the troop's flank once it is close
+      if (!e.cut && e.z > SQUAD_Z - 9) e.cut = true;
+      if (e.cut && !frozen) e.x += clamp(M.cx - e.x, -1, 1) * 10 * dt;
+    } else if (!frozen) e.x = clamp(e.x + Math.sin(gt * 1.7 + e.phase) * 0.35 * dt, -LANE_HALF + 0.4, LANE_HALF - 0.4);
     if (e.flash > 0) e.flash -= dt * 6;
     tickStatus(e, dt);
     if (!e.alive) continue;
     if (active && e.z > SQUAD_Z - M.R - 1.5 && e.z < SQUAD_Z + M.R + 1.5) { // trade with the troop, four of ours at most (a late armored has 20 hp: it used to eat 20 soldiers); frozen ones just shatter
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - e.x) ** 2 + (a.z - e.z) ** 2 < (e.r + 0.3) ** 2) {
         if (frozen) { debris(e.x, 0.6, e.z, new THREE.Color(0xd8f6ff), 5, 5, 0.2); killEnemy(e); break; }
+        if (e.kind === 'bomber') { killEnemy(e); break; } // it does not bite: it goes off where it touches the troop
         a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1; Sfx.play('bite'); Haptics.buzz(12, 140);
         if (e.hp <= 0 || ++e.bites >= (e.shield ? 2 : 4)) { killEnemy(e); break; } // a shielded one falls after two bites: a stampede is a check on the ultimate, not a wipe
       }
@@ -5830,10 +5917,14 @@ function drawCrowds() {
   allyMesh.count = allies.length; allyMesh.instanceMatrix.needsUpdate = true; allyMesh.instanceColor.needsUpdate = true;
   ma = enemyMesh.instanceMatrix.array; ca = enemyMesh.instanceColor.array;
   for (let i = 0; i < enemies.length; i++) {
-    const e = enemies[i], w = Math.sin(gt * (e.kind === 'runner' ? 17 : 10) + e.phase);
-    writeMatrix(ma, i, e.x, Math.abs(w) * 0.1 * e.scale, e.z, 0, w * 0.07, e.scale);
-    writeColor(ca, i, e.frozen > 0 ? COL_FROZEN : e.shield ? COL_SHIELD : e.color, Math.max(0, e.flash));
+    const e = enemies[i], w = Math.sin(gt * (e.kind === 'runner' || e.kind === 'bomber' ? 17 : e.kind === 'flanker' ? 22 : 10) + e.phase);
+    const y = Math.abs(w) * 0.1 * e.scale, yaw = e.cut ? Math.sign(M.cx - e.x) * 1.1 : 0, lit = e.kind === 'bomber' ? 0.35 + 0.35 * Math.sin(gt * 16 + e.phase) : 0;
+    writeMatrix(ma, i, e.x, y, e.z, yaw, w * 0.07, e.scale);
+    writeColor(ca, i, e.frozen > 0 ? COL_FROZEN : e.shield ? COL_SHIELD : e.color, Math.max(0, e.flash, lit));
+    const acc = ACC[e.kind]; // the hat, the bomb (it throbs) or the shield (while it holds)
+    if (acc && acc.n < ACC_MAX && (e.kind !== 'shielder' || e.guard > 0)) writeMatrix(acc.mesh.instanceMatrix.array, acc.n++, e.x, y, e.z, yaw, w * 0.07, e.scale * (e.kind === 'bomber' ? 1 + 0.12 * Math.sin(gt * 16 + e.phase) : 1));
   }
+  for (const k in ACC) { const a = ACC[k]; a.mesh.count = a.n; a.mesh.instanceMatrix.needsUpdate = true; a.n = 0; }
   enemyMesh.count = enemies.length; enemyMesh.instanceMatrix.needsUpdate = true; enemyMesh.instanceColor.needsUpdate = true;
 }
 const COL_FROZEN = new THREE.Color(0xbfeaff), COL_SHIELD = new THREE.Color(0x7fa8ff);
@@ -6007,7 +6098,7 @@ if (mh) {
     console.log('MARCH', JSON.stringify(log), JSON.stringify(end));
     return end;
   };
-  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, addSoldiers, frame, online };
+  window.marchTest = run; window.marchDbg = { M, state, allies, bigs, enemies, spawnRelic, spawnCage, spawnHazard, addSoldiers, spawnEnemy, spawnSpecials, frame, online };
   if (mh[2]) run(+mh[2]);
 }
 // Local testing: #w13t20 jumps to wave 13 and plays 20 seconds instantly with a sweeping aim bot.

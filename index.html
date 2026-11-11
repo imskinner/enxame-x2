@@ -381,6 +381,31 @@ body {
    tighter and the lists are tabbed or swiped sideways so a screen fits without scrolling */
 @keyframes sheetUp { from { transform: translateY(48px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (max-width: 520px) {
+  /* The phone HUD: smaller chips so the lane stays visible. Distance and coins share the first row, the next boss sits
+     under them, the status chips fit one row beside the thumb buttons, and sound and pause leave the thumb zone for
+     the top right corner, under the score (a stray thumb used to pause the game next to the ultimate). */
+  .hud-top, .hud-bottom { padding-inline: 10px; gap: 6px; }
+  .hud-top { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
+  .hud-bottom { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
+  .chip { min-height: 30px; padding: 4px 9px; gap: 6px; border-radius: 10px; box-shadow: 0 2px 0 rgba(0, 0, 0, .22); }
+  .chip .k { font-size: 9px; letter-spacing: .1em; }
+  .chip .v { font-size: 17px; }
+  .chip.next { min-height: 24px; padding: 3px 8px; font-size: 11px; }
+  .chip.coins .k { display: none; }
+  .chip.coins .spr { width: 18px; height: 18px; }
+  .stack-left { grid-template-columns: auto auto; justify-content: start; gap: 5px; }
+  #nextBoss { grid-column: 1 / -1; grid-row: 2; }
+  .score { font-size: 28px; }
+  .hp .bar { width: 56px; height: 10px; }
+  .group { gap: 5px; }
+  .hud-bottom > .group:first-child { max-width: calc(100% - 84px); flex-wrap: wrap-reverse; } /* the timed chips stack above the fixed pair, not under the thumb */
+  #btnMute, #btnPause { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 50px); width: 38px; height: 38px; border-radius: 10px; background: rgba(27, 22, 64, .6); box-shadow: none; }
+  #btnPause { right: 10px; }
+  #btnMute { right: 54px; }
+  #bossBar { top: calc(env(safe-area-inset-top, 0px) + 46px); left: 10px; transform: none; width: calc(100% - 20px - 92px); padding: 5px 10px; gap: 8px; }
+  #bossBar .k { font-size: 13px; }
+  #bossBar .bar { height: 10px; }
+  #banner .s { font-size: 14px; }
   .screen.sub, #overScreen { place-items: end center; padding: 0; }
   .screen.sub .card, #overScreen .card {
     width: 100%; max-height: calc(100% - env(safe-area-inset-top, 0px) - 28px); border-radius: 24px 24px 0 0;
@@ -3902,14 +3927,17 @@ function enterPortal(p) {
 // charges from closer than the horde usually spawns, on one side of the road. Bolts and elements glance off the shields,
 // so the bolt wall is no answer: the ultimate sweeps them, or the troop steers to the other side and pays the bites of
 // the ones it still meets. The horde contract makes it half again as big.
+const stampStripGeo = new THREE.PlaneGeometry(9, 110).rotateX(-Math.PI / 2);
 function stampede() {
   const lvl = M.dist / 200, scale = 1 + 0.35 * Math.min(lvl, 20) + 0.10 * Math.max(0, lvl - 20);
-  const n = Math.round(rand(2.4, 3.2) * scale * (con('horde') ? 1.5 : 1)), cx = (Math.random() < 0.5 ? -1 : 1) * rand(1.5, 3.5), z0 = MARCH_FAR + 45;
+  const n = Math.round(rand(2.4, 3.2) * scale * (con('horde') ? 1.5 : 1)), side = Math.random() < 0.5 ? -1 : 1, cx = side * rand(1.5, 3.5), z0 = MARCH_FAR + 45;
+  const strip = new THREE.Mesh(stampStripGeo, hzMat(0x3f78ff, 0.3, false)); strip.position.y = 0.06; // its half of the road lights up, from the horizon to the troop
+  addHazard({ type: 'stampwarn', x: clamp(cx, -LANE_HALF + 4.6, LANE_HALF - 4.6), z: SQUAD_Z - 52, strip }, strip);
   for (let i = 0; i < n; i++) {
     spawnEnemy(Math.random() < 0.25 ? 'runner' : 'armored', clamp(cx + gauss() * 3.2, -LANE_HALF + 0.5, LANE_HALF - 0.5), z0 + rand(-7, 7));
     const e = enemies[enemies.length - 1]; if (e && Math.abs(e.z - z0) <= 7) { e.shield = true; e.scale *= 1.25; e.r += 0.08; }
   }
-  showBanner('ESTOURO BLINDADO!', 'Tiros não entram: ultimate, ou desvie para o outro lado', 2.4, 'warn'); Sfx.play('stampede'); Haptics.buzz([40, 80, 40, 80, 40], 60, true); state.shake = Math.max(state.shake, 0.4);
+  showBanner('ESTOURO BLINDADO!', side < 0 ? '◀ Vem pela ESQUERDA · tiros não entram: ultimate, ou vá para a direita' : 'Vem pela DIREITA ▶ · tiros não entram: ultimate, ou vá para a esquerda', 2.8, 'warn'); Sfx.play('stampede'); Haptics.buzz([40, 80, 40, 80, 40], 60, true); state.shake = Math.max(state.shake, 0.4);
 }
 // The horde's specialists: one new kind a world from the second on. Each asks for something the bolt wall alone does not
 // give, and all of them are answered by where the troop stands (bolts only fly straight ahead):
@@ -4493,6 +4521,11 @@ const HZ_UPDATE = {
     }
     if (active) { if (n) { floatText('-' + n, M.cx, 3.2, SQUAD_Z, 'red'); state.shake = Math.max(state.shake, 0.3); Haptics.buzz([25, 30, 25], 120); } else floatText('DESVIOU!', M.cx, 3.2, SQUAD_Z, 'cyan'); }
     return true;
+  },
+  stampwarn(h) { // the stampede's side of the road, flashing in front of the troop until the last shielded imp has arrived
+    h.z = SQUAD_Z - 52; h.grp.position.z = h.z; // it does not ride the road: it stays ahead of the troop
+    h.strip.material.opacity = 0.12 + 0.22 * Math.abs(Math.sin(gt * 7));
+    return (h.t > 1 && !enemies.some((e) => e.alive && e.shield && e.z < SQUAD_Z)) || h.t >= 16;
   },
   mark(h) {
     const u = clamp(h.t / h.T, 0, 1); h.ring.scale.setScalar(h.r * (1.6 - 0.6 * u)); h.ring.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(gt * (8 + u * 16)));
@@ -5925,8 +5958,15 @@ function drawCrowds() {
     if (acc && acc.n < ACC_MAX && (e.kind !== 'shielder' || e.guard > 0)) writeMatrix(acc.mesh.instanceMatrix.array, acc.n++, e.x, y, e.z, yaw, w * 0.07, e.scale * (e.kind === 'bomber' ? 1 + 0.12 * Math.sin(gt * 16 + e.phase) : 1));
   }
   for (const k in ACC) { const a = ACC[k]; a.mesh.count = a.n; a.mesh.instanceMatrix.needsUpdate = true; a.n = 0; }
+  let nb = 0;
+  for (const e of enemies) if (e.shield && nb < 160) writeMatrix(shieldBubble.instanceMatrix.array, nb++, e.x, 0, e.z, 0, 0, e.scale * (1 + 0.05 * Math.sin(gt * 9 + e.phase)));
+  shieldBubble.count = nb; shieldBubble.instanceMatrix.needsUpdate = true;
   enemyMesh.count = enemies.length; enemyMesh.instanceMatrix.needsUpdate = true; enemyMesh.instanceColor.needsUpdate = true;
 }
+// A stampede's shield, drawn: a pale bubble around every shielded imp, so "bolts do not enter" reads at a glance.
+const shieldBubble = new THREE.InstancedMesh(new THREE.SphereGeometry(0.72, 12, 8).translate(0, 0.75, 0),
+  new THREE.MeshBasicMaterial({ color: 0x9fc4ff, transparent: true, opacity: 0.42, depthWrite: false }), 160);
+shieldBubble.instanceMatrix.setUsage(THREE.DynamicDrawUsage); shieldBubble.count = 0; shieldBubble.frustumCulled = false; scene.add(shieldBubble);
 const COL_FROZEN = new THREE.Color(0xbfeaff), COL_SHIELD = new THREE.Color(0x7fa8ff);
 const EMBER = new THREE.Color(0xff5c8a), FLAME_A = new THREE.Color(0xffa53a), FLAME_B = new THREE.Color(0xffdf6b), CORE = new THREE.Color(0x9ff6ff);
 function drawAmbient(realDt, dt) {

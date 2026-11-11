@@ -5,9 +5,17 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Enxame ×2 — multiplique sua tropa nos portões e segure a horda.">
 <title>Enxame x2</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1b1640">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Enxame ×2">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="icon" type="image/png" href="assets/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&display=swap" crossorigin="anonymous">
 <style>
 /* Layout: full-bleed WebGL arena; HUD chips pinned to top and bottom edges; menus are one card over a dimmed arena */
 :root {
@@ -538,7 +546,7 @@ body {
       <button class="btn alt" id="btnAch" type="button" data-online hidden>CONQUISTAS</button>
     </div>
     <p class="best" id="bestMenu">RECORDE 0</p>
-    <p class="account"><button class="link" id="btnAudio" type="button">♪ SOM E MÚSICA</button></p>
+    <p class="account"><button class="link" id="btnAudio" type="button">♪ SOM E MÚSICA</button> <button class="link" id="btnInstall" type="button" hidden>· INSTALAR O JOGO</button></p>
     <p class="account" id="accountLine" data-online hidden></p>
   </div>
 </div>
@@ -5038,6 +5046,16 @@ function toggleMute() {
 for (const id of ['btnAudio', 'btnAudioPause']) $(id).addEventListener('click', () => { Sfx.init(); toggleMute(); });
 $('btnHaptic').addEventListener('click', () => { audioPref.haptics = !audioPref.haptics; saveAudioPref(); renderAudio(); Haptics.buzz(30, 0, true); });
 renderAudio();
+// Installable, and playable with no network after the first visit (sw.js). Not registered on a local dev server, where
+// a cached copy would only get in the way (add ?sw to try it there). The install button shows when the browser offers it.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('sw'))) navigator.serviceWorker.register('sw.js').catch(() => {});
+let installEvt = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('btnInstall').hidden = false; });
+addEventListener('appinstalled', () => { installEvt = null; $('btnInstall').hidden = true; });
+$('btnInstall').addEventListener('click', async () => {
+  if (!installEvt) return;
+  installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; $('btnInstall').hidden = true;
+});
 // Browsers only let sound start after a gesture: the first tap or key anywhere wakes the audio, so the menu has its music too.
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => Sfx.init(), { capture: true, passive: true });
 $('btnPlay').addEventListener('click', () => startGame('defense'));

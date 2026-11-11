@@ -21,8 +21,9 @@ class Part:
     def _paint(self, verts, shade):
         if self.col is None: return
         s = shade if shade is not None else random.uniform(0.85, 1.05)
+        c = (*s, 1.0) if isinstance(s, (tuple, list)) else (s, s, s, 1.0)  # a gray shade, or a full color (r, g, b)
         for f in {f for v in verts for f in v.link_faces}:
-            for l in f.loops: l[self.col] = (s, s, s, 1.0)
+            for l in f.loops: l[self.col] = c
 
     def _bevel(self, verts, amount):
         if amount > 0:

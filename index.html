@@ -1230,6 +1230,7 @@ async function loadModels() {
   // A march that started before the models arrived gets its roadside rebuilt with them.
   loader.loadAsync('assets/flora.glb').then((g) => { dressFlora(meshesOf(g)); if (M.built) buildMarchDecor(); }).catch((err) => console.warn('flora.glb indisponível', err));
   loader.loadAsync('assets/props.glb').then((g) => { dressProps(meshesOf(g)); if (M.built) buildMarchDecor(); }).catch((err) => console.warn('props.glb indisponível', err));
+  loader.loadAsync('assets/worlds.glb').then((g) => { WORLD_GEO = meshesOf(g); if (M.built) buildMarchDecor(); }).catch((err) => console.warn('worlds.glb indisponível', err));
   loader.loadAsync('assets/characters.glb').then((g) => {
     const m = meshesOf(g);
     for (const [mesh, src] of [[allyMesh, m.soldier], [enemyMesh, m.imp]]) { mesh.geometry.dispose(); mesh.geometry = crowdGeometry(src); }
@@ -1608,6 +1609,11 @@ function fixShades(geo) {
 }
 // Blender props (props.glb): lanterns, trackside dressing, gate pillars and the cannon.
 let PROP = null; // Blender props, kept for the march road
+// Each march world's own landmark (worlds.glb): w_<id> carries its colors in the vertices, w_<id>_glow is drawn unlit
+// in the world's color so the bloom picks it up.
+let WORLD_GEO = null;
+const worldMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), worldGlowMats = {};
+const worldGlowMat = (b) => (worldGlowMats[b.id] ??= new THREE.MeshBasicMaterial({ color: b.css }));
 function dressProps(m) {
   for (const g of Object.values(m)) fixShades(g);
   PROP = m;
@@ -3446,6 +3452,42 @@ const marchLaneMat = lane.material.clone();
 marchLaneMat.map = laneTex.map.clone(); marchLaneMat.bumpMap = laneTex.bumpMap.clone();
 const marchGrass = grassDetail.clone(); marchGroundMat.map = marchGrass;
 for (const t of [marchGrass, marchLaneMat.map, marchLaneMat.bumpMap]) t.needsUpdate = true;
+// The road is not the same stone everywhere: the slabs of the first worlds, running-bond bricks in the hot and built
+// ones, round cobbles in the rotten and haunted ones. Drawn in the same pale tones, so each world's look tints them.
+function laneStyle(kind) {
+  const S = 512, noise = tileNoise(S, 48), fine = tileNoise(S, 128);
+  const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  const bump = document.createElement('canvas'); bump.width = bump.height = S; const b = bump.getContext('2d');
+  g.fillStyle = kind === 'brick' ? '#b3a8cc' : '#9c92b8'; g.fillRect(0, 0, S, S); b.fillStyle = '#000'; b.fillRect(0, 0, S, S);
+  const stone = (x, y, w, h, r) => {
+    const v = 228 + srand() * 22;
+    g.fillStyle = `rgb(${v + 4},${v - 4},${Math.min(255, v + 10)})`; g.beginPath(); roundRect(g, x, y, w, h, r); g.fill();
+    g.lineWidth = 3; g.lineCap = 'round';
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.moveTo(x + 3, y + h - r); g.lineTo(x + 3, y + 3); g.lineTo(x + w - r, y + 3); g.stroke();
+    g.strokeStyle = 'rgba(90,70,140,0.22)'; g.beginPath(); g.moveTo(x + w - 2, y + r); g.lineTo(x + w - 2, y + h - 2); g.lineTo(x + r, y + h - 2); g.stroke();
+    b.fillStyle = '#fff'; b.beginPath(); roundRect(b, x + 2, y + 2, w - 4, h - 4, r); b.fill();
+  };
+  if (kind === 'brick') for (let r = 0; r < 8; r++) for (let i = -1; i < 4; i++) stone(i * 128 + (r % 2 ? 64 : 0) + 4, r * 64 + 4, 120, 56, 8);
+  else for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { const w = 50 + srand() * 8, h = 50 + srand() * 8; stone(i * 64 + 3 + srand() * (58 - w), j * 64 + 3 + srand() * (58 - h), w, h, 18); }
+  const soft = document.createElement('canvas'); soft.width = soft.height = S; const sg = soft.getContext('2d');
+  sg.filter = 'blur(3px)'; sg.drawImage(bump, 0, 0);
+  const img = g.getImageData(0, 0, S, S);
+  for (let i = 0; i < S * S; i++) {
+    const k = 1 + (noise[i] - 0.5) * 0.1 + (fine[i] - 0.5) * 0.07;
+    for (let ch = 0; ch < 3; ch++) img.data[i * 4 + ch] = Math.min(255, img.data[i * 4 + ch] * k);
+  }
+  g.putImageData(img, 0, 0);
+  const map = new THREE.CanvasTexture(c); map.colorSpace = THREE.SRGBColorSpace;
+  const bumpMap = new THREE.CanvasTexture(soft);
+  for (const t of [map, bumpMap]) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+  return { map, bumpMap };
+}
+const LANE_STYLES = { slab: { map: marchLaneMat.map, bumpMap: marchLaneMat.bumpMap }, brick: laneStyle('brick'), cobble: laneStyle('cobble') };
+const LANE_FAMILY = { fire: 'brick', lava: 'brick', sand: 'brick', iron: 'brick', stone: 'brick', gold: 'brick', poison: 'cobble', zombie: 'cobble', void: 'cobble', shadow: 'cobble', ghost: 'cobble' };
+function setLaneStyle(id) {
+  const s = LANE_STYLES[LANE_FAMILY[id] || 'slab']; if (marchLaneMat.map === s.map) return;
+  marchLaneMat.map = s.map; marchLaneMat.bumpMap = s.bumpMap; marchLaneMat.needsUpdate = true;
+}
 {
   // ground: a strip along z (heights depend on x only)
   const xs = [], W = 200;
@@ -3466,7 +3508,7 @@ for (const t of [marchGrass, marchLaneMat.map, marchLaneMat.bumpMap]) t.needsUpd
   const len = ROAD_Z1 - ROAD_Z0;
   const road = new THREE.Mesh(new THREE.PlaneGeometry(LANE_HALF * 2, len), marchLaneMat);
   road.rotation.x = -Math.PI / 2; road.position.set(0, 0.02, (ROAD_Z0 + ROAD_Z1) / 2); road.receiveShadow = true; marchWorld.add(road);
-  for (const t of [marchLaneMat.map, marchLaneMat.bumpMap]) t.repeat.set((LANE_HALF * 2) / 4, len / 4);
+  for (const s of Object.values(LANE_STYLES)) for (const t of [s.map, s.bumpMap]) t.repeat.set((LANE_HALF * 2) / 4, len / 4);
   // curbs: one 4-unit period of red/white, slid by scroll mod 4
   const segs = Math.floor(len / 2) + 2;
   const curb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.8, 0.5, 2), new THREE.MeshLambertMaterial(), segs * 2);
@@ -3539,20 +3581,38 @@ function buildMarchDecor() {
       put('banner_cloth', PROP.banner_cloth, cloth, side * (LANE_HALF + 2.3), z, 1, 0, new THREE.Color(colors[i % 4]));
     }
   }
+  // Each world's landmark: a dozen along the roadside, turned toward the road, and a few giants in the distance. All
+  // eighteen sets are built, only the current world's is drawn (the swap happens under the portal's flash).
+  if (WORLD_GEO) for (const b of BIOMES) {
+    const geo = WORLD_GEO['w_' + b.id], glow = WORLD_GEO['w_' + b.id + '_glow']; if (!geo) continue;
+    const both = (x, z, k, yaw) => {
+      const y = marchHeight(x) - 0.05;
+      put('w_' + b.id, geo, worldMat, x, z, k, yaw, null, y); if (glow) put('w_' + b.id + '_glow', glow, worldGlowMat(b), x, z, k, yaw, null, y);
+    };
+    for (let z = ROAD_Z0 + rand(4, 20), i = 0; z < ROAD_Z1; z += rand(20, 30), i++) { const side = i % 2 ? 1 : -1; both(side * (LANE_HALF + rand(3.6, 5.4)), z, rand(0.85, 1.25), -side * 0.45 + rand(-0.25, 0.25)); }
+    for (let i = 0; i < 6; i++) { const side = i % 2 ? 1 : -1; both(side * rand(27, 44), ROAD_Z0 + (i + Math.random()) * DECOR_SPAN / 6, rand(2.2, 3.4), -side * 0.5 + rand(-0.3, 0.3)); }
+  }
   for (const [model, L] of Object.entries(lists)) {
     const mesh = new THREE.InstancedMesh(L.geo, L.mat, L.items.length);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); mesh.frustumCulled = false;
     L.items.forEach((it, i) => { if (it.color) mesh.setColorAt(i, it.color); });
-    mesh.castShadow = !model.startsWith('lantern_glow'); mesh.receiveShadow = true;
+    mesh.castShadow = !model.startsWith('lantern_glow') && !model.endsWith('_glow'); mesh.receiveShadow = true;
+    if (model.startsWith('w_')) { mesh.userData.world = model.split('_')[1]; mesh.visible = false; }
     marchWorld.add(mesh); marchDecor.meshes.push(mesh); marchDecor.items.push({ mesh, list: L.items });
   }
   M.decorWithProps = !!PROP; M.decorWithModels = !!flora.meshes.oak1_bark && flora.meshes.oak1_bark.geometry.type !== 'CylinderGeometry';
-  placeMarchDecor();
+  M.decorStage = -1; placeMarchDecor();
 }
 const _dm = new THREE.Matrix4(), _dq = new THREE.Quaternion(), _de = new THREE.Euler(), _dv = new THREE.Vector3(), _ds = new THREE.Vector3();
 function placeMarchDecor() {
   const s = M.scroll % DECOR_SPAN;
+  if (M.decorStage !== M.stage) { // a new world: its landmarks and its paving
+    M.decorStage = M.stage; const id = stageBiome();
+    for (const m of marchDecor.meshes) if (m.userData.world) m.visible = m.userData.world === id;
+    setLaneStyle(id);
+  }
   for (const { mesh, list } of marchDecor.items) {
+    if (!mesh.visible) continue;
     for (let i = 0; i < list.length; i++) {
       const it = list[i]; let z = it.z0 + s; if (z >= DECOR_SPAN) z -= DECOR_SPAN;
       _dm.compose(_dv.set(it.x, it.y, ROAD_Z0 + z), _dq.setFromEuler(_de.set(0, it.yaw, 0)), _ds.setScalar(it.k));
@@ -5155,8 +5215,10 @@ const LIQ_FS = `uniform float uT; uniform float uIce; uniform float uRound; unif
 void main() {
   float edge = uRound > 0.5 ? (1.0 - smoothstep(0.28, 0.5, length(vUv - 0.5))) : smoothstep(0.0, 0.3, vUv.x) * (1.0 - smoothstep(0.7, 1.0, vUv.x));
   vec2 uv = vUv * vec2(1.0, uLen) + vec2(0.0, uScroll);
-  float f = sin(uv.y * 1.7 - uT * 1.3 + sin(uv.x * 6.0 + uT) * 1.5) * 0.5 + 0.5;
-  float g = sin(uv.y * 3.1 + uT * 0.7 + uv.x * 9.0) * 0.5 + 0.5;
+  // long streaks along the flow, bent by a slow sideways drift (two crossed sines read as a checker from the chase camera)
+  float bend = sin(uv.y * 0.35 + uT * 0.4) * 0.6 + sin(uv.y * 0.83 - uT * 0.25) * 0.3;
+  float f = sin(uv.y * 0.9 - uT * 1.3 + sin(uv.x * 3.1 + bend * 2.0 + uT * 0.5) * 1.8) * 0.5 + 0.5;
+  float g = sin(uv.x * 7.0 + bend * 3.0 + uv.y * 0.6 + uT * 0.7) * 0.5 + 0.5;
   float n = f * 0.6 + g * 0.4;
   vec3 flowCol = mix(uA, uB, clamp(pow(max(n, 0.0), 2.2) * (0.4 + 0.8 * edge) + 0.08, 0.0, 1.0));
   float cr = abs(sin(uv.y * 3.3 + sin(uv.x * 11.0 + uv.y) * 2.0));
@@ -5827,7 +5889,9 @@ function computeTarget() {
   const bio = biomeOf(w);
   if (bigs.some((b) => b.alive && b.kind === 'boss')) return lerpLook(lookTarget, bio.peak, bio.peak, 0);
   if (w % 5 === 0 && state.bossDown) return lerpLook(lookTarget, DAY_LOOK, biomeOf(w + 1).full, 0.08); // the sun comes back
-  return lerpLook(lookTarget, DAY_LOOK, bio.full, 0.22 + 0.58 * (((w - 1) % 5) / 4));
+  // in defense the world creeps in over the four waves before its boss; on the march the troop has just stepped through
+  // a portal into it, so most of the world is there from the first meter
+  return lerpLook(lookTarget, DAY_LOOK, bio.full, (state.mode === 'march' ? 0.8 + 0.15 * (((w - 1) % 5) / 4) : 0.22 + 0.58 * (((w - 1) % 5) / 4)));
 }
 function snapLook() { computeTarget(); lerpLook(lookNow, lookTarget, lookTarget, 0); }
 function updateAmbience(realDt, dt) {

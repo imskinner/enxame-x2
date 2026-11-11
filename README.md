@@ -16,6 +16,10 @@ Jogo de navegador em 3D (Three.js): seu canhão dispara uma tropa, os portões m
 - FILA (Marcha): `S`, `↑`, clique do mouse ou o botão (também `W` e `Shift`)
 - Pausa: `P` · Som: `M` (alterna entre som e música, só efeitos e sem som)
 
+## Mundos da marcha
+
+Cada um dos dezoito mundos tem o seu marco na beira da estrada, modelado por `tools/blender/worlds.py` (`assets/worlds.glb`): estilhaços de gelo, braseiros, colunas de basalto com topo derretido, para-raios, fontes, cogumelos gigantes, árvore morta sobre lápides, um estilhaço flutuando entre anéis, pirâmide e obelisco, cristais, moinhos, forja, arco de mármore com halo, espinhos com olhos, pilha de pedras, arco quebrado com lanterna, monte de moedas e torre de relógio. As cores vão nos vértices e a parte que brilha é desenhada sem luz na cor do mundo, para o bloom pegar. Uma dúzia fica junto à pista e alguns gigantes ao longe; os dezoito conjuntos são montados de uma vez e só o do mundo atual é desenhado, com a troca escondida no clarão do portal. O piso também muda por família: lajes nos mundos claros, tijolos nos quentes e construídos, paralelepípedos nos podres e assombrados. E o visual do mundo (céu, neblina, luz, grama, rio) já chega a 80% no primeiro metro, porque a tropa acabou de atravessar o portal; na defesa ele continua chegando aos poucos antes do chefão.
+
 ## Câmera
 
 A câmera ajustada à tela só tremia; agora alguns momentos a pegam emprestada e devolvem. Na entrada de um chefão o jogo quase para por dois segundos e a câmera voa até ele, baixa e de frente, com o mundo dele ao fundo. Quando ele cai, o tempo desacelera e a câmera avança até o ponto. O ultimate e a fúria do chefão abrem o ângulo num solavanco, e na derrota a câmera fecha sobre a tropa ou o muro. Tudo entra e sai suavizado, e nada disso roda com "reduzir movimento" ligado no sistema.
@@ -35,7 +39,7 @@ python3 -m http.server 8000
 
 ## Modelos 3D (Blender)
 
-Árvores, pedras, castelos, objetos da pista (lanternas, cercas, barris, estandartes, colunas dos portões), o canhão, os personagens e os ogros são gerados por script em `tools/blender/` e exportados para `assets/*.glb`. Sem esses arquivos o jogo usa as formas simples feitas em código. Para regenerar:
+Árvores, pedras, castelos, objetos da pista (lanternas, cercas, barris, estandartes, colunas dos portões), o canhão, os personagens, os ogros e o marco de cada mundo da marcha são gerados por script em `tools/blender/` e exportados para `assets/*.glb`. Sem esses arquivos o jogo usa as formas simples feitas em código. Para regenerar:
 
 ```sh
 blender --background --factory-startup --python tools/blender/flora.py
@@ -43,6 +47,7 @@ blender --background --factory-startup --python tools/blender/castle.py
 blender --background --factory-startup --python tools/blender/props.py
 blender --background --factory-startup --python tools/blender/characters.py
 blender --background --factory-startup --python tools/blender/ogre.py
+blender --background --factory-startup --python tools/blender/worlds.py
 # prévia em PNG: blender --background --factory-startup --python tools/blender/preview.py -- assets/flora.glb previa.png
 ```
 

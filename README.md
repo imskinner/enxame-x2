@@ -16,6 +16,10 @@ Jogo de navegador em 3D (Three.js): seu canhão dispara uma tropa, os portões m
 - FILA (Marcha): `S`, `↑`, clique do mouse ou o botão (também `W` e `Shift`)
 - Pausa: `P` · Som: `M` (alterna entre som e música, só efeitos e sem som)
 
+## Câmera
+
+A câmera ajustada à tela só tremia; agora alguns momentos a pegam emprestada e devolvem. Na entrada de um chefão o jogo quase para por dois segundos e a câmera voa até ele, baixa e de frente, com o mundo dele ao fundo. Quando ele cai, o tempo desacelera e a câmera avança até o ponto. O ultimate e a fúria do chefão abrem o ângulo num solavanco, e na derrota a câmera fecha sobre a tropa ou o muro. Tudo entra e sai suavizado, e nada disso roda com "reduzir movimento" ligado no sistema.
+
 ## Som e vibração
 
 Nenhum arquivo de áudio: efeitos e música são sintetizados com Web Audio. A música é um sequenciador de dezesseis passos; cada mundo tem tom, modo, andamento e progressão próprios, e a melodia sai do nome do mundo (igual em toda visita). O arranjo acompanha o jogo: pad e arpejo lento no menu, baixo, bateria e melodia na pista, e um arranjo mais rápido e denso sobre um bordão grave enquanto o chefão está vivo; na pausa a música abafa e na derrota some. O estalo dos abates sobe de tom com o combo da marcha. Onde o navegador permite (Android), o celular vibra nos golpes, mordidas, portões, FILA, ultimate, chegada e queda de chefão; a pausa tem o botão para desligar. As escolhas ficam salvas no aparelho.

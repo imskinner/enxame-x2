@@ -551,15 +551,17 @@ body {
       <li><span class="ico plus">+1</span><span>Pegue as caixas douradas com o canhão. Cada uma soma +1 tiro por disparo.</span></li>
       <li><span class="ico div">÷2</span><span>Portões vermelhos cortam a tropa pela metade. Desvie deles.</span></li>
       <li><span class="ico power"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M13.5 2 5 13.5h6L9.5 22 19 9.5h-6.2z"/></svg></span><span>Abates carregam o ULTIMATE. Guarde para a horda gigante e solte com Espaço ou o botão.</span></li>
-      <li><span class="ico horde"><b></b><b></b><b></b></span><span>A cada 5 ondas vem um chefão elemental: gelo, fogo, lava, tempestade, água, veneno, zumbi e o buraco negro. O mapa vai virando o mundo dele.</span></li>
+      <li><span class="ico horde"><b></b><b></b><b></b></span><span>A cada 5 ondas vem um chefão elemental, de dezoito: gelo, fogo, lava, tempestade e por aí vai. O mapa vai virando o mundo dele.</span></li>
     </ul>
     <ul class="how">
       <li><h3>Marcha</h3></li>
-      <li><span class="ico gate">+5</span><span>Sua tropa corre pela estrada atirando. Arraste para escolher o portão: mais soldados, ×2 ou anos.</span></li>
-      <li><span class="ico div">-8</span><span>Atire nos portões de número: cada acerto soma 1. Um -8 pode virar +2.</span></li>
-      <li><span class="ico plus">ANO</span><span>Portões de anos levam a tropa a novas eras, da pedra ao laser: tiros mais fortes e rápidos.</span></li>
-      <li><span class="ico horde"><b></b><b></b><b></b></span><span>Quebre muros de caixotes, liberte reféns das jaulas e derrube o chefão a cada 1000 m.</span></li>
+      <li><span class="ico gate">×2</span><span>A tropa corre pela estrada atirando para a frente. Arraste para escolher o portão: os verdes multiplicam a tropa, os dourados melhoram a arma.</span></li>
+      <li><span class="ico div">-8</span><span>Atire nos portões dourados: cada acerto sobe o número. Um -8% pode virar +4%.</span></li>
+      <li><span class="ico plus">FILA</span><span>FILA afunila a tropa: passa pela brecha dos muros, pela faixa segura dos golpes do chefão e concentra o fogo.</span></li>
+      <li><span class="ico horde"><b></b><b></b><b></b></span><span>Um chefão a cada 1000 m. Ao cair ele deixa o elemento dele e uma carta de melhoria para a tropa.</span></li>
+      <li><span class="ico power"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M13.5 2 5 13.5h6L9.5 22 19 9.5h-6.2z"/></svg></span><span>Os tiros só voam em linha reta: arqueiros, escudeiros e flanqueadores se resolvem com a posição da tropa. O estouro blindado, só com o ultimate ou desviando.</span></li>
     </ul>
+    <button class="btn" id="btnTutor" type="button">JOGAR O TUTORIAL DA MARCHA</button>
     <p class="keys">Mover: <kbd>mouse</kbd> ou arrastar o dedo, <kbd>A</kbd> <kbd>D</kbd> ou <kbd>←</kbd> <kbd>→</kbd>. Ultimate: <kbd>Espaço</kbd> ou <kbd>Q</kbd>. Fila (Marcha): <kbd>S</kbd>, <kbd>↑</kbd> ou clique. Pausa: <kbd>P</kbd>. Som: <kbd>M</kbd>.</p>
     <button class="btn alt" type="button" data-back>VOLTAR</button>
   </div>
@@ -1842,7 +1844,7 @@ const saveAudioPref = () => { try { localStorage.setItem(AUDIO_KEY, JSON.stringi
 const Haptics = {
   until: 0,
   buzz(p, gap = 60, strong = false) {
-    if (!audioPref.haptics || !navigator.vibrate) return;
+    if (!audioPref.haptics || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return; // the browser refuses (and logs) a buzz before the first tap
     const now = performance.now(); if (now < this.until && !strong) return;
     this.until = now + (Array.isArray(p) ? p.reduce((a, b) => a + b, 0) : p) + gap;
     try { navigator.vibrate(p); } catch { /* blocked before the first tap */ }
@@ -3301,6 +3303,7 @@ function closeScreen(el) {
 for (const b of document.querySelectorAll('[data-back]')) b.addEventListener('click', () => closeScreen(b.closest('.screen')));
 for (const s of document.querySelectorAll('.screen.sub')) s.addEventListener('click', (e) => { if (e.target === s) closeScreen(s); }); // tapping the dim backdrop closes the sheet
 $('btnHow').addEventListener('click', () => openScreen('howScreen'));
+$('btnTutor').addEventListener('click', () => { closeScreen($('howScreen')); tutorForce = true; startGame('march'); });
 $('btnContracts').addEventListener('click', () => openScreen('contractsScreen'));
 $('btnQuartel').addEventListener('click', () => openScreen('quartelScreen'));
 $('btnHeroes').addEventListener('click', () => openScreen('heroesScreen'));
@@ -4106,7 +4109,37 @@ function explodeBomber(e, fromUlt = false) {
     if (n) { floatText('-' + n, e.x, 2.6, e.z, 'red'); Haptics.buzz([25, 30, 25], 120); }
   }
 }
+// ---- the first march: seven scripted stretches that teach by doing ----
+// A player with no march record (or one who asks for it on the how-to screen) gets the opening 300 m written by hand:
+// a gate to walk through, a gate to shoot, a pack, a second choice, a crate wall for FILA, a cage, and a horde with the
+// ultimate handed over full. Each stretch brings its tip when it is about 50 m ahead of the troop. Nothing here can
+// end the run, and the road goes back to the usual draw afterwards.
+const TUTOR_KEY = 'enxame-x2-tutor';
+let tutorForce = false;
+const tutorWanted = () => { if (tutorForce) return true; try { return !localStorage.getItem(TUTOR_KEY) && !loadBest('march'); } catch { return false; } };
+function tutorSegment() {
+  const fine = matchMedia('(pointer: fine)').matches, step = M.tutor++;
+  const gate = (k, n, s, x, w) => { const g = marchGate(k, n, x, w, s, 0); if (k !== 'stat') g.value = n; };
+  // a tip shows when its stretch is `ahead` meters away, and never less than 26 m (about 3 s) after the one before it
+  const tip = (title, sub, fn = null, ahead = 50) => M.tips.push({ at: Math.max(M.dist + (SQUAD_Z - MARCH_FAR) - ahead, (M.tips.at(-1)?.at ?? -99) + 26), title, sub, fn });
+  if (step === 1) { gate('mul', 2, null, -3.2, 5.2); gate('stat', -5, 'rate', 3.2, 5.2); tip('MOVA A TROPA', fine ? 'Mouse, A e D ou as setas: passe pelo portão ×2' : 'Arraste o dedo: passe pelo portão ×2'); }
+  else if (step === 2) { gate('stat', 3, 'dmg', 0, 6); tip('PORTÃO DOURADO', 'Atire nele e o número sobe. Depois atravesse'); }
+  else if (step === 3) { for (let i = 0; i < 8; i++) spawnEnemy('grunt', gauss() * 2.2, MARCH_FAR + rand(-2, 2)); tip('A HORDA', 'A tropa atira sozinha para a frente: fique diante dela'); }
+  else if (step === 4) { gate('stat', 5, 'rate', -3.2, 5.2); gate('mul', 2, null, 3.2, 5.2); tip('ESCOLHA', 'Mais soldados ou arma melhor: cada portão é uma troca'); }
+  else if (step === 5) {
+    spawnWall(-LANE_HALF + 4.85, 9.7, 10, 2.3); spawnWall(LANE_HALF - 1.85, 3.7, 10, 2.3); M.filaHint = true;
+    tip('FILA', fine ? 'Clique, S ou ↑: a tropa afunila e passa pela brecha' : 'Toque em FILA: a tropa afunila e passa pela brecha', null, 60);
+  } else if (step === 6) { spawnCage(-2, 12, 8); tip('JAULA', 'Atire para soltar os reféns: são soldados novos'); }
+  else {
+    for (let i = 0; i < 34; i++) spawnEnemy(i % 3 ? 'grunt' : 'runner', gauss() * 3.5, MARCH_FAR + rand(-5, 5));
+    tip('ULTIMATE', fine ? 'Está cheio: Espaço, ou o botão ULTI' : 'Está cheio: toque em ULTI', () => addUlt(ULT_MAX), 70);
+    tip('AGORA É COM VOCÊ', 'Um chefão a cada 1000 m. Boa marcha!', () => { try { localStorage.setItem(TUTOR_KEY, '1'); } catch { /* storage blocked */ } }, -10);
+    tip('', '', () => { M.hzShown = -1; M.hzT = 0; }, -40); // and only then the world's own hazard introduces itself
+    M.tutor = 0; tutorForce = false;
+  }
+}
 function marchSegment() {
+  if (M.tutor) { M.segs = (M.segs || 0) + 1; tutorSegment(); return; }
   const lvl = M.dist / 200;
   M.segs = (M.segs || 0) + 1;
   // The last stretch before a boss is only horde, so nothing is left standing in the arena when the road halts
@@ -4183,6 +4216,7 @@ function startMarch() {
     speed: 8, dist: 0, nextSeg: 12, bossAt: BOSS_EVERY, volley: 0, cx: 0, R: 1, bossLive: false, segs: 0, stampedeAt: 3200,
     elements: [], stat: { rate: 0, dmg: 0, range: 0 }, stage: 0, stageStart: 0, triple: 0, portalSel: null, hzT: 0, hzShown: -1, drift: 0, grip: 1, vx: 0, sqT: 0, sqCd: 0, sq: 0, filaHint: false,
     sqMax: SQUEEZE_T, sqCdMax: SQUEEZE_CD, relicStage: -1, combo: 1, comboK: 0, lastN: null, scoreAcc: 0, worldScore: 0, worldKills: 0,
+    tips: [], tutor: !location.hash && !window.botDrive && tutorWanted() ? 1 : 0,
     seen: new Set(), perk: {}, medicAt: 100, dry: {}, contracts: new Set(contractsPick.filter(contractOpen)), cMul: contractMul(contractsPick.filter(contractOpen)), coins: 0, coinAcc: 0, freed: 0,
     hero: heroPick && heroLevel(heroPick) ? { id: heroPick, lvl: heroLevel(heroPick), x: 0, z: SQUAD_Z, act: 0, r: 3 + 0.5 * (heroLevel(heroPick) - 1), r2: (3 + 0.5 * (heroLevel(heroPick) - 1)) ** 2 } : null,
     // the Quartel's levels (server-side, loaded with the wallet) shape the run from its first meter
@@ -4199,15 +4233,17 @@ function startMarch() {
   addSoldiers(M.q.start, 0); state.ult = M.q.ult;
   for (const a of allies) { a.x = rand(-1, 1); a.z = SQUAD_Z + rand(-1, 1); }
   // the first segments are already on the road, so the run opens with a choice instead of 20 s of empty road
-  for (const z of [-118, -92, -66, -40]) {
-    const g0 = gates.length, w0 = M.walls.length, e0 = enemies.length;
+  if (M.tutor) { M.hzShown = 0; M.hzT = 60; } // the world's own hazard waits for the lesson to end
+  for (const z of M.tutor ? [-40, -66, -92, -118] : [-118, -92, -66, -40]) { // the lesson is written in the order it is met
+    const g0 = gates.length, w0 = M.walls.length, e0 = enemies.length, t0 = M.tips.length;
     marchSegment(); const dz = z - MARCH_FAR;
+    for (const t of M.tips.slice(t0)) t.at = Math.max(0, t.at - dz, (M.tips[t0 - 1]?.at ?? -99) + 26);
     for (const g of gates.slice(g0)) { g.z += dz; g.group.position.z = g.z; }
     for (const o of M.walls.slice(w0)) { o.z += dz; o.grp.position.z = o.z; o.label.sprite.position.z = o.z; }
     for (const e of enemies.slice(e0)) e.z += dz;
   }
   M.nextSeg = 14;
-  showBanner('MARCHA!', 'Atire nos portões dourados para melhorar as armas', 2.6);
+  if (!M.tutor) showBanner('MARCHA!', 'Atire nos portões dourados para melhorar as armas', 2.6);
 }
 function simulateMarch(dt, realDt = dt) {
   gt += dt;
@@ -4263,6 +4299,7 @@ function simulateMarch(dt, realDt = dt) {
 
   // spawn the road ahead; the boss comes just before each 1000 m mark
   if (active && !M.portals.length) {
+    if (M.tips.length && M.dist >= M.tips[0].at) { const t = M.tips.shift(); if (t.title) showBanner(t.title, t.sub, 3.2); t.fn?.(); } // the first march's tips
     if (!boss && !state.bossDown && M.dist >= M.bossAt - BOSS_LEAD) {
       clearWorldHazards(); // the arena opens clean: a roadside tomb or rift left standing next to a halted troop would bleed it for the whole fight
       spawnBig('boss'); const b = bigs[bigs.length - 1]; b.z = SQUAD_Z - shotRange() - BOSS_GAP; b.mesh.position.z = b.z; M.bossLive = true; M.fallen = 0;

@@ -36,6 +36,10 @@ Nenhum arquivo de áudio: efeitos e música são sintetizados com Web Audio. A m
 
 O jogo é um PWA: `manifest.webmanifest`, ícones em `assets/icon-*.png` (renderizados por `tools/blender/app_icon.py`) e o service worker `sw.js`. No Android o menu mostra "Instalar o jogo" quando o navegador oferece; no iPhone é pelo Compartilhar, "Adicionar à Tela de Início". Depois da primeira visita o jogo abre sem rede: a página vem da rede quando há conexão (então uma versão nova aparece na visita seguinte) e do cache quando não há; modelos, sprites, three.js e fontes saem do cache na hora e se atualizam por trás. Ranking, moedas e loja continuam precisando de rede. O service worker não é registrado em servidor local, onde uma cópia em cache só atrapalha; para testar ali, abra com `?sw`.
 
+## Qualidade gráfica
+
+Quatro níveis (alto, médio, baixo, mínimo) mexem juntos em resolução, bloom e sombras. No automático, dois intervalos de 2 s seguidos abaixo de 42 fps descem um nível; doze segundos a 57 fps ou mais tentam subir um, uma vez, e se o nível não se sustenta ele fica travado até o fim da visita. O nível alcançado é lembrado no aparelho. O botão "Gráficos" na pausa fixa um nível ou volta ao automático. `#fps` na URL mostra o contador e o nível em uso.
+
 ## Rodar localmente
 
 É um único `index.html` sem build. Sirva a pasta com qualquer servidor estático:

@@ -739,6 +739,7 @@ body {
     <button class="btn alt" id="btnRestart" type="button">RECOMEÇAR</button>
     <button class="btn alt" id="btnAudioPause" type="button">SOM: SOM E MÚSICA</button>
     <button class="btn alt" id="btnHaptic" type="button">VIBRAÇÃO: LIGADA</button>
+    <button class="btn alt" id="btnGfx" type="button">GRÁFICOS: AUTO</button>
     <button class="btn alt" id="btnMenuPause" type="button">MENU</button>
   </div>
 </div>
@@ -862,8 +863,8 @@ scene.fog = new THREE.Fog(0xdff4ff, 90, 220);
 const camera = new THREE.PerspectiveCamera(46, 1, 0.5, 500);
 
 // Post: HDR render -> bloom on the brightest pixels (lamps, portal, lava, sparks) -> tone mapping.
-// Falls back to a direct render if the device can't hold the frame rate.
-const post = { on: true, slow: 0 };
+// Whether it runs is one of the things the graphics quality decides (see GFX).
+const post = { on: true };
 {
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
   post.composer = new EffectComposer(renderer, rt);
@@ -873,10 +874,6 @@ const post = { on: true, slow: 0 };
   post.composer.addPass(new OutputPass());
 }
 function render(realDt) {
-  if (post.on) {
-    post.slow = realDt > 0.026 ? post.slow + realDt : Math.max(0, post.slow - realDt * 0.5);
-    if (post.slow > 4) post.on = false; // ~4 s of sub-38 fps: drop the bloom for good
-  }
   if (post.on) post.composer.render(realDt); else renderer.render(scene, camera);
 }
 
@@ -5185,6 +5182,53 @@ function fitCamera() {
 }
 addEventListener('resize', fitCamera);
 
+// ---- graphics quality: four steps, picked by the frame rate or by the player ----
+// The game used to have one fallback (drop the bloom for good after four slow seconds). Now the resolution, the bloom and
+// the shadows step down together when the frame rate does not hold, and step back up when there is room.
+// On automatic: two 2-second windows in a row under 42 fps go one step down; twelve seconds at 57 fps or more try one
+// step up, once; if that step does not hold, the level is locked for the visit. The level reached is remembered, so a
+// modest phone does not start every visit at the top.
+const GFX = [
+  { name: 'ALTO', ratio: 1.75, bloom: true, shadow: 2048 },
+  { name: 'MÉDIO', ratio: 1.3, bloom: true, shadow: 1024 },
+  { name: 'BAIXO', ratio: 1, bloom: false, shadow: 1024 },
+  { name: 'MÍNIMO', ratio: 0.8, bloom: false, shadow: 0 },
+];
+const GFX_KEY = 'enxame-x2-gfx';
+const gfx = (() => {
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem(GFX_KEY)) || {}; } catch { /* first visit or storage blocked */ }
+  const pick = saved.pick === 'auto' || GFX[saved.pick] ? saved.pick : 'auto';
+  return { pick, level: pick === 'auto' ? clamp(saved.level | 0, 0, GFX.length - 1) : pick, t: 0, n: 0, slow: 0, fast: 0, rose: false, lock: 0 };
+})();
+function applyGfx(level) {
+  const g = GFX[level]; gfx.level = level;
+  renderer.setPixelRatio(g.ratio >= 1 ? Math.min(devicePixelRatio, g.ratio) : Math.min(devicePixelRatio, 1) * g.ratio);
+  post.on = g.bloom;
+  sun.castShadow = g.shadow > 0;
+  if (g.shadow && sun.shadow.mapSize.x !== g.shadow) { sun.shadow.mapSize.set(g.shadow, g.shadow); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+  if (fitW) fitCamera(); // the canvas and the bloom's buffers follow the new pixel ratio (the first fit comes later, at start-up)
+  try { localStorage.setItem(GFX_KEY, JSON.stringify({ pick: gfx.pick, level })); } catch { /* storage blocked */ }
+  const b = $('btnGfx'); if (b) b.textContent = 'GRÁFICOS: ' + (gfx.pick === 'auto' ? `AUTO (${g.name})` : g.name);
+}
+function autoGfx(dt) {
+  if (gfx.pick !== 'auto' || state.paused || (state.phase !== 'playing' && state.phase !== 'break') || dt <= 0 || dt > 0.25) return; // a paused or hidden game says nothing about the device
+  gfx.t += dt; gfx.n++;
+  if (gfx.t < 2) return;
+  const fps = gfx.n / gfx.t; gfx.t = 0; gfx.n = 0;
+  gfx.slow = fps < 42 ? gfx.slow + 1 : 0; gfx.fast = fps >= 57 ? gfx.fast + 1 : 0;
+  if (gfx.slow >= 2 && gfx.level < GFX.length - 1) {
+    if (gfx.rose) gfx.lock = gfx.level + 1; // the step up did not hold: stay below it from now on
+    gfx.slow = 0; gfx.rose = false; applyGfx(gfx.level + 1);
+  } else if (gfx.fast >= 6 && gfx.level > gfx.lock) { gfx.fast = 0; gfx.rose = true; applyGfx(gfx.level - 1); }
+}
+applyGfx(gfx.level);
+// The pause screen's graphics button: automatic, then each fixed level, then automatic again.
+$('btnGfx').addEventListener('click', () => {
+  gfx.pick = gfx.pick === 'auto' ? 0 : gfx.pick + 1 < GFX.length ? gfx.pick + 1 : 'auto';
+  Object.assign(gfx, { t: 0, n: 0, slow: 0, fast: 0, rose: false, lock: 0 });
+  applyGfx(gfx.pick === 'auto' ? gfx.level : gfx.pick);
+});
+
 // ================= Biomes =================
 // Every 5th wave brings an elemental boss. Over the 4 waves before it the map drifts toward that boss's world,
 // it peaks while the boss is alive, and after its defeat the sun returns before the next world creeps in.
@@ -6213,7 +6257,7 @@ function showFps(rawDt) { // called at the top of the frame: the renderer's coun
   fpsN++; fpsT += rawDt; fpsWorst = Math.max(fpsWorst, rawDt);
   if (fpsT >= 0.5) {
     const inf = renderer.info.render;
-    fpsBox.textContent = `${Math.round(fpsN / fpsT)} fps · pior ${Math.round(fpsWorst * 1000)} ms · ${inf.calls} draws · ${Math.round(inf.triangles / 1000)}k tris · bloom ${post.on ? 'on' : 'off'} · tropa ${allies.length} · inimigos ${enemies.length}`;
+    fpsBox.textContent = `${Math.round(fpsN / fpsT)} fps · pior ${Math.round(fpsWorst * 1000)} ms · ${inf.calls} draws · ${Math.round(inf.triangles / 1000)}k tris · ${GFX[gfx.level].name}${gfx.pick === 'auto' ? ' auto' : ''} · bloom ${post.on ? 'on' : 'off'} · tropa ${allies.length} · inimigos ${enemies.length}`;
     fpsN = 0; fpsT = 0; fpsWorst = 0;
   }
   renderer.info.reset();
@@ -6222,6 +6266,7 @@ function frame(now) {
   if (innerWidth !== fitW || innerHeight !== fitH) fitCamera();
   const rawDt = (now - last) / 1000, realDt = clamp(rawDt, 0, 0.05); last = Math.max(last, now);
   if (fpsBox) showFps(rawDt);
+  autoGfx(rawDt);
   Music.update(realDt);
   if (state.paused) { render(realDt); return; }
   let dt = realDt;
@@ -6252,7 +6297,7 @@ if (location.hash === '#autoplay') startGame('defense');
 // holds the elements of the bosses before).
 // Add t<seconds> (#march0t60) to play that long instantly with a bot that takes the best gate, dodges crate walls and
 // fires the ultimate at bosses; it logs the troop, weapon and elements every 10 s.
-window.dbg = { M, state, allies, enemies, bigs, online, frame, heroMesh, loadMissions, renderMissions, Sfx, Music, Haptics, cine }; // console handle for testing real runs
+window.dbg = { M, state, allies, enemies, bigs, online, frame, heroMesh, loadMissions, renderMissions, Sfx, Music, Haptics, cine, gfx, autoGfx, applyGfx, renderer }; // console handle for testing real runs
 const mh = /^#march(\d+)?(?:t(\d+))?$/.exec(location.hash);
 const marchBot = () => {
   const ahead = (o) => o.z < SQUAD_Z - 1 && o.z > SQUAD_Z - 45;

@@ -16,6 +16,10 @@ Jogo de navegador em 3D (Three.js): seu canhão dispara uma tropa, os portões m
 - FILA (Marcha): `S`, `↑`, clique do mouse ou o botão (também `W` e `Shift`)
 - Pausa: `P` · Som: `M` (alterna entre som e música, só efeitos e sem som)
 
+## Primeira marcha
+
+Quem nunca marchou (sem recorde de marcha no aparelho) recebe os primeiros 300 m escritos à mão, e aprende jogando: um portão para atravessar, um portão dourado para atirar, um bando, uma segunda escolha, um muro de caixotes para a FILA, uma jaula e uma horda com o ultimate entregue cheio. Cada trecho traz a dica quando está a uns 50 m da tropa, nada ali encerra a partida, e depois a estrada volta ao sorteio de sempre. O botão "Jogar o tutorial da marcha", em Como jogar, repete a lição.
+
 ## Mundos da marcha
 
 Cada um dos dezoito mundos tem o seu marco na beira da estrada, modelado por `tools/blender/worlds.py` (`assets/worlds.glb`): estilhaços de gelo, braseiros, colunas de basalto com topo derretido, para-raios, fontes, cogumelos gigantes, árvore morta sobre lápides, um estilhaço flutuando entre anéis, pirâmide e obelisco, cristais, moinhos, forja, arco de mármore com halo, espinhos com olhos, pilha de pedras, arco quebrado com lanterna, monte de moedas e torre de relógio. As cores vão nos vértices e a parte que brilha é desenhada sem luz na cor do mundo, para o bloom pegar. Uma dúzia fica junto à pista e alguns gigantes ao longe; os dezoito conjuntos são montados de uma vez e só o do mundo atual é desenhado, com a troca escondida no clarão do portal. O piso também muda por família: lajes nos mundos claros, tijolos nos quentes e construídos, paralelepípedos nos podres e assombrados. E o visual do mundo (céu, neblina, luz, grama, rio) já chega a 80% no primeiro metro, porque a tropa acabou de atravessar o portal; na defesa ele continua chegando aos poucos antes do chefão.

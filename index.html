@@ -504,6 +504,7 @@ body {
       <button class="btn alt" id="btnAch" type="button" data-online hidden>CONQUISTAS</button>
     </div>
     <p class="best" id="bestMenu">RECORDE 0</p>
+    <p class="account"><button class="link" id="btnAudio" type="button">♪ SOM E MÚSICA</button></p>
     <p class="account" id="accountLine" data-online hidden></p>
   </div>
 </div>
@@ -692,6 +693,8 @@ body {
     <h2 class="title">PAUSA</h2>
     <button class="btn" id="btnResume" type="button">CONTINUAR</button>
     <button class="btn alt" id="btnRestart" type="button">RECOMEÇAR</button>
+    <button class="btn alt" id="btnAudioPause" type="button">SOM: SOM E MÚSICA</button>
+    <button class="btn alt" id="btnHaptic" type="button">VIBRAÇÃO: LIGADA</button>
     <button class="btn alt" id="btnMenuPause" type="button">MENU</button>
   </div>
 </div>
@@ -1769,9 +1772,24 @@ function updateRings(dt) {
 }
 
 // ================= Sound (synthesized) =================
+// What the player chose to hear and feel, kept between visits: mode 0 is effects and music, 1 only effects, 2 silence.
+const AUDIO_KEY = 'enxame-x2-audio', AUDIO_LABELS = ['SOM E MÚSICA', 'SÓ EFEITOS', 'SEM SOM'];
+const audioPref = (() => { try { return Object.assign({ mode: 0, haptics: true }, JSON.parse(localStorage.getItem(AUDIO_KEY))); } catch { return { mode: 0, haptics: true }; } })();
+const saveAudioPref = () => { try { localStorage.setItem(AUDIO_KEY, JSON.stringify(audioPref)); } catch { /* private mode: the choice lasts the visit */ } };
+// The phone's vibration, where the browser has one (Android; iOS Safari ignores it). A pattern in progress is not cut
+// short by a weaker tap, and nothing fires more often than its gap.
+const Haptics = {
+  until: 0,
+  buzz(p, gap = 60, strong = false) {
+    if (!audioPref.haptics || !navigator.vibrate) return;
+    const now = performance.now(); if (now < this.until && !strong) return;
+    this.until = now + (Array.isArray(p) ? p.reduce((a, b) => a + b, 0) : p) + gap;
+    try { navigator.vibrate(p); } catch { /* blocked before the first tap */ }
+  },
+};
 const Sfx = {
-  ctx: null, master: null, muted: false, last: {}, noiseBuf: null,
-  gaps: { shoot: 0.08, pop: 0.035, gate: 0.07, thud: 0.06, hurt: 0.15, cut: 0.1, summon: 0.3, thunder: 0.25, boom: 0.12, whoosh: 0.2 },
+  ctx: null, master: null, muted: audioPref.mode === 2, last: {}, noiseBuf: null, pitch: 1, // pitch: the kill pop climbs with the march's combo
+  gaps: { shoot: 0.08, pop: 0.035, gate: 0.07, thud: 0.06, hurt: 0.15, cut: 0.1, summon: 0.3, thunder: 0.25, boom: 0.12, whoosh: 0.2, bite: 0.07, stampede: 1 },
   init() {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
@@ -1806,8 +1824,10 @@ const Sfx = {
     if (this.last[name] && now - this.last[name] < gap) return;
     this.last[name] = now;
     switch (name) {
-      case 'shoot': this.tone(rand(420, 520), 0.07, 'square', 0.035, 240); break;
-      case 'pop': this.noise(0.08, 0.1, rand(1400, 2400)); this.tone(rand(200, 260), 0.07, 'triangle', 0.07, 110); break;
+      case 'shoot': this.tone(rand(560, 680), 0.07, 'triangle', 0.045, 180); this.noise(0.025, 0.03, 3200); break;
+      case 'pop': this.noise(0.08, 0.1, rand(1400, 2400)); this.tone(rand(200, 260) * this.pitch, 0.07, 'triangle', 0.07, 110 * this.pitch); break;
+      case 'bite': this.tone(rand(170, 210), 0.09, 'sawtooth', 0.06, 90); break;
+      case 'stampede': this.rumble(2.6, 0.4, 0, 110); [0, 0.3, 0.6].forEach((d) => this.tone(330, 0.2, 'square', 0.07, 220, d)); break;
       case 'gate': this.tone(rand(640, 720), 0.09, 'sine', 0.05, 1100); break;
       case 'cut': this.tone(300, 0.12, 'sawtooth', 0.05, 150); break;
       case 'thud': this.tone(140, 0.06, 'square', 0.05, 90); break;
@@ -1837,6 +1857,100 @@ const Sfx = {
       case 'gas': this.noise(0.6, 0.1, 900); this.tone(180, 0.5, 'triangle', 0.04, 120); break;
       case 'summon': this.tone(260, 0.4, 'sawtooth', 0.07, 520); this.noise(0.3, 0.08, 900); break;
     }
+  },
+};
+
+// ================= Music (generated) =================
+// No audio files: a sixteen-step sequencer on the Web Audio clock. Every world has a key, a mode, a tempo and a chord
+// loop, and its melody is drawn from its name (the same on every visit). The layers follow what is happening: pad and a
+// slow arpeggio on the menu; bass, drums and the melody on the lane; a faster, denser arrangement over a low drone
+// while a boss is alive.
+const midiHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+const MODES = {
+  major: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11], mixo: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10],
+  minor: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], harmonic: [0, 2, 3, 5, 7, 8, 11], hijaz: [0, 1, 4, 5, 7, 8, 10],
+};
+const TUNES = {
+  menu: { root: 57, mode: 'major', bpm: 92, prog: [0, 3, 5, 4] },
+  ice: { root: 62, mode: 'dorian', bpm: 104, prog: [0, 3, 6, 4] }, fire: { root: 57, mode: 'minor', bpm: 116, prog: [0, 5, 3, 4] },
+  lava: { root: 52, mode: 'phrygian', bpm: 108, prog: [0, 1, 0, 6] }, storm: { root: 55, mode: 'minor', bpm: 120, prog: [0, 6, 5, 4] },
+  water: { root: 60, mode: 'lydian', bpm: 100, prog: [0, 1, 4, 3] }, poison: { root: 54, mode: 'harmonic', bpm: 106, prog: [0, 3, 4, 0] },
+  zombie: { root: 50, mode: 'phrygian', bpm: 96, prog: [0, 1, 3, 0] }, void: { root: 49, mode: 'harmonic', bpm: 110, prog: [0, 5, 1, 4] },
+  sand: { root: 57, mode: 'hijaz', bpm: 112, prog: [0, 1, 6, 0] }, crystal: { root: 64, mode: 'lydian', bpm: 108, prog: [0, 4, 1, 5] },
+  wind: { root: 62, mode: 'mixo', bpm: 122, prog: [0, 6, 3, 0] }, iron: { root: 52, mode: 'minor', bpm: 126, prog: [0, 0, 5, 6] },
+  light: { root: 60, mode: 'major', bpm: 110, prog: [0, 4, 5, 3] }, shadow: { root: 48, mode: 'phrygian', bpm: 98, prog: [0, 5, 1, 0] },
+  stone: { root: 50, mode: 'dorian', bpm: 100, prog: [0, 3, 0, 6] }, ghost: { root: 56, mode: 'harmonic', bpm: 94, prog: [0, 5, 3, 4] },
+  gold: { root: 58, mode: 'mixo', bpm: 118, prog: [0, 3, 4, 0] }, clock: { root: 53, mode: 'dorian', bpm: 132, prog: [0, 4, 6, 3] },
+};
+const Music = {
+  bus: null, filt: null, tune: null, level: 0, step: 0, next: 0, motif: null, vol: 0,
+  ensure() {
+    if (this.bus) return true;
+    const c = Sfx.ctx; if (!c) return false;
+    this.filt = c.createBiquadFilter(); this.filt.type = 'lowpass'; this.filt.frequency.value = 9000;
+    this.bus = c.createGain(); this.bus.gain.value = 0; this.filt.connect(this.bus); this.bus.connect(Sfx.master);
+    return true;
+  },
+  // the world's tune (a new one starts on its first bar) and how much of the arrangement plays: 0 menu, 1 lane, 2 boss
+  set(id, level) {
+    const tune = TUNES[id] || TUNES.menu;
+    if (tune !== this.tune) {
+      this.tune = tune; this.step = 0;
+      let s = 7; for (const ch of id) s = (s * 31 + ch.charCodeAt(0)) >>> 0;
+      const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+      this.motif = Array.from({ length: 32 }, (_, i) => (rnd() < (i % 4 === 0 ? 0.7 : i % 2 === 0 ? 0.4 : 0.12) ? [0, 2, 4, 5, 7, 4, 2, 9][Math.floor(rnd() * 8)] : null));
+    }
+    this.level = level;
+  },
+  stepDur() { return (60 / this.tune.bpm / 4) * (this.level === 2 ? 0.88 : 1); },
+  hz(deg, oct = 0) { const m = MODES[this.tune.mode]; return midiHz(this.tune.root + m[((deg % 7) + 7) % 7] + 12 * (Math.floor(deg / 7) + oct)); },
+  voice(freq, t, dur, type, vol, cut = 2400, att = 0.01) {
+    const c = Sfx.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    f.type = 'lowpass'; f.frequency.setValueAtTime(cut, t); f.frequency.exponentialRampToValueAtTime(Math.max(200, cut * 0.4), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f); f.connect(g); g.connect(this.filt); o.start(t); o.stop(t + dur + 0.05);
+  },
+  drum(kind, t, vol) {
+    const c = Sfx.ctx;
+    if (kind === 'kick') {
+      const o = c.createOscillator(), g = c.createGain();
+      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.connect(g); g.connect(this.filt); o.start(t); o.stop(t + 0.22); return;
+    }
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), hat = kind === 'hat', dur = hat ? 0.04 : 0.14;
+    s.buffer = Sfx.noiseBuf; f.type = hat ? 'highpass' : 'bandpass'; f.frequency.value = hat ? 5200 : 1800; f.Q.value = 0.7;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.filt); s.start(t, Math.random() * 0.3); s.stop(t + dur + 0.02);
+  },
+  playStep(i, t) {
+    const L = this.level, sd = this.stepDur(), s = i % 16, bar = Math.floor(i / 16) % 4, deg = this.tune.prog[bar];
+    if (s === 0) { // the chord, once a bar, and the boss's drone under it
+      for (const k of [0, 2, 4]) this.voice(this.hz(deg + k, -1), t, sd * 16, 'sawtooth', L === 2 ? 0.02 : 0.026, 900, 0.3);
+      if (L === 2) this.voice(this.hz(0, -3), t, sd * 16, 'sawtooth', 0.05, 180, 0.2);
+    }
+    const every = L === 0 ? 4 : L === 1 ? 2 : 1; // the arpeggio: quarters on the menu, eighths on the lane, sixteenths against a boss
+    if (s % every === 0) this.voice(this.hz(deg + [0, 2, 4, 7, 4, 2, 4, 7][(s / every) % 8]), t, sd * (L === 0 ? 3 : 1.6), 'triangle', L === 0 ? 0.05 : 0.04, 2600);
+    if (L === 0) return;
+    if (L === 2 ? s % 2 === 0 : [0, 6, 8, 11, 14].includes(s)) this.voice(this.hz(deg, -2), t, sd * (L === 2 ? 1.6 : 2.4), 'sawtooth', 0.085, 520);
+    if (L === 2 ? s % 4 === 0 : s === 0 || s === 8 || s === 10) this.drum('kick', t, 0.22);
+    if (s % 4 === 2 || (L === 2 && s % 2 === 1)) this.drum('hat', t, L === 2 ? 0.05 : 0.035);
+    if (s === 4 || s === 12) this.drum('snare', t, L === 2 ? 0.14 : 0.07);
+    const m = this.motif[(bar % 2) * 16 + s]; // the melody: the second half of every four bars, all of them against a boss
+    if (m !== null && (L === 2 || bar >= 2)) this.voice(this.hz(m, 1), t, sd * 2.2, 'square', 0.022, 3200);
+  },
+  // every frame: follow the game (world, boss, pause, defeat) and keep a fifth of a second scheduled ahead
+  update(realDt) {
+    const c = Sfx.ctx; if (!c || c.state !== 'running' || !this.ensure()) return;
+    const playing = state.phase === 'playing' || state.phase === 'break';
+    this.set(playing ? biomeOf(state.wave).id : 'menu', !playing ? 0 : bigs.some((b) => b.alive && b.kind === 'boss') ? 2 : 1);
+    const want = audioPref.mode !== 0 || state.phase === 'dying' ? 0 : state.paused ? 0.25 : state.phase === 'over' ? 0.45 : playing ? 0.55 : 0.9; // under the effects on the lane, fuller on the menu
+    this.vol += (want - this.vol) * Math.min(1, realDt * 3); this.bus.gain.value = this.vol;
+    this.filt.frequency.value = state.paused ? 700 : 9000; // a paused game hears its music from the next room
+    if (want === 0 && this.vol < 0.01) { this.next = 0; return; }
+    if (this.next < c.currentTime - 0.2) this.next = c.currentTime + 0.06;
+    while (this.next < c.currentTime + 0.2) { this.playStep(this.step++, this.next); this.next += this.stepDur(); }
   },
 };
 
@@ -2177,7 +2291,7 @@ function killBig(b, fromUlt = false) {
   smoke(b.x, 0.8, b.z, isBoss ? 18 : 7, isBoss ? 3.2 : 1.8, 0x8a7a98, 1.4);
   ring(b.x, b.z, isBoss ? 0xffc629 : 0xff6fa0, isBoss ? 14 : 6, 0.6);
   if (isBoss) ring(b.x, b.z, 0xffffff, 20, 0.9);
-  state.shake = Math.max(state.shake, isBoss ? 1 : 0.35); Sfx.play('bigdie');
+  state.shake = Math.max(state.shake, isBoss ? 1 : 0.35); Sfx.play('bigdie'); Haptics.buzz(isBoss ? [40, 40, 40, 40, 120] : 20, 60, isBoss);
   floatText('+' + b.score, b.x, b.scale * 1.5, b.z, 'gold');
   if (!fromUlt) addUlt(b.ult * ultGainScale());
   if (state.mode === 'march') { if (isBoss) bossBeaten(b); else marchKill(b); }
@@ -2345,7 +2459,7 @@ function waveCleared() {
 }
 function wallHit(dmg, x) {
   if (state.hp <= 0 || (state.phase !== 'playing' && state.phase !== 'break')) return;
-  state.hp -= dmg; state.hurt = Math.min(1, state.hurt + 0.35 + dmg * 0.05); state.shake = Math.max(state.shake, 0.25 + dmg * 0.04);
+  state.hp -= dmg; state.hurt = Math.min(1, state.hurt + 0.35 + dmg * 0.05); state.shake = Math.max(state.shake, 0.25 + dmg * 0.04); Haptics.buzz(25, 150);
   Sfx.play('hurt'); floatText('-' + dmg, x, 1.6, DEFENSE_Z, 'red'); ring(x, DEFENSE_Z, 0xff3b5c, 3, 0.4);
   sparks(x, 1, DEFENSE_Z, 0xff3b5c, 10 + dmg * 2, 6, 0.6, 0.5, 2);
   debris(x, 1.2, DEFENSE_Z + 3, new THREE.Color(0xdfe8ff), 2 + dmg, 5, 0.3);
@@ -2389,7 +2503,7 @@ function addUlt(v) {
   if (state.ultFx) state.ult = Math.min(state.ult, ULT_MAX - 1); // no refill while one is still sweeping
   if (!was && state.ult >= ULT_MAX) {
     const march = state.mode === 'march', px = march ? M.cx : player.position.x, pz = march ? SQUAD_Z : PLAYER_Z;
-    Sfx.play('ready'); floatText('ULTIMATE PRONTO!', px, 3.2, pz, 'cyan');
+    Sfx.play('ready'); Haptics.buzz(15); floatText('ULTIMATE PRONTO!', px, 3.2, pz, 'cyan');
     ring(px, pz, 0x7ff0ff, 6, 0.6);
   }
 }
@@ -2413,7 +2527,7 @@ function updateUltimate(dt, realDt) {
     recoil = Math.max(recoil, 0.4 * Math.random());
     if (fx.t >= 0.6) {
       fx.fired = true; ultWall.visible = true; ultWall.position.set(0, 0, fx.z);
-      state.flash = 1; state.shake = Math.max(state.shake, 1.1); recoil = 1; Sfx.play('ult');
+      state.flash = 1; state.shake = Math.max(state.shake, 1.1); recoil = 1; Sfx.play('ult'); Haptics.buzz([30, 40, 90], 60, true);
       ring(px, pz - 2, 0x7ff0ff, 16, 0.8); ring(0, DEFENSE_Z, 0xffffff, 24, 1.0);
       sparks(px, 1.5, pz - 2.5, 0xbff8ff, 140, 18, 0.9, 0.8, 4, 0.5);
       smoke(px, 1, pz - 2, 8, 1.6, 0xe8fbff, 0.9);
@@ -3620,7 +3734,7 @@ function setGateNumber(g, n) {
   g.labelMat.map.dispose(); g.labelMat.map = gateLabelTex(gateText(g), g.sub);
 }
 function passGate(g) {
-  g.used = true; g.pulse = 1; ring(g.x, SQUAD_Z, g.color, 5, 0.45); Sfx.play('gate');
+  g.used = true; g.pulse = 1; ring(g.x, SQUAD_Z, g.color, 5, 0.45); Sfx.play('gate'); Haptics.buzz(8);
   const n = squadCount();
   if (g.kind === 'mul') recruit(n * (g.value - 1), g.x);
   else if (g.kind === 'div') loseSoldiers(Math.ceil(n / 2));
@@ -3639,7 +3753,7 @@ function upgrade(stat, v) {
 }
 function squeeze() {
   if (state.mode !== 'march' || state.phase !== 'playing' || state.paused || M.sqT > 0 || M.sqCd > 0 || con('nofila')) return;
-  M.sqT = M.sqMax = (M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T) + M.q.fila; Sfx.play('whoosh'); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
+  M.sqT = M.sqMax = (M.bossLive ? SQUEEZE_BOSS_T : SQUEEZE_T) + M.q.fila; Sfx.play('whoosh'); Haptics.buzz(8); ring(M.cx, SQUAD_Z, 0xffc629, 4, 0.35);
   if (M.hero) { M.hero.act = M.hero.id === 'muralha' ? 2 : M.sqMax; ring(M.hero.x, M.hero.z, HEROES[M.hero.id].color, 5, 0.5); } // the hero's active rides the FILA
 }
 function addSoldiers(k, x = null, text = null) {
@@ -3774,7 +3888,7 @@ function stampede() {
     spawnEnemy(Math.random() < 0.25 ? 'runner' : 'armored', clamp(cx + gauss() * 3.2, -LANE_HALF + 0.5, LANE_HALF - 0.5), z0 + rand(-7, 7));
     const e = enemies[enemies.length - 1]; if (e && Math.abs(e.z - z0) <= 7) { e.shield = true; e.scale *= 1.25; e.r += 0.08; }
   }
-  showBanner('ESTOURO BLINDADO!', 'Tiros não entram: ultimate, ou desvie para o outro lado', 2.4, 'warn'); Sfx.play('warn'); state.shake = Math.max(state.shake, 0.4);
+  showBanner('ESTOURO BLINDADO!', 'Tiros não entram: ultimate, ou desvie para o outro lado', 2.4, 'warn'); Sfx.play('stampede'); Haptics.buzz([40, 80, 40, 80, 40], 60, true); state.shake = Math.max(state.shake, 0.4);
 }
 function marchSegment() {
   const lvl = M.dist / 200;
@@ -3888,7 +4002,7 @@ function simulateMarch(dt, realDt = dt) {
     if (lost) { M.comboK = Math.max(0, M.comboK - lost * 10); if (M.bossLive) M.fallen = (M.fallen || 0) + lost; } // the light element raises a third of these
     const combo = Math.min(3, 1 + M.comboK / 50), tier = Math.floor(combo);
     if (tier >= 2 && tier > Math.floor(M.combo)) { floatText(`COMBO ×${tier}`, M.cx, 3.8, SQUAD_Z, 'cyan'); Sfx.play('ready'); }
-    M.combo = combo;
+    M.combo = combo; Sfx.pitch = 1 + 0.22 * (combo - 1); // the kills ring higher as the combo climbs
   }
   // squeeze: a column about a third as wide (never under 1.4 m half-width) and deeper to hold everyone, or thinner
   // still to fit the crate-wall gap just ahead
@@ -4307,7 +4421,7 @@ const HZ_UPDATE = {
       if (active) n += h.midas ? midasTouch(q, h.z) : q.kind === 'disc' ? killAlliesNear(q.x, q.z + h.z, q.r, h.colorC, Infinity) : killAlliesInRect(q.x, q.z + h.z, q.hw, q.hd, h.colorC, Infinity);
       h.fx(q);
     }
-    if (active) { if (n) { floatText('-' + n, M.cx, 3.2, SQUAD_Z, 'red'); state.shake = Math.max(state.shake, 0.3); } else floatText('DESVIOU!', M.cx, 3.2, SQUAD_Z, 'cyan'); }
+    if (active) { if (n) { floatText('-' + n, M.cx, 3.2, SQUAD_Z, 'red'); state.shake = Math.max(state.shake, 0.3); Haptics.buzz([25, 30, 25], 120); } else floatText('DESVIOU!', M.cx, 3.2, SQUAD_Z, 'cyan'); }
     return true;
   },
   mark(h) {
@@ -4485,7 +4599,7 @@ function updateMarchEnemies(dt, dz) {
     if (active && e.z > SQUAD_Z - M.R - 1.5 && e.z < SQUAD_Z + M.R + 1.5) { // trade with the troop, four of ours at most (a late armored has 20 hp: it used to eat 20 soldiers); frozen ones just shatter
       for (const a of allies) if (a.alive && a.role !== 'caged' && (a.x - e.x) ** 2 + (a.z - e.z) ** 2 < (e.r + 0.3) ** 2) {
         if (frozen) { debris(e.x, 0.6, e.z, new THREE.Color(0xd8f6ff), 5, 5, 0.2); killEnemy(e); break; }
-        a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1;
+        a.alive = false; burst(a.x, 0.6, a.z, COL.ally, 3, 3, 0.16); e.hp -= 1; Sfx.play('bite'); Haptics.buzz(12, 140);
         if (e.hp <= 0 || ++e.bites >= (e.shield ? 2 : 4)) { killEnemy(e); break; } // a shielded one falls after two bites: a stampede is a check on the ultimate, not a wipe
       }
     }
@@ -4565,6 +4679,7 @@ function startGame(mode = state.mode) {
   if (state.phase === 'playing' || state.phase === 'break') return;
   if (online.sb && !location.hash && !online.nickname) { gateNick(mode); return; } // a nickname first, so every match counts on the board
   Sfx.init(); clearWorld(); setModeScene(mode);
+  Sfx.pitch = 1;
   Object.assign(state, { paused: false, score: 0, hp: WALL_HP, shots: 1, rapid: 0, fireTimer: 0, shake: 0, hurt: 0, kills: 0, peak: 0, targetX: 0, ult: 0, ultFx: null, slowmo: 0, flash: 0, best: loadBest(mode) });
   ultWall.visible = false;
   player.position.x = 0;
@@ -4596,7 +4711,7 @@ function renderBests() {
   $('bestMenu').textContent = `RECORDE ${d.toLocaleString('pt-BR')}` + (m ? ` · MARCHA ${m.toLocaleString('pt-BR')}` : '');
 }
 function gameOver() {
-  state.phase = 'dying'; state.dyingTimer = 1.6; state.shake = 1;
+  state.phase = 'dying'; state.dyingTimer = 1.6; state.shake = 1; Haptics.buzz([80, 60, 160], 60, true);
   if (state.mode === 'defense') for (let x = -LANE_HALF + 1; x < LANE_HALF; x += 2) burst(x, 1, DEFENSE_Z + 3, new THREE.Color(0xdfe8ff), 6, 8, 0.35);
   Sfx.play('over');
 }
@@ -4622,10 +4737,23 @@ function setPaused(p) {
   state.paused = p; ui.pause.hidden = !p;
   if (p) $('btnResume').focus(); else canvas.focus();
 }
-function toggleMute() {
-  Sfx.setMuted(!Sfx.muted);
-  ui.icoSound.style.opacity = Sfx.muted ? '0.35' : '1';
+// One button, three steps: effects and music, only effects, silence. The icon drops its outer wave, then dims.
+function renderAudio() {
+  const m = audioPref.mode;
+  ui.icoSound.style.opacity = m === 2 ? '0.35' : '1'; if (ui.icoSound.children[2]) ui.icoSound.children[2].style.display = m === 0 ? '' : 'none';
+  $('btnMute').setAttribute('aria-label', `Som: ${AUDIO_LABELS[m].toLowerCase()}. Toque para mudar`);
+  $('btnAudio').textContent = '♪ ' + AUDIO_LABELS[m]; $('btnAudioPause').textContent = 'SOM: ' + AUDIO_LABELS[m];
+  const h = $('btnHaptic'); h.hidden = !navigator.vibrate; h.textContent = 'VIBRAÇÃO: ' + (audioPref.haptics ? 'LIGADA' : 'DESLIGADA');
 }
+function toggleMute() {
+  audioPref.mode = (audioPref.mode + 1) % 3; saveAudioPref();
+  Sfx.setMuted(audioPref.mode === 2); renderAudio();
+}
+for (const id of ['btnAudio', 'btnAudioPause']) $(id).addEventListener('click', () => { Sfx.init(); toggleMute(); });
+$('btnHaptic').addEventListener('click', () => { audioPref.haptics = !audioPref.haptics; saveAudioPref(); renderAudio(); Haptics.buzz(30, 0, true); });
+renderAudio();
+// Browsers only let sound start after a gesture: the first tap or key anywhere wakes the audio, so the menu has its music too.
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => Sfx.init(), { capture: true, passive: true });
 $('btnPlay').addEventListener('click', () => startGame('defense'));
 $('btnMarch').addEventListener('click', () => startGame('march'));
 $('btnAgain').addEventListener('click', () => startGame());
@@ -5056,7 +5184,7 @@ function updateBolts(realDt) {
 // ---- boss arrival and defeat ----
 function bossArrive(b) {
   const t = b.theme;
-  Sfx.play('boss'); Sfx.play('nightfall');
+  Sfx.play('boss'); Sfx.play('nightfall'); Haptics.buzz([60, 50, 60], 60, true);
   showBanner(t.name, state.mode === 'march' ? t.hint + ' · FILA concentra o fogo' : t.hint, 2.8, 'warn');
   state.shake = Math.max(state.shake, 0.7); state.flash = Math.max(state.flash, 0.35);
   ring(0, SPAWN_Z - 1, t.glow, 18, 1.0); ring(0, SPAWN_Z - 1, 0xffffff, 10, 0.6);
@@ -5739,6 +5867,7 @@ function frame(now) {
   if (innerWidth !== fitW || innerHeight !== fitH) fitCamera();
   const rawDt = (now - last) / 1000, realDt = clamp(rawDt, 0, 0.05); last = Math.max(last, now);
   if (fpsBox) showFps(rawDt);
+  Music.update(realDt);
   if (state.paused) { render(realDt); return; }
   let dt = realDt;
   if (state.slowmo > 0) { state.slowmo -= realDt; dt *= 0.3; }
@@ -5767,7 +5896,7 @@ if (location.hash === '#autoplay') startGame('defense');
 // holds the elements of the bosses before).
 // Add t<seconds> (#march0t60) to play that long instantly with a bot that takes the best gate, dodges crate walls and
 // fires the ultimate at bosses; it logs the troop, weapon and elements every 10 s.
-window.dbg = { M, state, allies, enemies, bigs, online, frame, heroMesh, loadMissions, renderMissions }; // console handle for testing real runs
+window.dbg = { M, state, allies, enemies, bigs, online, frame, heroMesh, loadMissions, renderMissions, Sfx, Music, Haptics }; // console handle for testing real runs
 const mh = /^#march(\d+)?(?:t(\d+))?$/.exec(location.hash);
 const marchBot = () => {
   const ahead = (o) => o.z < SQUAD_Z - 1 && o.z > SQUAD_Z - 45;
